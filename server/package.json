@@ -1,0 +1,32 @@
+{
+  "name": "wow-artwork-engine-server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "WOW Artwork Engine — generation orchestrator, API, and media pipeline.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "migrate": "node src/db/migrate.js",
+    "test": "node --test",
+    "spike:frame-break": "node ../scripts/spikes/frame_break.js",
+    "spike:eon": "node ../scripts/spikes/eon_3pod.js"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.600.0",
+    "@aws-sdk/client-secrets-manager": "^3.600.0",
+    "basic-ftp": "^5.0.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "nodemailer": "^6.9.13",
+    "pg": "^8.12.0",
+    "pino": "^9.2.0",
+    "pino-http": "^10.1.0"
+  },
+  "devDependencies": {
+    "pino-pretty": "^11.2.1"
+  }
+}

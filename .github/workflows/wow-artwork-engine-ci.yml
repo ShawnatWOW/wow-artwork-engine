@@ -1,0 +1,47 @@
+name: WOW Artwork Engine CI
+
+on:
+  push:
+    branches: ['**']
+    paths:
+      - 'server/**'
+      - 'web/**'
+      - 'migrations/**'
+      - 'scripts/spikes/**'
+      - '.github/workflows/wow-artwork-engine-ci.yml'
+  pull_request:
+    paths:
+      - 'server/**'
+      - 'web/**'
+      - 'migrations/**'
+      - 'scripts/spikes/**'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install FFmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Install server deps
+        working-directory: server
+        run: npm install
+
+      - name: Run server tests
+        working-directory: server
+        run: npm test
+
+      - name: Run spikes (fixtures, no paid APIs)
+        run: |
+          node scripts/spikes/frame_break.js
+          node scripts/spikes/eon_3pod.js
+
+      - name: Build web
+        working-directory: web
+        run: npm install && npm run build

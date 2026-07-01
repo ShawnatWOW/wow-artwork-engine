@@ -1,0 +1,17 @@
+.firecrawl/
+.env.telegram
+.pycache/
+
+# WOW Artwork Engine
+node_modules/
+.env
+.env.local
+dist/
+web/dist/
+*.log
+.DS_Store
+# Local FFmpeg / spike / fixture output
+tmp/
+out/
+artifacts/
+
