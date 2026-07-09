@@ -4,6 +4,7 @@ import express from 'express';
 import logger from './config/logger.js';
 import healthRouter from './routes/health.js';
 import runsRouter from './routes/runs.js';
+import artworksRouter from './routes/artworks.js';
 
 export function createApp() {
   const app = express();
@@ -22,7 +23,11 @@ export function createApp() {
   });
 
   app.use(healthRouter);
-  app.use(runsRouter);
+  // Dashboard + orchestration API. Namespaced under /api so it drops cleanly
+  // into the shared WOW dashboard (unstuckllc/wow-contract-query) behind its
+  // existing /api proxy.
+  app.use('/api', runsRouter);
+  app.use('/api', artworksRouter);
 
   // 404
   app.use((req, res) => res.status(404).json({ error: 'not_found', path: req.path }));

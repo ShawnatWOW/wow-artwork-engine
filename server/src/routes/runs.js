@@ -10,7 +10,7 @@
 import { Router } from 'express';
 import logger from '../config/logger.js';
 import { runWeek } from '../services/orchestrator.js';
-import { pgRepo } from '../db/repo.js';
+import { getRepo } from '../db/index.js';
 
 const router = Router();
 
@@ -36,7 +36,7 @@ router.post('/runs', async (req, res, next) => {
 
 router.get('/runs', async (_req, res, next) => {
   try {
-    res.json({ runs: await pgRepo.listRuns() });
+    res.json({ runs: await getRepo().listRuns() });
   } catch (err) {
     next(err);
   }
@@ -44,15 +44,17 @@ router.get('/runs', async (_req, res, next) => {
 
 router.get('/runs/:id', async (req, res, next) => {
   try {
+    const repo = getRepo();
     const id = Number(req.params.id);
     if (!Number.isInteger(id)) return res.status(400).json({ error: 'invalid_run_id' });
-    const run = await pgRepo.getRun(id);
+    const run = await repo.getRun(id);
     if (!run) return res.status(404).json({ error: 'run_not_found' });
-    const [artworks, eonSequences] = await Promise.all([
-      pgRepo.listArtworks(id),
-      pgRepo.listEonSequences(id),
+    const [artworks, eonSequences, selections] = await Promise.all([
+      repo.listArtworks(id),
+      repo.listEonSequences(id),
+      repo.listSelections(id),
     ]);
-    res.json({ run, artworks, eonSequences });
+    res.json({ run, artworks, eonSequences, selections });
   } catch (err) {
     next(err);
   }

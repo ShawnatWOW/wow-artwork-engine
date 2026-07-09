@@ -14,4 +14,7 @@ web/dist/
 tmp/
 out/
 artifacts/
+# Local asset store (STORAGE_DRIVER=local)
+var/
+server/var/
 

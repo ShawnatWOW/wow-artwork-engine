@@ -9,7 +9,18 @@ import logger from '../../config/logger.js';
 import { createLocalStore } from './local.js';
 import { createS3Store } from './s3.js';
 
-export async function getStore(driver = config.storage.driver) {
+// One store per driver, memoized so routes and the orchestrator share it
+// (and the S3 client isn't rebuilt on every request).
+const cache = new Map();
+
+export function getStore(driver = config.storage.driver) {
+  if (!cache.has(driver)) {
+    cache.set(driver, buildStore(driver));
+  }
+  return cache.get(driver);
+}
+
+async function buildStore(driver) {
   if (driver === 's3') {
     logger.info({ bucket: config.storage.s3Bucket }, 'Asset store: S3');
     return createS3Store();

@@ -1,0 +1,34 @@
+// API client for the Artwork Engine dashboard.
+//
+// Base path is configurable so this module drops into the shared WOW dashboard
+// (unstuckllc/wow-contract-query) unchanged — set VITE_API_BASE if the engine's
+// routes are mounted somewhere other than /api. In standalone dev, Vite proxies
+// /api and /health to the Express backend on :4000 (see vite.config.js).
+
+const API = (import.meta.env && import.meta.env.VITE_API_BASE) || '/api';
+
+async function req(method, path, body) {
+  const res = await fetch(`${API}${path}`, {
+    method,
+    headers: body ? { 'Content-Type': 'application/json' } : undefined,
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) throw new Error(`${method} ${path} → ${res.status}`);
+  return res.status === 204 ? null : res.json();
+}
+
+export const api = {
+  base: API,
+  health: () => fetch('/health').then((r) => r.json()).catch(() => ({ status: 'unreachable' })),
+  listRuns: () => req('GET', '/runs'),
+  getRun: (id) => req('GET', `/runs/${id}`),
+  generate: (weekOf) => req('POST', '/runs', { triggeredBy: 'dashboard', ...(weekOf ? { weekOf } : {}) }),
+  select: (id) => req('POST', `/artworks/${id}/select`),
+  unselect: (id) => req('DELETE', `/artworks/${id}/select`),
+  approve: (id) => req('POST', `/artworks/${id}/approve`),
+  reject: (id) => req('POST', `/artworks/${id}/reject`),
+  mediaUrl: (id) => `${API}/artworks/${id}/media`,
+  thumbUrl: (id) => `${API}/artworks/${id}/thumbnail`,
+};
+
+export default api;

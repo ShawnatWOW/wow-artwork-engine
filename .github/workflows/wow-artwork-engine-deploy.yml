@@ -1,11 +1,14 @@
 name: WOW Artwork Engine Deploy
 
-# Deploys to the EC2 app server over SSH and reloads PM2. Mirrors the WOW
-# Content Automation deploy pattern. Triggered manually or on main.
+# Deploys the backend worker/API into WOW's existing AWS (EC2 + PM2), mirroring
+# the live WOW Content Automation pipeline: `dev` -> staging EC2, `master` ->
+# production EC2. The generation worker + weekly scheduler run in-process with
+# the API. The review dashboard ships as a tab in unstuckllc/wow-contract-query;
+# the web build here is the standalone/dev copy.
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [master, dev]
     paths:
       - 'server/**'
       - 'web/**'
@@ -13,7 +16,7 @@ on:
       - 'infra/**'
 
 concurrency:
-  group: deploy-wow-artwork-engine
+  group: deploy-wow-artwork-engine-${{ github.ref_name }}
   cancel-in-progress: false
 
 jobs:
@@ -22,20 +25,34 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # master -> production host, everything else (dev) -> staging host.
+      - name: Resolve target environment
+        id: target
+        run: |
+          if [ "${{ github.ref_name }}" = "master" ]; then
+            echo "host=${{ secrets.EC2_HOST_PROD }}" >> "$GITHUB_OUTPUT"
+            echo "branch=master" >> "$GITHUB_OUTPUT"
+            echo "pm2_env=production" >> "$GITHUB_OUTPUT"
+          else
+            echo "host=${{ secrets.EC2_HOST_STAGING }}" >> "$GITHUB_OUTPUT"
+            echo "branch=dev" >> "$GITHUB_OUTPUT"
+            echo "pm2_env=staging" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Deploy over SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.EC2_HOST }}
+          host: ${{ steps.target.outputs.host }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             set -euo pipefail
             cd /opt/wow-artwork-engine
             git fetch --all
-            git reset --hard origin/main
+            git reset --hard "origin/${{ steps.target.outputs.branch }}"
             cd server && npm ci --omit=dev
             npm run migrate
             cd ../web && npm ci && npm run build
             cd ..
-            pm2 startOrReload infra/pm2/ecosystem.config.cjs --env production
+            pm2 startOrReload infra/pm2/ecosystem.config.cjs --env ${{ steps.target.outputs.pm2_env }}
             pm2 save

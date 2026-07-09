@@ -31,6 +31,32 @@ npm run generate            # this week
 npm run generate 2026-08-10 # a specific Monday
 ```
 
+## Milestone 2 (Dashboard)
+
+Weekly **review/pick** surface. The API is namespaced under `/api` so it drops
+into the shared WOW dashboard (`unstuckllc/wow-contract-query`) behind its `/api`
+proxy; the generation worker + scheduler run **in-process** with the API.
+
+- `POST /api/runs` — trigger a run (202 + `runId`, generation continues async)
+- `GET  /api/runs` · `GET /api/runs/:id` — run + artworks + EON sequences + selections
+- `POST/DELETE /api/artworks/:id/select` — pick / un-pick a favorite (`selections`)
+- `POST /api/artworks/:id/approve` · `/reject` — flip `artworks.status`
+- `GET  /api/artworks/:id/media` · `/thumbnail` — stream from the asset store
+  (local disk with HTTP range support, or S3)
+
+The React + Vite + Tailwind dashboard lives in `web/` (built to embed as the
+"Artwork Engine" tab in `wow-contract-query`). **No database required** — with
+`DATABASE_URL` unset the whole app uses an in-memory repo, so it demos at $0:
+
+```bash
+# terminal 1 — API (in-memory repo when DATABASE_URL is unset)
+npm start
+# terminal 2 — dashboard (proxies /api + /health to :4000)
+cd ../web && npm install && npm run dev   # http://localhost:5173
+```
+
+Click **Generate this week** to populate the grid, then pick / approve / reject.
+
 ## Milestone 0 (Foundations) + the two spikes
 
 Implemented in the M0 scaffold:

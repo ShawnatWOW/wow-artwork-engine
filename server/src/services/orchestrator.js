@@ -23,7 +23,7 @@ import { planJobs, POST } from './generation/catalog.js';
 import { buildPrompt } from './generation/prompts.js';
 import { getProviders } from './generation/index.js';
 import { getStore, artworkKey } from './storage/index.js';
-import { pgRepo } from '../db/repo.js';
+import { getRepo } from '../db/index.js';
 import { weekOfFor } from './dates.js';
 
 const even = (n) => Math.max(2, Math.floor(n / 2) * 2);
@@ -40,7 +40,7 @@ const thumbDims = (spec) => ({ width: even(spec.width / 2), height: even(spec.he
  * @returns {Promise<{ runId, status, weekOf, counts, artworks }>}
  */
 export async function runWeek({ weekOf, triggeredBy = 'manual', onStart, deps = {} } = {}) {
-  const repo = deps.repo || pgRepo;
+  const repo = deps.repo || getRepo();
   const store = deps.store || (await getStore());
   const providers = deps.providers || getProviders();
   const guardrails = deps.guardrails || guardrailsModule;

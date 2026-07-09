@@ -119,6 +119,33 @@ export const pgRepo = {
     );
     return rows;
   },
+
+  // --- Selections (the reviewer's picks) ---------------------------------
+  async addSelection(artworkId, selectedBy = null) {
+    const { rows } = await query(
+      `INSERT INTO selections (artwork_id, selected_by)
+       VALUES ($1, $2)
+       ON CONFLICT (artwork_id) DO UPDATE SET selected_by = EXCLUDED.selected_by, selected_at = now()
+       RETURNING *`,
+      [artworkId, selectedBy],
+    );
+    return rows[0];
+  },
+
+  async removeSelection(artworkId) {
+    await query('DELETE FROM selections WHERE artwork_id = $1', [artworkId]);
+  },
+
+  async listSelections(runId) {
+    const { rows } = await query(
+      `SELECT s.* FROM selections s
+         JOIN artworks a ON a.id = s.artwork_id
+        WHERE a.run_id = $1
+        ORDER BY s.id ASC`,
+      [runId],
+    );
+    return rows;
+  },
 };
 
 export default pgRepo;

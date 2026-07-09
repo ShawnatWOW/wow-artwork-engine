@@ -8,9 +8,11 @@ export function createMemoryRepo() {
   const runs = [];
   const artworks = [];
   const eonSequences = [];
+  const selections = [];
   let runSeq = 0;
   let artSeq = 0;
   let seqSeq = 0;
+  let selSeq = 0;
 
   const clone = (o) => ({ ...o });
 
@@ -108,6 +110,27 @@ export function createMemoryRepo() {
 
     async listEonSequences(runId) {
       return eonSequences.filter((r) => r.run_id === runId).map(clone);
+    },
+
+    async addSelection(artworkId, selectedBy = null) {
+      let row = selections.find((s) => s.artwork_id === artworkId);
+      if (row) {
+        row.selected_by = selectedBy;
+      } else {
+        row = { id: (selSeq += 1), artwork_id: artworkId, selected_by: selectedBy, selected_at: null };
+        selections.push(row);
+      }
+      return clone(row);
+    },
+
+    async removeSelection(artworkId) {
+      const i = selections.findIndex((s) => s.artwork_id === artworkId);
+      if (i !== -1) selections.splice(i, 1);
+    },
+
+    async listSelections(runId) {
+      const ids = new Set(artworks.filter((a) => a.run_id === runId).map((a) => a.id));
+      return selections.filter((s) => ids.has(s.artwork_id)).map(clone);
     },
   };
 }
