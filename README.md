@@ -33,7 +33,8 @@ infra/         PM2, GitHub Actions, Terraform skeleton
 cd server && npm install
 cp ../.env.example ../.env        # fill in; .env is gitignored
 npm run migrate                   # needs DATABASE_URL
-npm test                          # 18 tests (real ffmpeg round-trips)
+npm test                          # 35 tests (real ffmpeg round-trips)
+npm run generate                  # a full weekly batch on fixtures — no API cost
 npm run spike:frame-break         # fixtures only — no API cost
 npm run spike:eon
 ```

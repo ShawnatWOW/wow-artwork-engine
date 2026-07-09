@@ -27,8 +27,24 @@ const config = {
     s3Bucket: process.env.S3_BUCKET,
   },
 
+  // Asset store for generated media. `local` (default) keeps everything on
+  // disk so the fixture pipeline runs at $0 without touching AWS; `s3` uploads
+  // to the configured bucket for production.
+  storage: {
+    driver: process.env.STORAGE_DRIVER || 'local',
+    localDir: process.env.STORAGE_LOCAL_DIR || 'var/storage',
+    s3Bucket: process.env.S3_BUCKET,
+  },
+
   // How many options per surface Scott reviews each week (locked: 3).
   optionsPerSurface: num(process.env.OPTIONS_PER_SURFACE, 3),
+
+  // Generation defaults. Short durations keep fixture runs fast; a live run
+  // conforms to the spot length (15/30/60s) downstream.
+  generation: {
+    durationS: num(process.env.GEN_DURATION_S, 6),
+    fps: num(process.env.GEN_FPS, 30),
+  },
 
   // fixture | live  — see .env.example. `live` requires explicit opt-in so a
   // stray run can never spend generation credits by accident.
@@ -97,6 +113,9 @@ const config = {
 
   scheduler: {
     weeklyCron: process.env.WEEKLY_RUN_CRON || '0 9 * * 1',
+    // In-process scheduler is opt-in so dev/test/CI never auto-fire a run.
+    // Enable in production (PM2) to fire the weekly batch automatically.
+    enabled: bool(process.env.SCHEDULER_ENABLED, false),
   },
 };
 

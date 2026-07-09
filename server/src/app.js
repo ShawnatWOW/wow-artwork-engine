@@ -3,6 +3,7 @@
 import express from 'express';
 import logger from './config/logger.js';
 import healthRouter from './routes/health.js';
+import runsRouter from './routes/runs.js';
 
 export function createApp() {
   const app = express();
@@ -21,6 +22,7 @@ export function createApp() {
   });
 
   app.use(healthRouter);
+  app.use(runsRouter);
 
   // 404
   app.use((req, res) => res.status(404).json({ error: 'not_found', path: req.path }));

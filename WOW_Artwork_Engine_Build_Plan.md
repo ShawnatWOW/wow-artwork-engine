@@ -102,8 +102,13 @@ See `migrations/001_init.sql`. Tables: `specs`, `generation_runs`, `artworks`,
 
 ## Milestones
 
-- **M0 Foundations** (this scaffold): repo, schema + seed, Express skeleton,
+- **M0 Foundations** (DONE): repo, schema + seed, Express skeleton,
   FFmpeg post-processing + EON slicer, the two spikes.
-- **M1 Generation Engine**, **M2 Dashboard**, **M3 Handoff**, **M4 QA & Delivery**.
+- **M1 Generation Engine** (DONE): `runWeek()` orchestrator (3 options/surface,
+  guardrail-before-spend, generate → conform/composite → slice → thumbnail →
+  store, writing `generation_runs`/`artworks`/`eon_sequences`), weekly
+  scheduler, local/S3 asset store, and the `/runs` API. `npm run generate` runs
+  a full week on fixtures at $0.
+- **M2 Dashboard**, **M3 Handoff**, **M4 QA & Delivery** — next.
 
 Target date: 2026-08-14.
