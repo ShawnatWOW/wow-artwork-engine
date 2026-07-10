@@ -94,8 +94,10 @@ test('guardrail blocks the MOTION spend before Seedance is ever called', async (
     still: stillProvider, // Phase 1 still is allowed
     motion: { model: 'boom', generate: async () => { throw new Error('should not spend'); } },
   };
+  // Motion prompts contain "motion"; still prompts don't — use that to block
+  // only the Seedance (motion) spend.
   const blockMotion = {
-    checkPrompt: (p) => (/Animate this frame/.test(p) ? { allowed: false, reasons: ['test motion block'] } : { allowed: true, reasons: [] }),
+    checkPrompt: (p) => (/\bmotion\b/i.test(p) ? { allowed: false, reasons: ['test motion block'] } : { allowed: true, reasons: [] }),
     reviewArtwork: async () => ({ allowed: true, reasons: [] }),
   };
   try {
