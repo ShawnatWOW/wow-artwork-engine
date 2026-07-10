@@ -51,13 +51,17 @@ const config = {
   generationMode: process.env.GENERATION_MODE || 'fixture',
 
   // Both models run on fal.ai: Seedance 2.0 (motion, image-to-video) + Seedream
-  // (stills, which double as the first-frame reference for Seedance).
+  // (stills — its output URL feeds Seedance as the first frame). Slugs verified
+  // against the live wow-contract-query integration + fal docs (2026-07).
   fal: {
     key: process.env.FAL_KEY,
-    // fal model slugs — confirm/override if fal renames them.
-    seedanceModel: process.env.FAL_SEEDANCE_MODEL || 'fal-ai/bytedance/seedance/v2/image-to-video',
-    seedreamModel: process.env.FAL_SEEDREAM_MODEL || 'fal-ai/bytedance/seedream/v3/text-to-image',
+    // Seedance app id (no "fal-ai/" prefix — matches Content Automation). `fast`
+    // is the cheap 720p tier; drop `/fast` for Standard (up to 1080p).
+    seedanceModel: process.env.FAL_SEEDANCE_MODEL || 'bytedance/seedance-2.0/fast/image-to-video',
+    seedreamModel: process.env.FAL_SEEDREAM_MODEL || 'fal-ai/bytedance/seedream/v4/text-to-image',
     queueBase: process.env.FAL_QUEUE_BASE || 'https://queue.fal.run',
+    resolution: process.env.FAL_RESOLUTION || '720p',
+    generateAudio: process.env.FAL_GENERATE_AUDIO === '1', // artwork is silent by default
   },
   gemini: {
     apiKey: process.env.GEMINI_API_KEY,

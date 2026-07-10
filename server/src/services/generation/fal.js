@@ -1,11 +1,12 @@
-// FAL / Seedance 2.0 motion provider (LIVE — spends credits).
+// Seedance 2.0 motion provider (LIVE — spends credits).
 //
-// Motion generation runs through fal.ai's Seedance 2.0 model (locked decision).
-// Implemented against fal's async queue REST API:
-//   submit → poll status → fetch result → download the video.
-// Gated behind a configured FAL_KEY; throws if unset so a stray run can never
-// spend credits. The model emits a standard ratio at high res; FFmpeg conforms
-// to the exact WOW spec downstream (see services/ffmpeg.js).
+// Image-to-video via fal.ai's queue API — the exact integration proven live in
+// WOW Content Automation (server/modules/video-studio/falai.js):
+//   submit : POST {base}/{model}  -> { request_id, status_url }
+//   status : GET  status_url      -> { status: IN_QUEUE|IN_PROGRESS|COMPLETED }
+//   result : GET  status_url-/status -> { video: { url } }
+// Always uses the status_url fal returns (its status path uses the app id, not
+// the full sub-path). Requires an `image_url` (the approved Seedream still).
 
 import { createWriteStream } from 'node:fs';
 import { pipeline } from 'node:stream/promises';
@@ -15,7 +16,9 @@ import logger from '../../config/logger.js';
 
 export const MODEL_MOTION = 'seedance-2.0@fal';
 
-const AUTH = () => ({ Authorization: `Key ${config.fal.key}`, 'Content-Type': 'application/json' });
+const auth = () => ({ Authorization: `Key ${config.fal.key}`, 'Content-Type': 'application/json', Accept: 'application/json' });
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const appId = (m) => m.split('/').slice(0, 2).join('/');
 
 async function downloadTo(url, output) {
   const res = await fetch(url);
@@ -26,63 +29,44 @@ async function downloadTo(url, output) {
 export const motionProvider = {
   model: MODEL_MOTION,
   /**
-   * @returns {Promise<{path, model, width, height, durationS, jobId}>}
-   * @param ratio e.g. "16:9" | "2:1" — fal-supported aspect ratio.
+   * @param referenceImageUrl a URL fal can fetch (the Seedream still). REQUIRED —
+   *        Seedance is image-to-video. fal-hosted Seedream URLs work directly.
    */
-  async generate({ prompt, ratio = '16:9', durationS = 6, output, referenceImageUrl, pollMs = 4000, timeoutMs = 600000 }) {
-    if (!config.fal.key) {
-      throw new Error('FAL_KEY not set. Live motion generation is disabled until the key is configured.');
-    }
-    const model = config.fal.seedanceModel;
+  async generate({ prompt, durationS = 6, output, referenceImageUrl, pollMs = 6000, timeoutMs = 900000 }) {
+    if (!config.fal.key) throw new Error('FAL_KEY not set. Live motion generation is disabled until the key is configured.');
+    if (!referenceImageUrl) throw new Error('Seedance needs referenceImageUrl (image-to-video) — generate/approve a Seedream still first.');
+
     const base = config.fal.queueBase.replace(/\/$/, '');
+    const model = config.fal.seedanceModel;
+    const body = {
+      prompt,
+      image_url: referenceImageUrl,
+      resolution: config.fal.resolution,
+      generate_audio: config.fal.generateAudio,
+      duration: Math.min(15, Math.max(4, Math.round(durationS))),
+    };
 
-    // Seedance runs image-to-video off the approved Seedream still. The still
-    // must be a URL fal can fetch — upload the local still to fal storage first
-    // and pass its URL as `referenceImageUrl`. (Upload wiring lands with the
-    // first live run; fixture mode animates the local still directly.)
-    if (!referenceImageUrl) {
-      logger.warn('Seedance called without a reference still URL — text-to-video fallback.');
-    }
+    const submit = await fetch(`${base}/${model}`, { method: 'POST', headers: auth(), body: JSON.stringify(body) });
+    if (!submit.ok) throw new Error(`fal Seedance submit failed: ${submit.status} ${await submit.text()}`);
+    const sd = await submit.json();
+    const statusUrl = sd.status_url || `${base}/${appId(model)}/requests/${sd.request_id}/status`;
+    logger.info({ requestId: sd.request_id, model }, 'fal Seedance job submitted');
 
-    // 1. Submit to the queue.
-    const submit = await fetch(`${base}/${model}`, {
-      method: 'POST',
-      headers: AUTH(),
-      body: JSON.stringify({
-        prompt,
-        aspect_ratio: ratio,
-        duration: durationS,
-        ...(referenceImageUrl ? { image_url: referenceImageUrl } : {}),
-      }),
-    });
-    if (!submit.ok) {
-      throw new Error(`fal submit failed: ${submit.status} ${await submit.text()}`);
-    }
-    const { request_id: requestId, status_url: statusUrl, response_url: responseUrl } =
-      await submit.json();
-    logger.info({ requestId, model }, 'fal Seedance job submitted');
-
-    // 2. Poll until COMPLETED (or fail/timeout).
     const deadline = Date.now() + timeoutMs;
-    const statusEndpoint = statusUrl || `${base}/${model}/requests/${requestId}/status`;
-    // eslint-disable-next-line no-constant-condition
-    while (true) {
-      if (Date.now() > deadline) throw new Error(`fal job ${requestId} timed out`);
-      const s = await fetch(statusEndpoint, { headers: AUTH() });
-      const status = (await s.json()).status;
+    for (;;) {
+      if (Date.now() > deadline) throw new Error(`fal Seedance job timed out`);
+      const status = String((await (await fetch(statusUrl, { headers: auth() })).json()).status || '').toUpperCase();
       if (status === 'COMPLETED') break;
-      if (status === 'FAILED' || status === 'ERROR') throw new Error(`fal job ${requestId} ${status}`);
-      await new Promise((r) => setTimeout(r, pollMs));
+      if (['FAILED', 'ERROR', 'CANCELED'].includes(status)) throw new Error(`fal Seedance job ${status}`);
+      await sleep(pollMs);
     }
 
-    // 3. Fetch the result and download the video.
-    const resultEndpoint = responseUrl || `${base}/${model}/requests/${requestId}`;
-    const result = await (await fetch(resultEndpoint, { headers: AUTH() })).json();
-    const videoUrl = result?.video?.url || result?.videos?.[0]?.url;
-    if (!videoUrl) throw new Error(`fal job ${requestId} returned no video url`);
+    const result = await (await fetch(statusUrl.replace(/\/status\/?$/, ''), { headers: auth() })).json();
+    const videoUrl = result?.video?.url || result?.videos?.[0]?.url || result?.output?.video?.url;
+    if (!videoUrl) throw new Error(`fal Seedance completed but returned no video url`);
     await downloadTo(videoUrl, output);
 
-    return { path: output, model: MODEL_MOTION, durationS, jobId: requestId };
+    return { path: output, model: MODEL_MOTION, durationS, jobId: sd.request_id };
   },
 };
 
