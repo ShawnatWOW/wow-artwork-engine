@@ -37,6 +37,31 @@ without them. Grab them when we start M3 (delivery) and M4 (first live run).
 
 ---
 
+## 🔒 Rotate the compromised key (MUST-DO before launch)
+
+`google-drive-server-account.json` is committed in the `wow-contract-query` repo — treat the
+key as **leaked; you can't un-leak it, you must rotate it.**
+
+1. **Find the owning project + rotate (do first).** You're unsure which Google Cloud project
+   this service account lives under — the account email inside the JSON
+   (`…@<project>.iam.gserviceaccount.com`) names the project. In
+   [Google Cloud Console → Service Accounts](https://console.cloud.google.com/iam-admin/serviceaccounts)
+   for that project → the account → **Keys** → **Add key → JSON** (new), then **delete** the old
+   key ID that's in the committed file. — [Google guide](https://cloud.google.com/iam/docs/keys-create-delete)
+2. **Store the new key outside git** (Secrets Manager / pull from S3 at deploy), reference by env.
+3. **Scrub it from git history:**
+   ```bash
+   brew install git-filter-repo
+   git filter-repo --path google-drive-server-account.json --invert-paths   # in a fresh clone
+   git push --force --all      # coordinate — teammates must re-clone
+   ```
+   [GitHub guide](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/removing-sensitive-data-from-a-repository) ·
+   [git-filter-repo](https://github.com/newren/git-filter-repo) · [BFG](https://rtyley.github.io/bfg-repo-cleaner/)
+
+DLLM can do steps 2–3 once you've rotated (step 1 is yours — it's your Google account).
+
+---
+
 ## Already connected on this machine (nothing needed from you)
 
 - **GitHub** — authorized as `ShawnatWOW` (push, PRs, Actions). Both repos reachable:

@@ -1,6 +1,17 @@
 # WOW Artwork Engine — Status Update
 
-**Last updated:** 2026-07-09 · **Delivery target:** 2026-08-14 · **Spent so far:** $0
+**Last updated:** 2026-07-10 · **Delivery target:** 2026-08-14 · **Spent so far:** $0
+
+---
+
+## 🔒 MUST-DO BEFORE LAUNCH (blocking)
+
+- [ ] **Rotate the leaked Google service-account key.** The file
+  `google-drive-server-account.json` is committed in the `wow-contract-query` repo — a live
+  credential in source control. **Shawn:** find which Google Cloud project owns that service
+  account (needs digging), create a new key + delete the old one, then scrub it from git
+  history. Full steps in [KEYS.md](KEYS.md) → "Rotate the compromised key." Tracked in Linear.
+  *The project must not go live until this is done.*
 
 ---
 
