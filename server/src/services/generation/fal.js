@@ -29,18 +29,31 @@ export const motionProvider = {
    * @returns {Promise<{path, model, width, height, durationS, jobId}>}
    * @param ratio e.g. "16:9" | "2:1" — fal-supported aspect ratio.
    */
-  async generate({ prompt, ratio = '16:9', durationS = 6, output, pollMs = 4000, timeoutMs = 600000 }) {
+  async generate({ prompt, ratio = '16:9', durationS = 6, output, referenceImageUrl, pollMs = 4000, timeoutMs = 600000 }) {
     if (!config.fal.key) {
       throw new Error('FAL_KEY not set. Live motion generation is disabled until the key is configured.');
     }
     const model = config.fal.seedanceModel;
     const base = config.fal.queueBase.replace(/\/$/, '');
 
+    // Seedance runs image-to-video off the approved Seedream still. The still
+    // must be a URL fal can fetch — upload the local still to fal storage first
+    // and pass its URL as `referenceImageUrl`. (Upload wiring lands with the
+    // first live run; fixture mode animates the local still directly.)
+    if (!referenceImageUrl) {
+      logger.warn('Seedance called without a reference still URL — text-to-video fallback.');
+    }
+
     // 1. Submit to the queue.
     const submit = await fetch(`${base}/${model}`, {
       method: 'POST',
       headers: AUTH(),
-      body: JSON.stringify({ prompt, aspect_ratio: ratio, duration: durationS }),
+      body: JSON.stringify({
+        prompt,
+        aspect_ratio: ratio,
+        duration: durationS,
+        ...(referenceImageUrl ? { image_url: referenceImageUrl } : {}),
+      }),
     });
     if (!submit.ok) {
       throw new Error(`fal submit failed: ${submit.status} ${await submit.text()}`);

@@ -1,33 +1,46 @@
-// Prompt library (Build Plan M1).
+// Prompt library (Build Plan M1 · two-phase M2.5).
 //
-// Builds the text prompt handed to the model for each surface/option. Pure and
-// deterministic (seeded by week + option) so a run is reproducible and tests
-// are stable. Prompts are always screened by guardrails before spend
-// (see orchestrator + services/guardrails.js).
-//
-// In fixture mode the prompt is cosmetic — the fixture provider ignores it —
-// but it is still stored on the artwork and guardrail-checked, so swapping to
-// live generation changes nothing but the provider.
+// Two prompts per option:
+//   buildStillPrompt  — the Seedream still (the first-frame reference / style).
+//   buildMotionPrompt — the Seedance motion applied to that still.
+// Split so we can review the still (cheap) before spending on motion, and so
+// motion direction is explicit — critical for EON, where a subject must travel
+// across the three pods (e.g. "slithers from the far-right edge to the
+// far-left edge"). Pure + deterministic (seeded by week + option) so runs are
+// reproducible and variations are easy to compare.
 
-// Rotating creative themes. Deterministically indexed by week + option so the
-// three options for a surface differ, and different weeks differ.
+// Rotating creative themes. Deterministically indexed by week + option.
 const THEMES = [
-  'bold neon geometric motion, high-energy, deep contrast',
+  'bold neon geometric forms, high-energy, deep contrast',
   'liquid metallic ribbons flowing across a dark field',
   'sunrise gradients with drifting particles of light',
   'retro-futuristic grid horizon with a glowing sun',
-  'abstract botanical bloom unfolding in slow motion',
+  'an abstract botanical bloom unfolding',
   'iridescent soap-bubble textures, prismatic highlights',
-  'cosmic nebula swirl with slow parallax stars',
+  'a cosmic nebula swirl with slow parallax stars',
   'crisp origami shapes folding and unfolding',
 ];
 
-// Per-style framing so each surface reads correctly on its sign.
-const STYLE_FRAMING = {
-  frame_break: 'a single hero subject that appears to break out of the frame toward the viewer, strong central focal point, empty margins',
-  eon_connected: 'one continuous wide composition with a clear element that travels left-to-right across the full width',
-  eon_single: 'a self-contained vertical composition, balanced for a tall narrow panel',
+// Per-style framing for the STILL (composition guidance for the image model).
+const STILL_FRAMING = {
+  frame_break: 'a single bold hero subject centered with generous empty margins, cinematic depth, designed to pop out of a frame toward the viewer',
+  eon_single: 'a self-contained vertical composition balanced for a tall, narrow panel, strong central focal point',
+  // eon_connected framing is directional — see buildStillPrompt.
 };
+
+// EON travel direction per option, so the three options are visibly different
+// and we can compare which reads best across the pods.
+//   pods sit left→right as pod 1 | pod 2 | pod 3.
+const TRAVELS = [
+  { dir: 'rtl', start: 'far-right', end: 'far-left', order: 'pod 3 → pod 2 → pod 1', verb: 'glides' },
+  { dir: 'ltr', start: 'far-left', end: 'far-right', order: 'pod 1 → pod 2 → pod 3', verb: 'travels' },
+  { dir: 'rtl', start: 'far-right', end: 'far-left', order: 'pod 3 → pod 2 → pod 1', verb: 'slithers' },
+];
+
+/** The travel spec for an EON-connected option (1-based). Pure. */
+export function travelFor(option) {
+  return TRAVELS[(option - 1) % TRAVELS.length];
+}
 
 /** Stable non-negative hash of a string (FNV-1a). Pure. */
 function hash(str) {
@@ -39,18 +52,46 @@ function hash(str) {
   return h >>> 0;
 }
 
+function themeFor({ specKey, option, weekOf }) {
+  return THEMES[hash(`${weekOf || 'week'}:${specKey}:${option}`) % THEMES.length];
+}
+
+const SAFE = 'Vivid, premium, brand-safe. No text, no logos, no watermarks.';
+
 /**
- * Build the prompt for one job.
- * @param {{ surface, style, specKey, option, weekOf }} job
- * @returns {string}
+ * The still (first-frame) prompt for one option.
+ * @param {{ style, specKey, option, weekOf }} job
  */
-export function buildPrompt({ style, specKey, option, weekOf }) {
-  const seed = hash(`${weekOf || 'week'}:${specKey}:${option}`);
-  const theme = THEMES[seed % THEMES.length];
-  const framing = STYLE_FRAMING[style] || 'a striking abstract composition';
-  return `WOW billboard artwork — ${framing}. Style: ${theme}. ` +
-    'Vivid, premium, brand-safe, no text, no logos, no watermarks.';
+export function buildStillPrompt({ style, specKey, option, weekOf }) {
+  const theme = themeFor({ specKey, option, weekOf });
+  if (style === 'eon_connected') {
+    const t = travelFor(option);
+    return `WOW EON billboard — one continuous ultra-wide composition spanning three vertical pods. ${theme}. ` +
+      `Place the hero subject at the ${t.start} edge with open, uncluttered space across the rest of the width, ` +
+      `so it can travel the full frame; seamless left-to-right continuity with no hard seams between pods. ${SAFE}`;
+  }
+  const framing = STILL_FRAMING[style] || 'a striking abstract composition';
+  return `WOW billboard artwork — ${framing}. ${theme}. First frame for a short motion clip. ${SAFE}`;
+}
+
+/**
+ * The motion prompt for one option — how Seedance animates the still.
+ * @param {{ style, specKey, option, weekOf }} job
+ */
+export function buildMotionPrompt({ style, specKey, option, weekOf }) {
+  const theme = themeFor({ specKey, option, weekOf });
+  if (style === 'eon_connected') {
+    const t = travelFor(option);
+    return `Animate this frame: the hero subject ${t.verb} smoothly from the ${t.start} edge to the ${t.end} edge, ` +
+      `crossing the entire width so it passes across all three pods in sequence (${t.order}); ` +
+      `constant, even speed, seamless and loopable. Keep the background continuous. 6 seconds.`;
+  }
+  if (style === 'frame_break') {
+    return `Animate this frame: subtle cinematic motion — ${theme} — with the hero subject easing forward as if breaking ` +
+      `out of the frame toward the viewer; smooth, premium, loopable. 6 seconds.`;
+  }
+  return `Animate this frame: gentle ambient motion — ${theme} — slow drift and shimmer, smooth and loopable. 6 seconds.`;
 }
 
 export { THEMES };
-export default { buildPrompt, THEMES };
+export default { buildStillPrompt, buildMotionPrompt, travelFor, THEMES };

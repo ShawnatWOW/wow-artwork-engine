@@ -23,6 +23,7 @@ export const api = {
   listRuns: () => req('GET', '/runs'),
   getRun: (id) => req('GET', `/runs/${id}`),
   generate: (weekOf) => req('POST', '/runs', { triggeredBy: 'dashboard', ...(weekOf ? { weekOf } : {}) }),
+  animate: (runId) => req('POST', `/runs/${runId}/animate`),
   select: (id) => req('POST', `/artworks/${id}/select`),
   unselect: (id) => req('DELETE', `/artworks/${id}/select`),
   approve: (id) => req('POST', `/artworks/${id}/approve`),

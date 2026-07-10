@@ -50,11 +50,13 @@ const config = {
   // stray run can never spend generation credits by accident.
   generationMode: process.env.GENERATION_MODE || 'fixture',
 
-  // Motion: Seedance 2.0 via fal.ai (locked). Stills: Nano Banana Pro (Gemini).
+  // Both models run on fal.ai: Seedance 2.0 (motion, image-to-video) + Seedream
+  // (stills, which double as the first-frame reference for Seedance).
   fal: {
     key: process.env.FAL_KEY,
-    // fal model slug for Seedance 2.0 motion. Override if fal renames it.
-    seedanceModel: process.env.FAL_SEEDANCE_MODEL || 'fal-ai/bytedance/seedance/v2/text-to-video',
+    // fal model slugs — confirm/override if fal renames them.
+    seedanceModel: process.env.FAL_SEEDANCE_MODEL || 'fal-ai/bytedance/seedance/v2/image-to-video',
+    seedreamModel: process.env.FAL_SEEDREAM_MODEL || 'fal-ai/bytedance/seedream/v3/text-to-image',
     queueBase: process.env.FAL_QUEUE_BASE || 'https://queue.fal.run',
   },
   gemini: {

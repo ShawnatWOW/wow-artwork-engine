@@ -9,7 +9,7 @@
 
 import { Router } from 'express';
 import logger from '../config/logger.js';
-import { runWeek } from '../services/orchestrator.js';
+import { runWeek, animateRun } from '../services/orchestrator.js';
 import { getRepo } from '../db/index.js';
 
 const router = Router();
@@ -29,6 +29,23 @@ router.post('/runs', async (req, res, next) => {
     });
 
     res.status(202).json({ runId: run.id, status: run.status, weekOf: run.week_of });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Phase 2: animate the run's approved stills. Responds once work is under way;
+// motions are polled via GET /runs/:id.
+router.post('/runs/:id/animate', async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'invalid_run_id' });
+
+    const run = await new Promise((resolve, reject) => {
+      animateRun({ runId: id, triggeredBy: req.get('x-user-email') || 'dashboard', onStart: resolve })
+        .catch((err) => { logger.error({ err: err.message }, 'Background animate failed'); reject(err); });
+    });
+    res.status(202).json({ runId: run.id, status: 'running' });
   } catch (err) {
     next(err);
   }

@@ -1,9 +1,9 @@
-// WOW Artwork Engine — weekly review dashboard (Build Plan M2).
+// WOW Artwork Engine — weekly review dashboard (Build Plan M2 · two-phase M2.5).
 //
-// Standalone shell for dev; the reusable review surface is <ReviewDashboard/>,
-// written to lift into the shared WOW dashboard (unstuckllc/wow-contract-query)
-// as the "Artwork Engine" tab. Data comes from the /api/runs + /api/artworks
-// endpoints; media streams from the asset store.
+// Phase 1: review the Seedream STILLS (styles) + their proposed motion prompt,
+// approve the ones Scott likes. Phase 2: "Animate approved" runs Seedance only
+// on approved stills. Standalone shell for dev; ReviewDashboard lifts into the
+// wow-contract-query "Artwork Engine" tab.
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from './api.js';
 import { Preview, Actions, StatusBadge, Details, Card } from './ui.jsx';
@@ -19,7 +19,7 @@ export default function App() {
 export function ReviewDashboard() {
   const [runs, setRuns] = useState([]);
   const [runId, setRunId] = useState(null);
-  const [detail, setDetail] = useState(null); // { run, artworks, eonSequences, selections }
+  const [detail, setDetail] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 
@@ -27,18 +27,16 @@ export function ReviewDashboard() {
     const { runs: list } = await api.listRuns();
     setRuns(list);
     setRunId((cur) => cur ?? list[0]?.id ?? null);
-    return list;
   }, []);
 
   const loadDetail = useCallback(async (id) => {
-    if (!id) return setDetail(null);
+    if (id == null) return setDetail(null);
     setDetail(await api.getRun(id));
   }, []);
 
   useEffect(() => { loadRuns().catch((e) => setError(e.message)); }, [loadRuns]);
   useEffect(() => { loadDetail(runId).catch((e) => setError(e.message)); }, [runId, loadDetail]);
 
-  // Poll while a run is still generating so cards fill in live.
   useEffect(() => {
     if (detail?.run?.status !== 'running') return undefined;
     const t = setInterval(() => loadDetail(runId).catch(() => {}), 2000);
@@ -46,36 +44,40 @@ export function ReviewDashboard() {
   }, [detail?.run?.status, runId, loadDetail]);
 
   const generate = async () => {
-    setBusy(true);
-    setError(null);
+    setBusy(true); setError(null);
     try {
       const { runId: newId } = await api.generate();
       await loadRuns();
       setRunId(newId);
       await loadDetail(newId);
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setBusy(false);
-    }
+    } catch (e) { setError(e.message); } finally { setBusy(false); }
+  };
+
+  const animate = async () => {
+    setBusy(true); setError(null);
+    try { await api.animate(runId); await loadDetail(runId); }
+    catch (e) { setError(e.message); } finally { setBusy(false); }
   };
 
   const act = async (fn) => {
     setBusy(true);
     try { await fn(); await loadDetail(runId); }
-    catch (e) { setError(e.message); }
-    finally { setBusy(false); }
+    catch (e) { setError(e.message); } finally { setBusy(false); }
   };
+
+  // Approved stills not yet animated → the Animate button's count.
+  const pendingAnimate = useMemo(() => {
+    if (!detail) return 0;
+    const animated = new Set(detail.artworks.map((a) => a.source_still_id).filter(Boolean));
+    return detail.artworks.filter((a) => a.stage === 'still' && a.status === 'approved' && !animated.has(a.id)).length;
+  }, [detail]);
 
   return (
     <main className="mx-auto max-w-6xl p-6">
       <Header
-        runs={runs}
-        runId={runId}
-        onSelectRun={setRunId}
-        onGenerate={generate}
-        busy={busy}
-        run={detail?.run}
+        runs={runs} runId={runId} onSelectRun={setRunId}
+        onGenerate={generate} onAnimate={animate} pendingAnimate={pendingAnimate}
+        busy={busy} run={detail?.run}
       />
       {error && <p className="mb-4 rounded bg-rose-950 px-3 py-2 text-sm text-rose-200">{error}</p>}
       {!detail && <Empty onGenerate={generate} busy={busy} />}
@@ -84,7 +86,7 @@ export function ReviewDashboard() {
   );
 }
 
-function Header({ runs, runId, onSelectRun, onGenerate, busy, run }) {
+function Header({ runs, runId, onSelectRun, onGenerate, onAnimate, pendingAnimate, busy, run }) {
   const [health, setHealth] = useState(null);
   useEffect(() => { api.health().then(setHealth); }, []);
   return (
@@ -105,18 +107,22 @@ function Header({ runs, runId, onSelectRun, onGenerate, busy, run }) {
             onChange={(e) => onSelectRun(Number(e.target.value))}
             className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm"
           >
-            {runs.map((r) => (
-              <option key={r.id} value={r.id}>#{r.id} · {r.week_of} · {r.status}</option>
-            ))}
+            {runs.map((r) => <option key={r.id} value={r.id}>#{r.id} · {r.week_of} · {r.status}</option>)}
           </select>
         )}
+        {pendingAnimate > 0 && (
+          <button
+            type="button" onClick={onAnimate} disabled={busy}
+            className="rounded bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+          >
+            {busy ? 'Working…' : `▶ Animate approved (${pendingAnimate})`}
+          </button>
+        )}
         <button
-          type="button"
-          onClick={onGenerate}
-          disabled={busy}
+          type="button" onClick={onGenerate} disabled={busy}
           className="rounded bg-[#0247FE] px-3 py-1.5 text-sm font-medium text-white hover:bg-[#0235c9] disabled:opacity-50"
         >
-          {busy ? 'Working…' : 'Generate this week'}
+          {busy ? 'Working…' : 'Generate styles'}
         </button>
       </div>
     </header>
@@ -128,13 +134,12 @@ function Empty({ onGenerate, busy }) {
     <div className="grid place-items-center rounded border border-dashed border-neutral-800 py-24 text-center">
       <div>
         <p className="text-neutral-400">No runs yet.</p>
+        <p className="mt-1 text-xs text-neutral-600">Step 1 generates cheap style stills. You approve; Step 2 animates only those.</p>
         <button
-          type="button"
-          onClick={onGenerate}
-          disabled={busy}
+          type="button" onClick={onGenerate} disabled={busy}
           className="mt-3 rounded bg-[#0247FE] px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
         >
-          {busy ? 'Generating…' : 'Generate this week (fixtures, $0)'}
+          {busy ? 'Generating…' : 'Generate styles (fixtures, $0)'}
         </button>
       </div>
     </div>
@@ -142,50 +147,65 @@ function Empty({ onGenerate, busy }) {
 }
 
 function RunView({ detail, onAct, busy }) {
-  const { artworks, eonSequences, selections } = detail;
+  const { artworks, selections } = detail;
   const selected = useMemo(() => new Set(selections.map((s) => s.artwork_id)), [selections]);
-  const byId = useMemo(() => new Map(artworks.map((a) => [a.id, a])), [artworks]);
-
-  const spectacular = artworks.filter((a) => a.style === 'frame_break');
-  const eonSingle = artworks.filter((a) => a.style === 'eon_single');
+  const motionsByStill = useMemo(() => {
+    const m = new Map();
+    for (const a of artworks) {
+      if (a.stage === 'motion' && a.source_still_id) {
+        if (!m.has(a.source_still_id)) m.set(a.source_still_id, []);
+        m.get(a.source_still_id).push(a);
+      }
+    }
+    return m;
+  }, [artworks]);
 
   const actionsFor = (a) => ({
-    selected: selected.has(a.id),
-    status: a.status,
-    busy,
+    selected: selected.has(a.id), status: a.status, busy,
     onSelect: () => onAct(() => (selected.has(a.id) ? api.unselect(a.id) : api.select(a.id))),
     onApprove: () => onAct(() => api.approve(a.id)),
     onReject: () => onAct(() => api.reject(a.id)),
   });
+  // For a set of faces, apply one action to all three.
+  const groupActions = (faces) => ({
+    selected: faces.some((f) => selected.has(f.id)), status: faces[0]?.status, busy,
+    onSelect: () => onAct(() => Promise.all(faces.map((f) => (selected.has(f.id) ? api.unselect(f.id) : api.select(f.id))))),
+    onApprove: () => onAct(() => Promise.all(faces.map((f) => api.approve(f.id)))),
+    onReject: () => onAct(() => Promise.all(faces.map((f) => api.reject(f.id)))),
+  });
+
+  const stillsOf = (style) => artworks.filter((a) => a.stage === 'still' && a.style === style);
 
   return (
     <div className="space-y-10">
-      <Section title="Spectacular" subtitle="1692×468 · frame-break · 3 options">
+      <Section title="Spectacular" subtitle="frame-break · 3 styles → 1692×468 motion">
         <div className="space-y-4">
-          {spectacular.map((a) => (
-            <Card key={a.id} artwork={a} aspectClass="aspect-spectacular" actions={actionsFor(a)} />
-          ))}
+          {stillsOf('frame_break').map((still) => {
+            const motion = motionsByStill.get(still.id)?.[0];
+            return motion
+              ? <Card key={still.id} artwork={motion} actions={actionsFor(motion)} />
+              : <Card key={still.id} artwork={still} actions={actionsFor(still)} />;
+          })}
         </div>
       </Section>
 
-      <Section title="EON — Connected pods" subtitle="768×384 master → 3 × 256×384 faces · travels across the pod">
+      <Section title="EON — Connected pods" subtitle="one wide style → animates & slices into 3 × 256×384 faces that travel pod-to-pod">
         <div className="space-y-6">
-          {eonSequences.map((seq, i) => (
-            <ConnectedSet
-              key={seq.id}
-              index={i + 1}
-              faces={[seq.face1_artwork_id, seq.face2_artwork_id, seq.face3_artwork_id].map((id) => byId.get(id)).filter(Boolean)}
-              actionsFor={actionsFor}
-            />
-          ))}
+          {stillsOf('eon_connected').map((still) => {
+            const faces = motionsByStill.get(still.id);
+            return faces
+              ? <ConnectedSet key={still.id} faces={faces} actions={groupActions(faces)} />
+              : <div key={still.id} className="max-w-2xl"><Card artwork={still} actions={actionsFor(still)} /></div>;
+          })}
         </div>
       </Section>
 
-      <Section title="EON — Single face" subtitle="256×384 · 3 options">
+      <Section title="EON — Single face" subtitle="256×384 · 3 styles">
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-          {eonSingle.map((a) => (
-            <Card key={a.id} artwork={a} aspectClass="aspect-eon-face" actions={actionsFor(a)} />
-          ))}
+          {stillsOf('eon_single').map((still) => {
+            const motion = motionsByStill.get(still.id)?.[0];
+            return <Card key={still.id} artwork={motion || still} actions={actionsFor(motion || still)} />;
+          })}
         </div>
       </Section>
     </div>
@@ -204,33 +224,23 @@ function Section({ title, subtitle, children }) {
   );
 }
 
-// A connected EON option: the three pod faces shown side by side (as they sit
-// on the network) with one set of actions applied to the whole set.
-function ConnectedSet({ index, faces, actionsFor }) {
-  const setAct = (method) => () => faces.forEach((f) => actionsFor(f)[method]());
-  const anySelected = faces.some((f) => actionsFor(f).selected);
-  const status = faces[0]?.status;
+// An animated connected EON option: the three pod faces side by side.
+function ConnectedSet({ faces, actions }) {
   return (
     <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-3">
       <div className="mb-2 flex items-center justify-between">
-        <span className="text-xs text-neutral-400">Option {index}</span>
-        <StatusBadge status={status} />
+        <span className="text-xs text-neutral-400">Connected · animated</span>
+        <StatusBadge status={faces[0]?.status} />
       </div>
       <div className="flex items-end gap-1">
         {faces.map((f, i) => (
           <div key={f.id} className="w-28">
-            <Preview artworkId={f.id} aspectClass="aspect-eon-face" />
+            <Preview artwork={f} />
             <p className="mt-1 text-center text-[10px] text-neutral-600">pod {i + 1}</p>
           </div>
         ))}
       </div>
-      <Actions
-        selected={anySelected}
-        status={status}
-        onSelect={setAct('onSelect')}
-        onApprove={setAct('onApprove')}
-        onReject={setAct('onReject')}
-      />
+      <Actions {...actions} />
       {faces[0] && <Details artwork={faces[0]} />}
     </div>
   );
