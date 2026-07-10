@@ -5,6 +5,7 @@ import logger from './config/logger.js';
 import healthRouter from './routes/health.js';
 import runsRouter from './routes/runs.js';
 import artworksRouter from './routes/artworks.js';
+import handoffRouter from './routes/handoff.js';
 
 export function createApp() {
   const app = express();
@@ -28,6 +29,7 @@ export function createApp() {
   // existing /api proxy.
   app.use('/api', runsRouter);
   app.use('/api', artworksRouter);
+  app.use('/api', handoffRouter);
 
   // 404
   app.use((req, res) => res.status(404).json({ error: 'not_found', path: req.path }));

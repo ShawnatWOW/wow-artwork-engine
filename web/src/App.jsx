@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from './api.js';
 import { Preview, Actions, StatusBadge, Details, Card } from './ui.jsx';
+import SendDialog from './SendDialog.jsx';
 
 export default function App() {
   return (
@@ -22,6 +23,7 @@ export function ReviewDashboard() {
   const [detail, setDetail] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  const [showSend, setShowSend] = useState(false);
 
   const loadRuns = useCallback(async () => {
     const { runs: list } = await api.listRuns();
@@ -72,21 +74,29 @@ export function ReviewDashboard() {
     return detail.artworks.filter((a) => a.stage === 'still' && a.status === 'approved' && !animated.has(a.id)).length;
   }, [detail]);
 
+  // Approved animated pieces → ready to send to Jeff.
+  const readyToSend = useMemo(
+    () => (detail ? detail.artworks.filter((a) => a.stage === 'motion' && a.status === 'approved').length : 0),
+    [detail],
+  );
+
   return (
     <main className="mx-auto max-w-6xl p-6">
       <Header
         runs={runs} runId={runId} onSelectRun={setRunId}
         onGenerate={generate} onAnimate={animate} pendingAnimate={pendingAnimate}
+        readyToSend={readyToSend} onSend={() => setShowSend(true)}
         busy={busy} run={detail?.run}
       />
       {error && <p className="mb-4 rounded bg-rose-950 px-3 py-2 text-sm text-rose-200">{error}</p>}
       {!detail && <Empty onGenerate={generate} busy={busy} />}
       {detail && <RunView detail={detail} onAct={act} busy={busy} />}
+      {showSend && <SendDialog runId={runId} onClose={() => setShowSend(false)} onSent={() => loadDetail(runId)} />}
     </main>
   );
 }
 
-function Header({ runs, runId, onSelectRun, onGenerate, onAnimate, pendingAnimate, busy, run }) {
+function Header({ runs, runId, onSelectRun, onGenerate, onAnimate, pendingAnimate, readyToSend, onSend, busy, run }) {
   const [health, setHealth] = useState(null);
   useEffect(() => { api.health().then(setHealth); }, []);
   return (
@@ -116,6 +126,14 @@ function Header({ runs, runId, onSelectRun, onGenerate, onAnimate, pendingAnimat
             className="rounded bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
           >
             {busy ? 'Working…' : `▶ Animate approved (${pendingAnimate})`}
+          </button>
+        )}
+        {readyToSend > 0 && (
+          <button
+            type="button" onClick={onSend} disabled={busy}
+            className="rounded bg-amber-500 px-3 py-1.5 text-sm font-medium text-neutral-950 hover:bg-amber-400 disabled:opacity-50"
+          >
+            ✉ Send to Jeff ({readyToSend})
           </button>
         )}
         <button

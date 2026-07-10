@@ -74,9 +74,24 @@ const config = {
       .filter(Boolean),
   },
 
-  // Handoff (locked: Google Drive). FTP kept as an optional fallback.
+  // Handoff (locked: Google Drive). FTP kept as an optional fallback. When
+  // Drive/Gmail aren't configured the handoff runs OFFLINE — files copied to a
+  // local folder and the email written as a .eml — and is reported as NOT sent.
   delivery: {
     method: process.env.DELIVERY_METHOD || 'drive',
+    localDir: process.env.HANDOFF_LOCAL_DIR || 'var/handoff',
+  },
+
+  // Jeff notification via the Gmail API + a Google service account with
+  // domain-wide delegation — sends AS a real @wowmedia.com person, no SMTP.
+  publish: {
+    // Reuses the same service-account key as Drive.
+    serviceAccountJson: process.env.GOOGLE_SERVICE_ACCOUNT_JSON,
+    senders: (process.env.PUBLISH_SENDERS || 'scott@wowmedia.com,shawn@wowmedia.com')
+      .split(',').map((s) => s.trim()).filter(Boolean),
+    from: process.env.PUBLISH_FROM || 'scott@wowmedia.com',
+    to: process.env.PUBLISH_TO || process.env.JEFF_EMAIL || 'jeff@wowmedia.com',
+    domain: process.env.PUBLISH_DOMAIN || 'wowmedia.com',
   },
   drive: {
     // ID of the watched Drive folder picks are dropped into.

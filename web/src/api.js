@@ -28,6 +28,8 @@ export const api = {
   unselect: (id) => req('DELETE', `/artworks/${id}/select`),
   approve: (id) => req('POST', `/artworks/${id}/approve`),
   reject: (id) => req('POST', `/artworks/${id}/reject`),
+  handoffPreview: (runId) => req('GET', `/runs/${runId}/handoff`),
+  sendHandoff: (runId, payload) => req('POST', `/runs/${runId}/handoff`, payload),
   mediaUrl: (id) => `${API}/artworks/${id}/media`,
   thumbUrl: (id) => `${API}/artworks/${id}/thumbnail`,
 };

@@ -9,10 +9,12 @@ export function createMemoryRepo() {
   const artworks = [];
   const eonSequences = [];
   const selections = [];
+  const deliveries = [];
   let runSeq = 0;
   let artSeq = 0;
   let seqSeq = 0;
   let selSeq = 0;
+  let delSeq = 0;
 
   const clone = (o) => ({ ...o });
 
@@ -135,6 +137,28 @@ export function createMemoryRepo() {
     async listSelections(runId) {
       const ids = new Set(artworks.filter((a) => a.run_id === runId).map((a) => a.id));
       return selections.filter((s) => ids.has(s.artwork_id)).map(clone);
+    },
+
+    async insertDelivery({ artworkId, method, destination, status = 'pending', sentAt = null, error = null }) {
+      const row = {
+        id: (delSeq += 1), artwork_id: artworkId, method, destination,
+        status, sent_at: sentAt, jeff_notified_at: null, error, created_at: null,
+      };
+      deliveries.push(row);
+      return clone(row);
+    },
+
+    async updateDelivery(id, patch) {
+      const row = deliveries.find((r) => r.id === id);
+      if (!row) return null;
+      const map = { status: 'status', destination: 'destination', sentAt: 'sent_at', jeffNotifiedAt: 'jeff_notified_at', error: 'error' };
+      for (const [k, col] of Object.entries(map)) if (patch[k] !== undefined) row[col] = patch[k];
+      return clone(row);
+    },
+
+    async listDeliveries(runId) {
+      const ids = new Set(artworks.filter((a) => a.run_id === runId).map((a) => a.id));
+      return deliveries.filter((d) => ids.has(d.artwork_id)).map(clone);
     },
   };
 }

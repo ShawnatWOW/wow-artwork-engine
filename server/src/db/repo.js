@@ -150,6 +150,37 @@ export const pgRepo = {
     );
     return rows;
   },
+
+  // --- Deliveries (the handoff to Jeff) ----------------------------------
+  async insertDelivery({ artworkId, method, destination, status = 'pending', sentAt = null, error = null }) {
+    const { rows } = await query(
+      `INSERT INTO deliveries (artwork_id, method, destination, status, sent_at, error)
+       VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+      [artworkId, method, destination, status, sentAt, error],
+    );
+    return rows[0];
+  },
+
+  async updateDelivery(id, patch) {
+    const map = { status: 'status', destination: 'destination', sentAt: 'sent_at', jeffNotifiedAt: 'jeff_notified_at', error: 'error' };
+    const sets = [];
+    const values = [id];
+    for (const [k, col] of Object.entries(map)) {
+      if (patch[k] !== undefined) { values.push(patch[k]); sets.push(`${col} = $${values.length}`); }
+    }
+    if (!sets.length) return null;
+    const { rows } = await query(`UPDATE deliveries SET ${sets.join(', ')} WHERE id = $1 RETURNING *`, values);
+    return rows[0];
+  },
+
+  async listDeliveries(runId) {
+    const { rows } = await query(
+      `SELECT d.* FROM deliveries d JOIN artworks a ON a.id = d.artwork_id
+        WHERE a.run_id = $1 ORDER BY d.id ASC`,
+      [runId],
+    );
+    return rows;
+  },
 };
 
 export default pgRepo;
