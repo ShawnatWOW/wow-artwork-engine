@@ -119,12 +119,14 @@ See `migrations/001_init.sql`. Tables: `specs`, `generation_runs`, `artworks`,
   store, writing `generation_runs`/`artworks`/`eon_sequences`), weekly
   scheduler, local/S3 asset store, and the `/runs` API. `npm run generate` runs
   a full week on fixtures at $0.
-- **M2 Dashboard** (in progress): weekly review/pick surface — `/api/runs` +
-  `/api/artworks` (select / approve / reject / media streaming), and a
-  React + Vite + Tailwind dashboard in `web/` built to embed as the
-  "Artwork Engine" tab in `unstuckllc/wow-contract-query`. Runs on fixtures with
-  no database (in-memory fallback) so it demos at $0.
-- **M3 Handoff**, **M4 QA & Delivery** — next. M3 email goes through the Gmail
-  API service account; M4 deploys into WOW's existing AWS (no new stack).
+- **M2 Dashboard** (DONE): weekly review/pick surface — `/api/runs` +
+  `/api/artworks` (select / approve / reject / media streaming), embedded as the
+  "Artwork Engine" tab in `wow-contract-query`. Two-phase: review cheap Seedream
+  **stills** first, then **animate approved** with Seedance.
+- **M3 Handoff** (DONE): one-click ship of approved pieces to the watched Drive
+  folder + a Jeff email via the **Gmail API service account** (offline-first,
+  honest "not sent" fallback; `deliveries` tracked). "Review & send" dialog.
+- **M4 QA & Delivery** — next: deploy into WOW's existing AWS (no new stack),
+  first live run with keys, rotate the leaked SA key (DEL-143).
 
 Target date: 2026-08-14.

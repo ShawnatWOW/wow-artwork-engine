@@ -29,10 +29,10 @@ The work is split into four stages (M1–M4).
 
 | Stage | What it means (plain terms) | Status |
 |---|---|---|
-| **M1 — The art machine** | Makes a full week of artwork automatically: 3 options per billboard type, each sized exactly to spec. | ✅ **Done & tested** |
-| **M2 — The review screen** | A web page to watch the week's options and click Pick / Approve / Reject. | ✅ **Done & tested** |
-| **M3 — Send to Jeff** | Auto-deliver approved art to Google Drive + email Jeff, ready to run. | 🔜 Next |
-| **M4 — Final testing + go live** | Real AI keys, first real run, launch. | 🔜 After M3 |
+| **M1 — The art machine** | Makes a full week of artwork automatically. Now two-phase: cheap **style stills** first, animate only the ones Scott approves. | ✅ **Done & tested** |
+| **M2 — The review screen** | A web page (a tab in your WOW dashboard) to watch options and Pick / Approve / Reject. | ✅ **Done & tested** |
+| **M3 — Send to Jeff** | One-click ship of approved art to Google Drive + an email to Jeff (as a real @wowmedia.com person), with a Review & send dialog. | ✅ **Done & tested** (offline; goes live with Drive/Gmail keys) |
+| **M4 — Final testing + go live** | Real AI keys, first real run, deploy. Includes the 🔒 key rotation above. | 🔜 Next |
 
 ---
 
