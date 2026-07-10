@@ -6,7 +6,7 @@
 // endpoints; media streams from the asset store.
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from './api.js';
-import { Preview, Actions, StatusBadge } from './ui.jsx';
+import { Preview, Actions, StatusBadge, Details, Card } from './ui.jsx';
 
 export default function App() {
   return (
@@ -182,11 +182,9 @@ function RunView({ detail, onAct, busy }) {
       </Section>
 
       <Section title="EON — Single face" subtitle="256×384 · 3 options">
-        <div className="flex flex-wrap gap-4">
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
           {eonSingle.map((a) => (
-            <div key={a.id} className="w-40">
-              <Card artwork={a} aspectClass="aspect-eon-face" actions={actionsFor(a)} />
-            </div>
+            <Card key={a.id} artwork={a} aspectClass="aspect-eon-face" actions={actionsFor(a)} />
           ))}
         </div>
       </Section>
@@ -203,19 +201,6 @@ function Section({ title, subtitle, children }) {
       </div>
       {children}
     </section>
-  );
-}
-
-function Card({ artwork, aspectClass, actions }) {
-  return (
-    <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-2">
-      <Preview artworkId={artwork.id} aspectClass={aspectClass} />
-      <div className="mt-2 flex items-center justify-between px-0.5">
-        <span className="text-[11px] text-neutral-500">{artwork.width}×{artwork.height}</span>
-        <StatusBadge status={artwork.status} />
-      </div>
-      <div className="px-0.5"><Actions {...actions} /></div>
-    </div>
   );
 }
 
@@ -246,6 +231,7 @@ function ConnectedSet({ index, faces, actionsFor }) {
         onApprove={setAct('onApprove')}
         onReject={setAct('onReject')}
       />
+      {faces[0] && <Details artwork={faces[0]} />}
     </div>
   );
 }
