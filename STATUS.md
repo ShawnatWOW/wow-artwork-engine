@@ -2,9 +2,10 @@
 
 **Last updated:** 2026-07-11 · **Delivery target:** 2026-08-14 · **Spent so far:** ~$2 (live validation)
 
-> **🚀 DEPLOYED TO STAGING (2026-07-11).** The engine + the "Artwork Engine" tab are live
-> on WOW's staging server, in LIVE mode (real art on button-press; weekly auto-run off).
-> Open the staging dashboard → Artwork Engine tab → "Generate styles" to try it.
+> **🚀 LIVE IN PRODUCTION (2026-07-11).** The Artwork Engine tab is on
+> **wowautomation.ai** — Scott can use it now. LIVE mode: real art on button-press
+> (~$0.30 per batch of 9 style stills); the weekly auto-run stays OFF until launch
+> sign-off. Open wowautomation.ai → **Artwork Engine** → "Generate styles".
 
 ---
 
