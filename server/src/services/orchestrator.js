@@ -134,6 +134,9 @@ async function generateStill(job, ctx) {
       // as the image-to-video first frame (fixture mode has no URL).
       remoteUrl: gen.url ?? null,
       s3KeyFinal: put.key, thumbnailKey: put.key, status: 'ready',
+      // Borderline-dark scenes reach review with an amber note (emissive LED
+      // signs handle dark backgrounds; the reviewer decides).
+      error: gate.warn ? `qa: ${gate.reason}` : null,
     });
     return { ready: 1, failed: 0, blocked: 0 };
   } catch (err) {
@@ -176,8 +179,10 @@ export async function animateRun({ runId, stillIds, triggeredBy = 'dashboard', o
     if (targeted) return targeted.has(a.id);
     // Bulk mode: skip already-animated stills AND ones whose last attempt
     // errored (e.g. a moderation refusal) — those need an explicit retry, not
-    // a silent re-spend (UX review P0, 2026-07-10).
-    return !animatedStillIds.has(a.id) && !a.error;
+    // a silent re-spend (UX review P0). "qa:"-prefixed notes are advisory
+    // warnings (e.g. dark-scene), not failures — they don't block.
+    const hardError = a.error && !a.error.startsWith('qa:');
+    return !animatedStillIds.has(a.id) && !hardError;
   });
   logger.info({ runId, approved: toAnimate.length, targeted: Boolean(targeted), mode: providers.mode || config.generationMode }, 'Phase 2 (animate) started');
 
@@ -236,6 +241,33 @@ async function animateStill(still, ctx) {
     referenceImageUrl: still.remote_url ?? null, // fal-hosted URL — live Seedance
   });
 
+  // Video models return their own frame shape (e.g. a 960x960 square) with the
+  // input art letterboxed/extended inside. The TRUE content aspect is known —
+  // it's the approved still's — so recover it deterministically: center-crop
+  // the model output to the still's aspect ratio (no fragile bar detection).
+  let content = raw;
+  if (!String(gen.model || '').startsWith('fixture') && still.width && still.height) {
+    try {
+      const rawDims = await ffmpeg.probe(raw);
+      const want = still.width / still.height;
+      const got = rawDims.width / rawDims.height;
+      if (rawDims.width && Math.abs(got - want) / want > 0.03) {
+        const even = (n) => Math.max(2, Math.floor(n / 2) * 2);
+        let cw = rawDims.width;
+        let ch = rawDims.height;
+        if (got > want) cw = even(rawDims.height * want);
+        else ch = even(rawDims.width / want);
+        const cx = even((rawDims.width - cw) / 2);
+        const cy = even((rawDims.height - ch) / 2);
+        content = path.join(dir, 'content.mp4');
+        await ffmpeg.cropColumn({ input: raw, output: content, width: cw, height: ch, x: cx, y: cy });
+        logger.info({ stillId: still.id, raw: `${rawDims.width}x${rawDims.height}`, content: `${cw}x${ch}@${cx},${cy}` }, 'Recovered content band from model output');
+      }
+    } catch (err) {
+      logger.warn({ stillId: still.id, err: err.message }, 'Content recovery failed; using raw output');
+    }
+  }
+
   // QA: measure saturation drift on the model's raw output (Seedance colors
   // drain over a clip). Warning only — stored on the motion rows.
   let driftWarn;
@@ -246,11 +278,11 @@ async function animateStill(still, ctx) {
 
   // Ambient surfaces get a palindrome pass so the clip loops seamlessly on the
   // sign (art review: mismatched endpoints pop every cycle). Doubles duration.
-  let srcVideo = raw;
+  let srcVideo = content;
   let effDuration = duration;
   if (surface.loop === 'pingpong') {
     srcVideo = path.join(dir, 'raw_loop.mp4');
-    await ffmpeg.pingpong({ input: raw, output: srcVideo });
+    await ffmpeg.pingpong({ input: content, output: srcVideo });
     effDuration = duration * 2;
   }
 
@@ -295,9 +327,20 @@ async function animateStill(still, ctx) {
   // Spectacular (frame-break) and EON single: one motion artwork.
   const final = path.join(dir, 'final.mp4');
   if (surface.post === POST.FRAME_BREAK) {
+    // Conform the content to the inner window FIRST (cover-crop), then draw
+    // the black canvas + border around it. The old blind overshoot geometry
+    // assumed a known input aspect and showed letterbox when the model
+    // returned something else. True pop-out matting = Batch B.
+    const inset = 48;
+    const inner = path.join(dir, 'inner.mp4');
+    await ffmpeg.conform({
+      input: srcVideo, output: inner,
+      width: finalSpec.width - inset * 2, height: finalSpec.height - inset * 2,
+      duration: effDuration, fps,
+    });
     await ffmpeg.frameBreakComposite({
-      input: srcVideo, output: final, canvasWidth: finalSpec.width, canvasHeight: finalSpec.height,
-      inset: 48, borderThickness: 5, overshoot: 70, duration: effDuration, fps,
+      input: inner, output: final, canvasWidth: finalSpec.width, canvasHeight: finalSpec.height,
+      inset, borderThickness: 5, overshoot: 0, duration: effDuration, fps,
     });
   } else {
     await ffmpeg.conform({ input: srcVideo, output: final, width: finalSpec.width, height: finalSpec.height, duration: effDuration, fps });

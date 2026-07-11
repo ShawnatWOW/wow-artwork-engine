@@ -174,6 +174,36 @@ async function run(args) {
   }
 }
 
+/**
+ * Detect the content region of a video, ignoring letterbox/pillarbox bars
+ * (video models often return a fixed square with the art letterboxed inside).
+ * Samples a few seconds with cropdetect and returns { width, height, x, y }
+ * or null when the full frame is content.
+ */
+export async function detectContentCrop(input, { seconds = 2, limit = 24 } = {}) {
+  const args = [
+    '-i', input,
+    '-t', String(seconds),
+    '-vf', `cropdetect=limit=${limit}:round=2:reset=0`,
+    '-f', 'null', '-',
+  ];
+  let stderr = '';
+  try {
+    ({ stderr } = await execFileP(FFMPEG(), args, { maxBuffer: 1024 * 1024 * 32 }));
+  } catch (err) {
+    stderr = String(err.stderr || '');
+    if (!stderr.includes('crop=')) throw err;
+  }
+  const matches = [...stderr.matchAll(/crop=(\d+):(\d+):(\d+):(\d+)/g)];
+  if (!matches.length) return null;
+  const [, w, h, x, y] = matches[matches.length - 1].map(Number);
+  const probed = await probe(input);
+  // Treat near-full-frame as "no bars" (within 4px per axis).
+  if (!probed.width || (probed.width - w <= 4 && probed.height - h <= 4)) return null;
+  if (w < 16 || h < 16) return null; // degenerate detection (all-dark scene)
+  return { width: w, height: h, x, y };
+}
+
 /** ffprobe → { width, height, duration } for an output file. */
 export async function probe(input) {
   const args = [
@@ -232,4 +262,5 @@ export default {
   cropColumn,
   pingpong,
   probe,
+  detectContentCrop,
 };

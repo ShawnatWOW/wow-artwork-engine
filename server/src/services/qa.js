@@ -16,7 +16,12 @@ import config from '../config/index.js';
 const execFileP = promisify(execFile);
 const FFMPEG = () => config.ffmpeg.ffmpegPath;
 
-export const LUMA_MIN = 55;
+// Calibration (2026-07-10, second live run): billboards are EMISSIVE — a
+// bright subject on a deep black background is classic LED art and can average
+// luma 25–55 while being perfectly readable. Only near-black mud hard-fails;
+// the dark-but-plausible zone gets a WARNING and reaches the reviewer.
+export const LUMA_HARD_MIN = 25;
+export const LUMA_WARN_BELOW = 55;
 export const LUMA_MAX = 200;
 export const SAT_DRIFT_WARN = 0.3; // warn when >30% of the starting saturation is lost
 
@@ -42,11 +47,18 @@ export async function measureLuma(imagePath) {
   return parseStat(out, 'YAVG');
 }
 
-/** Gate a still on outdoor readability. @returns {{ok, yavg, reason?}} */
-export async function lumaGate(imagePath, { min = LUMA_MIN, max = LUMA_MAX } = {}) {
+/**
+ * Gate a still on outdoor readability.
+ * @returns {{ok, yavg, warn?, reason?}} — ok:false blocks; warn surfaces an
+ * amber note on an otherwise-ready card (reviewer decides).
+ */
+export async function lumaGate(imagePath, { hardMin = LUMA_HARD_MIN, warnBelow = LUMA_WARN_BELOW, max = LUMA_MAX } = {}) {
   const yavg = await measureLuma(imagePath);
-  if (yavg < min) return { ok: false, yavg, reason: `average luma ${yavg.toFixed(0)}/255 — too dark to read in direct sunlight` };
+  if (yavg < hardMin) return { ok: false, yavg, reason: `average luma ${yavg.toFixed(0)}/255 — near-black mud, unreadable in daylight` };
   if (yavg > max) return { ok: false, yavg, reason: `average luma ${yavg.toFixed(0)}/255 — near-white, reads as a blank panel at distance` };
+  if (yavg < warnBelow) {
+    return { ok: true, yavg, warn: true, reason: `dark scene (avg luma ${yavg.toFixed(0)}/255) — strong on an LED sign at night, double-check daytime readability` };
+  }
   return { ok: true, yavg };
 }
 
@@ -76,4 +88,4 @@ export async function satDrift(videoPath, { warnAt = SAT_DRIFT_WARN } = {}) {
   };
 }
 
-export default { measureLuma, lumaGate, satDrift, LUMA_MIN, LUMA_MAX, SAT_DRIFT_WARN };
+export default { measureLuma, lumaGate, satDrift, LUMA_HARD_MIN, LUMA_WARN_BELOW, LUMA_MAX, SAT_DRIFT_WARN };

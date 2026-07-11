@@ -73,8 +73,10 @@ export function ReviewDashboard() {
   const pendingAnimate = useMemo(() => {
     if (!detail) return 0;
     const animated = new Set(detail.artworks.map((a) => a.source_still_id).filter(Boolean));
+    // "qa:" notes are advisory warnings, not failures — they don't block.
     return detail.artworks.filter(
-      (a) => a.stage === 'still' && a.status === 'approved' && !animated.has(a.id) && !a.error,
+      (a) => a.stage === 'still' && a.status === 'approved' && !animated.has(a.id)
+        && !(a.error && !a.error.startsWith('qa:')),
     ).length;
   }, [detail]);
 
@@ -194,7 +196,8 @@ function RunView({ detail, onAct, busy }) {
     onApprove: () => onAct(() => api.approve(a.id)),
     onReject: () => onAct(() => api.reject(a.id)),
     // Explicit retry for an approved still whose animation errored (UX P0).
-    ...(a.stage === 'still' && a.status === 'approved' && a.error
+    // "qa:" notes are warnings, not animation failures — no retry needed.
+    ...(a.stage === 'still' && a.status === 'approved' && a.error && !a.error.startsWith('qa:')
       ? { onRetry: () => onAct(() => api.animateOne(a.id)) }
       : {}),
   });
