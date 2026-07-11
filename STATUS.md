@@ -1,6 +1,10 @@
 # WOW Artwork Engine — Status Update
 
-**Last updated:** 2026-07-10 · **Delivery target:** 2026-08-14 · **Spent so far:** $0
+**Last updated:** 2026-07-11 · **Delivery target:** 2026-08-14 · **Spent so far:** ~$2 (live validation)
+
+> **🚀 DEPLOYED TO STAGING (2026-07-11).** The engine + the "Artwork Engine" tab are live
+> on WOW's staging server, in LIVE mode (real art on button-press; weekly auto-run off).
+> Open the staging dashboard → Artwork Engine tab → "Generate styles" to try it.
 
 ---
 
@@ -29,10 +33,10 @@ The work is split into four stages (M1–M4).
 
 | Stage | What it means (plain terms) | Status |
 |---|---|---|
-| **M1 — The art machine** | Makes a full week of artwork automatically. Now two-phase: cheap **style stills** first, animate only the ones Scott approves. | ✅ **Done & tested** |
-| **M2 — The review screen** | A web page (a tab in your WOW dashboard) to watch options and Pick / Approve / Reject. | ✅ **Done & tested** |
+| **M1 — The art machine** | Makes a full week of artwork automatically. Two-phase: cheap **style stills** first, animate only the ones Scott approves. **Validated with real AI art** (Seedream + Seedance, fal key live). | ✅ **Done, live-validated** |
+| **M2 — The review screen** | The "Artwork Engine" tab in your WOW dashboard: watch options, Approve / Reject / Retry, honest LIVE-vs-$0 indicator, step-by-step flow. Art-director + UX reviews applied. | ✅ **Done, deployed to staging** |
 | **M3 — Send to Jeff** | One-click ship of approved art to Google Drive + an email to Jeff (as a real @wowmedia.com person), with a Review & send dialog. | ✅ **Done & tested** (offline; goes live with Drive/Gmail keys) |
-| **M4 — Final testing + go live** | Real AI keys, first real run, deploy. Includes the 🔒 key rotation above. | 🔜 Next |
+| **M4 — Final testing + go live** | Scott reviews on staging → promote to production. Includes the 🔒 key rotation above, a database on the server, and remaining polish (tweak/re-roll, undo, lightbox). | 🟡 **In progress — staging live** |
 
 ---
 
