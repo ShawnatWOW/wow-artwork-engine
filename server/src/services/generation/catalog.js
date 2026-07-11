@@ -26,8 +26,11 @@ export const POST = { FRAME_BREAK: 'frame_break', CONFORM: 'conform', EON_SLICE:
 
 // The surfaces generated every week. `gen` is the ratio/size handed to the
 // model (a standard ratio at high res); the pipeline conforms to `specKey`.
-// Gen sizes: high-res standard ratios, every dimension >= 960 (Seedream's
-// minimum) so live stills keep their exact aspect; FFmpeg conforms downstream.
+// Gen sizes: high-res, every dimension >= 960 (Seedream's minimum), aspect as
+// close to the delivery spec as possible so compositions survive downstream.
+// `loop: 'pingpong'` = ambient motion gets a palindrome pass so it loops
+// seamlessly on the sign (directional travel must NOT ping-pong — it would
+// visibly reverse).
 export const SURFACES = [
   {
     key: 'spectacular',
@@ -35,8 +38,11 @@ export const SURFACES = [
     specKey: 'spectacular_wow1_8',
     style: 'frame_break', // the WOW signature 3D frame-break look
     mediaType: 'video',
-    gen: { kind: 'motion', width: 1920, height: 1080, ratio: '16:9' },
+    // Native ~3.6:1 (matches 1692x468) — the whole composition survives the
+    // band; no center-crop lottery (art review, 2026-07-10).
+    gen: { kind: 'motion', width: 3456, height: 960, ratio: '21:9' },
     post: POST.FRAME_BREAK,
+    loop: 'pingpong',
   },
   {
     key: 'eon_connected',
@@ -46,6 +52,7 @@ export const SURFACES = [
     mediaType: 'video',
     gen: { kind: 'motion', width: 2048, height: 1024, ratio: '2:1' },
     post: POST.EON_SLICE,
+    // Directional travel: no ping-pong. Loop policy = enter/exit clip.
   },
   {
     key: 'eon_single',
@@ -55,6 +62,7 @@ export const SURFACES = [
     mediaType: 'video',
     gen: { kind: 'motion', width: 1024, height: 1536, ratio: '2:3' },
     post: POST.CONFORM,
+    loop: 'pingpong',
   },
 ];
 

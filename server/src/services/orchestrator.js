@@ -23,6 +23,7 @@ import logger from '../config/logger.js';
 import ffmpeg from './ffmpeg.js';
 import { sliceMaster } from './eonSlicer.js';
 import * as guardrailsModule from './guardrails.js';
+import * as qaModule from './qa.js';
 import { planJobs, POST, SURFACES, SPECS } from './generation/catalog.js';
 import { buildStillPrompt, buildMotionPrompt } from './generation/prompts.js';
 import { getProviders } from './generation/index.js';
@@ -37,6 +38,7 @@ function resolveDeps(deps) {
   return {
     repo: deps.repo || getRepo(),
     guardrails: deps.guardrails || guardrailsModule,
+    qa: deps.qa || qaModule,
     duration: deps.duration ?? config.generation.durationS,
     fps: deps.fps ?? config.generation.fps,
   };
@@ -51,7 +53,7 @@ function resolveDeps(deps) {
  * @returns {Promise<{ runId, phase, status, weekOf, counts, artworks }>}
  */
 export async function runWeek({ weekOf, triggeredBy = 'manual', onStart, deps = {} } = {}) {
-  const { repo, guardrails, duration, fps } = resolveDeps(deps);
+  const { repo, guardrails, qa, duration, fps } = resolveDeps(deps);
   const store = deps.store || (await getStore());
   const providers = deps.providers || getProviders();
   const week = weekOf || weekOfFor();
@@ -65,7 +67,7 @@ export async function runWeek({ weekOf, triggeredBy = 'manual', onStart, deps = 
   const counts = { ready: 0, failed: 0, blocked: 0 };
   try {
     for (const job of jobs) {
-      const r = await generateStill(job, { runId: run.id, weekOf: week, repo, store, providers, guardrails, workDir });
+      const r = await generateStill(job, { runId: run.id, weekOf: week, repo, store, providers, guardrails, qa, workDir });
       counts.ready += r.ready; counts.failed += r.failed; counts.blocked += r.blocked;
     }
     const status = counts.ready === 0 && counts.failed + counts.blocked > 0 ? 'failed' : 'complete';
@@ -82,7 +84,7 @@ export async function runWeek({ weekOf, triggeredBy = 'manual', onStart, deps = 
 }
 
 async function generateStill(job, ctx) {
-  const { runId, weekOf, repo, store, providers, guardrails, workDir } = ctx;
+  const { runId, weekOf, repo, store, providers, guardrails, qa, workDir } = ctx;
   const prompt = buildStillPrompt({ style: job.style, specKey: job.specKey, option: job.option, weekOf });
   const motionPrompt = buildMotionPrompt({ style: job.style, specKey: job.specKey, option: job.option, weekOf });
 
@@ -108,6 +110,21 @@ async function generateStill(job, ctx) {
     });
     const key = artworkKey({ runId, surfaceKey: job.key, option: job.option, name: 'still.png' });
     const put = await store.put({ key, sourcePath: stillPath });
+
+    // QA gate BEFORE review: outdoor readability (art review 2026-07-10). The
+    // file is stored either way so a failed card can still show what happened.
+    const gate = await qa.lumaGate(stillPath);
+    if (!gate.ok) {
+      await repo.insertArtwork({
+        runId, surface: job.surface, style: job.style, mediaType: 'still', stage: 'still',
+        specKey: job.specKey, width: job.gen.width, height: job.gen.height,
+        prompt, motionPrompt, model: gen.model, remoteUrl: gen.url ?? null,
+        s3KeyFinal: put.key, thumbnailKey: put.key,
+        status: 'failed', error: `qa: ${gate.reason}`,
+      });
+      logger.warn({ runId, surface: job.key, option: job.option, yavg: gate.yavg }, 'Still failed luma QA gate');
+      return { ready: 0, failed: 1, blocked: 0 };
+    }
 
     await repo.insertArtwork({
       runId, surface: job.surface, style: job.style, mediaType: 'still', stage: 'still',
@@ -135,12 +152,14 @@ async function generateStill(job, ctx) {
 // ===========================================================================
 
 /**
- * Animate the run's APPROVED stills (Phase 2). Only approved, not-yet-animated
- * stills are processed, so this is safe to call repeatedly.
+ * Animate the run's APPROVED stills (Phase 2). By default only approved,
+ * not-yet-animated, non-errored stills are processed (safe to call repeatedly).
+ * Pass `stillIds` to explicitly (re-)animate specific stills — that bypasses
+ * both the already-animated and the error skip (the retry path).
  * @returns {Promise<{ runId, phase, status, animated, counts, artworks }>}
  */
-export async function animateRun({ runId, triggeredBy = 'dashboard', onStart, deps = {} } = {}) {
-  const { repo, guardrails, duration, fps } = resolveDeps(deps);
+export async function animateRun({ runId, stillIds, triggeredBy = 'dashboard', onStart, deps = {} } = {}) {
+  const { repo, guardrails, qa, duration, fps } = resolveDeps(deps);
   const store = deps.store || (await getStore());
   const providers = deps.providers || getProviders();
 
@@ -151,8 +170,16 @@ export async function animateRun({ runId, triggeredBy = 'dashboard', onStart, de
 
   const artworks = await repo.listArtworks(runId);
   const animatedStillIds = new Set(artworks.map((a) => a.source_still_id).filter(Boolean));
-  const toAnimate = artworks.filter((a) => a.stage === 'still' && a.status === 'approved' && !animatedStillIds.has(a.id));
-  logger.info({ runId, approved: toAnimate.length, mode: providers.mode || config.generationMode }, 'Phase 2 (animate) started');
+  const targeted = stillIds ? new Set(stillIds) : null;
+  const toAnimate = artworks.filter((a) => {
+    if (a.stage !== 'still' || a.status !== 'approved') return false;
+    if (targeted) return targeted.has(a.id);
+    // Bulk mode: skip already-animated stills AND ones whose last attempt
+    // errored (e.g. a moderation refusal) — those need an explicit retry, not
+    // a silent re-spend (UX review P0, 2026-07-10).
+    return !animatedStillIds.has(a.id) && !a.error;
+  });
+  logger.info({ runId, approved: toAnimate.length, targeted: Boolean(targeted), mode: providers.mode || config.generationMode }, 'Phase 2 (animate) started');
 
   const workDir = deps.workDir || (await mkdtemp(path.join(os.tmpdir(), `wae-motion-${runId}-`)));
   const counts = { ready: 0, failed: 0, blocked: 0 };
@@ -166,7 +193,7 @@ export async function animateRun({ runId, triggeredBy = 'dashboard', onStart, de
         continue;
       }
       try {
-        counts.ready += await animateStill(still, { runId, repo, store, providers, duration, fps, workDir });
+        counts.ready += await animateStill(still, { runId, repo, store, providers, qa, duration, fps, workDir });
         if (still.error) await repo.updateArtwork(still.id, { error: null }); // clear a stale retry error
       } catch (err) {
         logger.error({ runId, stillId: still.id, err: err.message }, 'Animation failed');
@@ -188,7 +215,7 @@ export async function animateRun({ runId, triggeredBy = 'dashboard', onStart, de
 // Animate one approved still into its motion deliverable(s). Returns the number
 // of motion artworks created (3 for an EON connected set, else 1).
 async function animateStill(still, ctx) {
-  const { runId, repo, store, providers, duration, fps, workDir } = ctx;
+  const { runId, repo, store, providers, qa, duration, fps, workDir } = ctx;
   const surface = SURFACES.find((s) => s.style === still.style);
   if (!surface) throw new Error(`No surface for style "${still.style}"`);
   const finalSpec = SPECS[surface.specKey];
@@ -209,6 +236,24 @@ async function animateStill(still, ctx) {
     referenceImageUrl: still.remote_url ?? null, // fal-hosted URL — live Seedance
   });
 
+  // QA: measure saturation drift on the model's raw output (Seedance colors
+  // drain over a clip). Warning only — stored on the motion rows.
+  let driftWarn;
+  try {
+    const drift = await qa.satDrift(raw);
+    if (drift.warn) driftWarn = `qa: ${drift.reason}`;
+  } catch { /* QA measurement is best-effort; never fail the render on it */ }
+
+  // Ambient surfaces get a palindrome pass so the clip loops seamlessly on the
+  // sign (art review: mismatched endpoints pop every cycle). Doubles duration.
+  let srcVideo = raw;
+  let effDuration = duration;
+  if (surface.loop === 'pingpong') {
+    srcVideo = path.join(dir, 'raw_loop.mp4');
+    await ffmpeg.pingpong({ input: raw, output: srcVideo });
+    effDuration = duration * 2;
+  }
+
   const keyBase = `runs/${runId}/motion/still${still.id}`;
   const key = (name) => `${keyBase}/${name}`;
   const rawPut = await store.put({ key: key('raw.mp4'), sourcePath: raw });
@@ -216,26 +261,26 @@ async function animateStill(still, ctx) {
   const insertMotion = (extra) => repo.insertArtwork({
     runId, surface: surface.surface, style: surface.style, mediaType: 'video', stage: 'motion',
     sourceStillId: still.id, prompt: still.prompt, motionPrompt: still.motion_prompt, model: gen.model,
-    s3KeyRaw: rawPut.key, ...extra,
+    s3KeyRaw: rawPut.key, error: driftWarn ?? null, ...extra,
   });
 
   if (surface.post === POST.EON_SLICE) {
     const master = path.join(dir, 'master.mp4');
-    await ffmpeg.conform({ input: raw, output: master, width: finalSpec.width, height: finalSpec.height, duration, fps });
+    await ffmpeg.conform({ input: srcVideo, output: master, width: finalSpec.width, height: finalSpec.height, duration: effDuration, fps });
     const masterPut = await store.put({ key: key('master.mp4'), sourcePath: master });
-    const faces = await sliceMaster({ masterPath: master, outDir: dir, duration });
+    const faces = await sliceMaster({ masterPath: master, outDir: dir, duration: effDuration });
 
     const faceIds = [];
     for (const face of faces) {
       const td = thumbDims({ width: 256, height: 384 });
       const thumb = path.join(dir, `pod${face.pod}_thumb.jpg`);
-      await ffmpeg.thumbnail({ input: face.path, output: thumb, width: td.width, height: td.height, atSeconds: Math.min(2, duration / 2) });
+      await ffmpeg.thumbnail({ input: face.path, output: thumb, width: td.width, height: td.height, atSeconds: Math.min(2, effDuration / 2) });
       const facePut = await store.put({ key: key(`pod${face.pod}.mp4`), sourcePath: face.path });
       const thumbPut = await store.put({ key: key(`pod${face.pod}_thumb.jpg`), sourcePath: thumb });
       const probed = await ffmpeg.probe(face.path);
       const a = await insertMotion({
         specKey: 'eon_face', width: face.width, height: face.height,
-        durationS: Math.round(probed.duration ?? duration),
+        durationS: Math.round(probed.duration ?? effDuration),
         s3KeyFinal: facePut.key, thumbnailKey: thumbPut.key, status: 'ready',
       });
       faceIds.push(a.id);
@@ -251,21 +296,21 @@ async function animateStill(still, ctx) {
   const final = path.join(dir, 'final.mp4');
   if (surface.post === POST.FRAME_BREAK) {
     await ffmpeg.frameBreakComposite({
-      input: raw, output: final, canvasWidth: finalSpec.width, canvasHeight: finalSpec.height,
-      inset: 48, borderThickness: 5, overshoot: 70, duration, fps,
+      input: srcVideo, output: final, canvasWidth: finalSpec.width, canvasHeight: finalSpec.height,
+      inset: 48, borderThickness: 5, overshoot: 70, duration: effDuration, fps,
     });
   } else {
-    await ffmpeg.conform({ input: raw, output: final, width: finalSpec.width, height: finalSpec.height, duration, fps });
+    await ffmpeg.conform({ input: srcVideo, output: final, width: finalSpec.width, height: finalSpec.height, duration: effDuration, fps });
   }
   const td = thumbDims(finalSpec);
   const thumb = path.join(dir, 'thumb.jpg');
-  await ffmpeg.thumbnail({ input: final, output: thumb, width: td.width, height: td.height, atSeconds: Math.min(2, duration / 2) });
+  await ffmpeg.thumbnail({ input: final, output: thumb, width: td.width, height: td.height, atSeconds: Math.min(2, effDuration / 2) });
   const finalPut = await store.put({ key: key('final.mp4'), sourcePath: final });
   const thumbPut = await store.put({ key: key('thumb.jpg'), sourcePath: thumb });
   const probed = await ffmpeg.probe(final);
   await insertMotion({
     specKey: surface.specKey, width: finalSpec.width, height: finalSpec.height,
-    durationS: Math.round(probed.duration ?? duration),
+    durationS: Math.round(probed.duration ?? effDuration),
     s3KeyFinal: finalPut.key, thumbnailKey: thumbPut.key, status: 'ready',
   });
   return 1;

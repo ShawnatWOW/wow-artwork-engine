@@ -6,7 +6,7 @@
 // wow-contract-query "Artwork Engine" tab.
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from './api.js';
-import { Preview, Actions, StatusBadge, Details, Card } from './ui.jsx';
+import { Preview, Actions, StatusBadge, Details, Card, ModePill, Stepper } from './ui.jsx';
 import SendDialog from './SendDialog.jsx';
 
 export default function App() {
@@ -67,12 +67,18 @@ export function ReviewDashboard() {
     catch (e) { setError(e.message); } finally { setBusy(false); }
   };
 
-  // Approved stills not yet animated → the Animate button's count.
+  // Approved stills not yet animated → the Animate button's count. Stills whose
+  // last attempt ERRORED are excluded — they get an explicit per-card Retry
+  // instead of a silent re-spend (UX P0).
   const pendingAnimate = useMemo(() => {
     if (!detail) return 0;
     const animated = new Set(detail.artworks.map((a) => a.source_still_id).filter(Boolean));
-    return detail.artworks.filter((a) => a.stage === 'still' && a.status === 'approved' && !animated.has(a.id)).length;
+    return detail.artworks.filter(
+      (a) => a.stage === 'still' && a.status === 'approved' && !animated.has(a.id) && !a.error,
+    ).length;
   }, [detail]);
+
+  const mode = detail?.generationMode;
 
   // Approved animated pieces → ready to send to Jeff.
   const readyToSend = useMemo(
@@ -86,29 +92,32 @@ export function ReviewDashboard() {
         runs={runs} runId={runId} onSelectRun={setRunId}
         onGenerate={generate} onAnimate={animate} pendingAnimate={pendingAnimate}
         readyToSend={readyToSend} onSend={() => setShowSend(true)}
-        busy={busy} run={detail?.run}
+        busy={busy} run={detail?.run} mode={mode} detail={detail}
       />
       {error && <p className="mb-4 rounded bg-rose-950 px-3 py-2 text-sm text-rose-200">{error}</p>}
-      {!detail && <Empty onGenerate={generate} busy={busy} />}
+      {!detail && <Empty onGenerate={generate} busy={busy} mode={mode} />}
       {detail && <RunView detail={detail} onAct={act} busy={busy} />}
       {showSend && <SendDialog runId={runId} onClose={() => setShowSend(false)} onSent={() => loadDetail(runId)} />}
     </main>
   );
 }
 
-function Header({ runs, runId, onSelectRun, onGenerate, onAnimate, pendingAnimate, readyToSend, onSend, busy, run }) {
+function Header({ runs, runId, onSelectRun, onGenerate, onAnimate, pendingAnimate, readyToSend, onSend, busy, run, mode, detail }) {
   const [health, setHealth] = useState(null);
   useEffect(() => { api.health().then(setHealth); }, []);
+  const effectiveMode = mode || health?.generationMode;
   return (
     <header className="mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-neutral-800 pb-4">
-      <div>
-        <h1 className="text-xl font-semibold">
+      <div className="space-y-1">
+        <h1 className="flex items-center gap-2 text-xl font-semibold">
           WOW Artwork Engine <span className="text-[#0247FE]">·</span> Weekly Review
+          <ModePill mode={effectiveMode} />
         </h1>
         <p className="text-xs text-neutral-500">
           backend <span className={health?.status === 'ok' ? 'text-emerald-400' : 'text-amber-400'}>{health?.status ?? '…'}</span>
           {run && <> · run #{run.id} · week of {run.week_of} · <StatusBadge status={run.status} /></>}
         </p>
+        <Stepper detail={detail} />
       </div>
       <div className="flex items-center gap-2">
         {runs.length > 0 && (
@@ -140,24 +149,25 @@ function Header({ runs, runId, onSelectRun, onGenerate, onAnimate, pendingAnimat
           type="button" onClick={onGenerate} disabled={busy}
           className="rounded bg-[#0247FE] px-3 py-1.5 text-sm font-medium text-white hover:bg-[#0235c9] disabled:opacity-50"
         >
-          {busy ? 'Working…' : 'Generate styles'}
+          {busy ? 'Working…' : effectiveMode === 'live' ? 'Generate styles (~$0.30)' : 'Generate styles ($0)'}
         </button>
       </div>
     </header>
   );
 }
 
-function Empty({ onGenerate, busy }) {
+function Empty({ onGenerate, busy, mode }) {
+  const live = mode === 'live';
   return (
     <div className="grid place-items-center rounded border border-dashed border-neutral-800 py-24 text-center">
       <div>
         <p className="text-neutral-400">No runs yet.</p>
-        <p className="mt-1 text-xs text-neutral-600">Step 1 generates cheap style stills. You approve; Step 2 animates only those.</p>
+        <p className="mt-1 text-xs text-neutral-600">Step 1 generates style stills. You approve; Step 2 animates only those.</p>
         <button
           type="button" onClick={onGenerate} disabled={busy}
           className="mt-3 rounded bg-[#0247FE] px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
         >
-          {busy ? 'Generating…' : 'Generate styles (fixtures, $0)'}
+          {busy ? 'Generating…' : live ? 'Generate styles (~$0.30 real spend)' : 'Generate styles (fixtures, $0)'}
         </button>
       </div>
     </div>
@@ -183,6 +193,10 @@ function RunView({ detail, onAct, busy }) {
     onSelect: () => onAct(() => (selected.has(a.id) ? api.unselect(a.id) : api.select(a.id))),
     onApprove: () => onAct(() => api.approve(a.id)),
     onReject: () => onAct(() => api.reject(a.id)),
+    // Explicit retry for an approved still whose animation errored (UX P0).
+    ...(a.stage === 'still' && a.status === 'approved' && a.error
+      ? { onRetry: () => onAct(() => api.animateOne(a.id)) }
+      : {}),
   });
   // For a set of faces, apply one action to all three.
   const groupActions = (faces) => ({
@@ -199,7 +213,8 @@ function RunView({ detail, onAct, busy }) {
       <Section title="Spectacular" subtitle="frame-break · 3 styles → 1692×468 motion">
         <div className="space-y-4">
           {stillsOf('frame_break').map((still) => {
-            const motion = motionsByStill.get(still.id)?.[0];
+            // .at(-1): after a re-roll, show the LATEST animation.
+            const motion = motionsByStill.get(still.id)?.at(-1);
             return motion
               ? <Card key={still.id} artwork={motion} actions={actionsFor(motion)} />
               : <Card key={still.id} artwork={still} actions={actionsFor(still)} />;
@@ -210,8 +225,8 @@ function RunView({ detail, onAct, busy }) {
       <Section title="EON — Connected pods" subtitle="one wide style → animates & slices into 3 × 256×384 faces that travel pod-to-pod">
         <div className="space-y-6">
           {stillsOf('eon_connected').map((still) => {
-            const faces = motionsByStill.get(still.id);
-            return faces
+            const faces = motionsByStill.get(still.id)?.slice(-3); // latest set of 3 after re-rolls
+            return faces?.length
               ? <ConnectedSet key={still.id} faces={faces} actions={groupActions(faces)} />
               : <div key={still.id} className="max-w-2xl"><Card artwork={still} actions={actionsFor(still)} /></div>;
           })}
@@ -221,7 +236,7 @@ function RunView({ detail, onAct, busy }) {
       <Section title="EON — Single face" subtitle="256×384 · 3 styles">
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
           {stillsOf('eon_single').map((still) => {
-            const motion = motionsByStill.get(still.id)?.[0];
+            const motion = motionsByStill.get(still.id)?.at(-1);
             return <Card key={still.id} artwork={motion || still} actions={actionsFor(motion || still)} />;
           })}
         </div>
@@ -248,7 +263,7 @@ function ConnectedSet({ faces, actions }) {
     <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-3">
       <div className="mb-2 flex items-center justify-between">
         <span className="text-xs text-neutral-400">Connected · animated</span>
-        <StatusBadge status={faces[0]?.status} />
+        <StatusBadge status={faces[0]?.status} stage="motion" />
       </div>
       <div className="flex items-end gap-1">
         {faces.map((f, i) => (

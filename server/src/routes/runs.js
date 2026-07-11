@@ -8,6 +8,7 @@
 // orchestrator. A run never spends unless GENERATION_MODE=live is set.
 
 import { Router } from 'express';
+import config from '../config/index.js';
 import logger from '../config/logger.js';
 import { runWeek, animateRun } from '../services/orchestrator.js';
 import { getRepo } from '../db/index.js';
@@ -53,7 +54,7 @@ router.post('/runs/:id/animate', async (req, res, next) => {
 
 router.get('/runs', async (_req, res, next) => {
   try {
-    res.json({ runs: await getRepo().listRuns() });
+    res.json({ runs: await getRepo().listRuns(), generationMode: config.generationMode });
   } catch (err) {
     next(err);
   }
@@ -71,7 +72,7 @@ router.get('/runs/:id', async (req, res, next) => {
       repo.listEonSequences(id),
       repo.listSelections(id),
     ]);
-    res.json({ run, artworks, eonSequences, selections });
+    res.json({ run, artworks, eonSequences, selections, generationMode: config.generationMode });
   } catch (err) {
     next(err);
   }

@@ -26,16 +26,19 @@ async function run(args) {
 export const MODEL_STILL = 'fixture:gradient';
 export const MODEL_MOTION = 'fixture:traveling-box';
 
-// Two hex colors deterministically derived from the prompt (FNV-1a).
+// Two hex colors deterministically derived from the prompt (FNV-1a). Channels
+// are clamped to a mid-range so fixture stills always pass the luma QA gate
+// (the gate exists to catch real-model failures, not synthetic gradients).
 function colorsFromPrompt(prompt) {
   let h = 0x811c9dc5;
   for (const ch of String(prompt || 'wow')) {
     h ^= ch.charCodeAt(0);
     h = Math.imul(h, 0x01000193);
   }
-  const c0 = (h & 0xffffff).toString(16).padStart(6, '0');
-  const c1 = (((h >>> 9) ^ 0x3ad6c2) & 0xffffff).toString(16).padStart(6, '0');
-  return [c0, c1];
+  const mid = (byte) => 0x50 + (byte % 0x60); // each channel in [0x50, 0xAF]
+  const hex = (n) => [(n >>> 16) & 0xff, (n >>> 8) & 0xff, n & 0xff]
+    .map((b) => mid(b).toString(16).padStart(2, '0')).join('');
+  return [hex(h), hex((h >>> 9) ^ 0x3ad6c2)];
 }
 
 export const stillProvider = {

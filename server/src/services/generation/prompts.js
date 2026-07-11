@@ -1,47 +1,43 @@
-// Prompt library (Build Plan M1 · two-phase M2.5).
+// Prompt library (Build Plan M1 · two-phase M2.5 · art-review hardened).
 //
 // Two prompts per option:
 //   buildStillPrompt  — the Seedream still (the first-frame reference / style).
 //   buildMotionPrompt — the Seedance motion applied to that still.
 //
-// IMPORTANT: prompts describe ONLY the art and its motion WITHIN THE FRAME.
-// The models don't know what a pod / EON / spectacular / billboard is, so we
-// never mention placement, hardware, or where the art will run — only the
-// visual: subject, style, and in-frame direction (e.g. "from the right edge to
-// the left edge across the full width"). Placement (slicing across three pods,
-// etc.) is handled by our pipeline, not the model.
-//
-// Pure + deterministic (seeded by week + option) so runs are reproducible and
-// variations are easy to compare.
+// RULES (learned from the first live run + art-director review, 2026-07-10):
+// - Describe ONLY the art and in-frame motion. Never placement/hardware (pod,
+//   billboard, sign…) — the models don't know what those are.
+// - NAME the hero subject. "A hero subject" alone collapses to a photoreal
+//   person, which video-model moderation refuses ("likenesses of real people")
+//   and is a likeness risk. Themes are (style, subject) pairs.
+// - Poster contrast: bright saturated subject vs deep dark background (or the
+//   inverse) — never all-white / all-black scenes (unreadable in direct sun).
+// - No meta-artwork vocabulary (poster, framed, canvas…) — models literalize
+//   it into pictures-of-pictures.
+// - Motion: locked camera, constant speed, explicit color-constancy (Seedance
+//   saturation drains over a clip unless told not to).
+// Pure + deterministic (seeded by week + option) so runs are reproducible.
 
-// Rotating creative themes — art descriptions only.
+// (style, subject) pairs — the subject is concrete and non-human by
+// construction. Rotated deterministically by week + option.
 const THEMES = [
-  'bold neon geometric forms, high-energy, deep contrast',
-  'liquid metallic ribbons flowing across a dark field',
-  'sunrise gradients with drifting particles of light',
-  'a retro-futuristic grid horizon with a glowing sun',
-  'an abstract botanical bloom unfolding',
-  'iridescent soap-bubble textures with prismatic highlights',
-  'a cosmic nebula swirl with slow parallax stars',
-  'crisp origami shapes folding and unfolding',
+  { style: 'bold neon geometric forms, high-energy, deep contrast', subject: 'a glowing chrome sphere' },
+  { style: 'liquid metallic ribbons flowing across a dark field', subject: 'a ribbon of molten silver' },
+  { style: 'sunrise gradients with drifting particles of light', subject: 'a hot-air balloon' },
+  { style: 'a retro-futuristic grid horizon with a glowing sun', subject: 'a vintage convertible car' },
+  { style: 'lush macro botanicals on black', subject: 'a blooming crimson flower' },
+  { style: 'iridescent soap-bubble textures with prismatic highlights', subject: 'a glassy iridescent bubble' },
+  { style: 'a cosmic nebula swirl with slow parallax stars', subject: 'a luminous comet' },
+  { style: 'crisp folded-paper geometry', subject: 'an origami crane' },
+  { style: 'deep-sea bioluminescence on near-black water', subject: 'a neon jellyfish' },
+  { style: 'autumn wind on a moody sky', subject: 'a monarch butterfly' },
 ];
 
-// Per-style composition for the STILL (in-frame art direction only).
-// "hero subject" alone makes image models default to a photoreal PERSON —
-// which is a likeness/brand risk AND gets refused by video-model moderation
-// ("likenesses of real people"). Always steer to non-human subjects.
-const STILL_FRAMING = {
-  frame_break: 'A single bold non-human hero subject (a sculptural object, animal, plant, or abstract form) centered with generous empty margins, cinematic depth and dramatic lighting',
-  eon_single: 'A self-contained vertical composition with a strong non-human central focal point, in a tall vertical frame',
-};
-
-// In-frame travel direction per option, so the three options differ and we can
-// compare which reads best. "start/end" are edges of the frame — nothing about
-// where the art is displayed.
+// In-frame travel direction per option (frame edges only — never placement).
 const TRAVELS = [
   { dir: 'rtl', start: 'right', end: 'left', verb: 'glides' },
   { dir: 'ltr', start: 'left', end: 'right', verb: 'travels' },
-  { dir: 'rtl', start: 'right', end: 'left', verb: 'slithers' },
+  { dir: 'rtl', start: 'right', end: 'left', verb: 'drifts' },
 ];
 
 /** The in-frame travel spec for a wide-composition option (1-based). Pure. */
@@ -59,28 +55,44 @@ function hash(str) {
   return h >>> 0;
 }
 
-function themeFor({ specKey, option, weekOf }) {
+/** The (style, subject) theme for one option. Pure; exported for the UI/tests. */
+export function themeFor({ specKey, option, weekOf }) {
   return THEMES[hash(`${weekOf || 'week'}:${specKey}:${option}`) % THEMES.length];
 }
 
-const SAFE = 'Ultra high detail. No people, no faces, no human figures, no text, no logos, no watermarks.';
+// Poster-readability + safety clauses appended to every still prompt.
+const CONTRAST =
+  'High-contrast lighting: a bright, saturated hero subject against a deep, dark background, ' +
+  'strong tonal separation readable from far away in direct sunlight; never an all-white or all-black scene.';
+const SAFE =
+  'Ultra high detail. No people, no faces, no human figures, no human silhouettes, no mannequins, ' +
+  'no statues of people, no hands, no text, no logos, no watermarks.';
 
 /**
  * The still (first-frame) prompt for one option — art + composition only.
  * @param {{ style, specKey, option, weekOf }} job
  */
 export function buildStillPrompt({ style, specKey, option, weekOf }) {
-  const theme = themeFor({ specKey, option, weekOf });
+  const t = themeFor({ specKey, option, weekOf });
   if (style === 'eon_connected') {
-    // A wide panoramic composition; the subject starts at one edge with open
-    // space across the rest so there's room to travel. No mention of pods.
-    const t = travelFor(option);
-    return `An ultra-wide continuous panoramic composition. Style: ${theme}. ` +
-      `A single clear non-human hero subject (an animal, object, or abstract form) positioned at the ${t.start} side of the frame, with open, ` +
-      `uncluttered negative space filling the rest of the width; evenly lit edge to edge, no hard breaks. ${SAFE}`;
+    const tr = travelFor(option);
+    return `An ultra-wide continuous panoramic scene. Style: ${t.style}. ` +
+      `The single hero subject is ${t.subject}, positioned at the ${tr.start} edge, occupying about one third ` +
+      `of the frame width and at least 60% of the frame height, with a continuous seamless environment extending ` +
+      `across the full width for it to travel through; uniform lighting and background texture edge to edge; ` +
+      `no secondary focal objects; keep the subject clear of the vertical lines at one-third and two-thirds of the frame width. ` +
+      `${CONTRAST} ${SAFE}`;
   }
-  const framing = STILL_FRAMING[style] || 'A striking abstract composition';
-  return `${framing}. Style: ${theme}. ${SAFE}`;
+  if (style === 'frame_break') {
+    return `An ultra-wide cinematic scene. Style: ${t.style}. ` +
+      `The single hero subject is ${t.subject}, centered, with generous open margins on both sides and ` +
+      `the entire subject contained in the central horizontal band of the frame (the top and bottom edges are ` +
+      `expendable background texture). Cinematic depth and dramatic lighting. ${CONTRAST} ${SAFE}`;
+  }
+  // eon_single: tall portrait composition.
+  return `A tall vertical scene. Style: ${t.style}. ` +
+    `The single hero subject is ${t.subject}, filling most of the frame height with a strong central focal point ` +
+    `and bold silhouette. ${CONTRAST} ${SAFE}`;
 }
 
 /**
@@ -88,19 +100,21 @@ export function buildStillPrompt({ style, specKey, option, weekOf }) {
  * @param {{ style, specKey, option, weekOf }} job
  */
 export function buildMotionPrompt({ style, specKey, option, weekOf }) {
-  const theme = themeFor({ specKey, option, weekOf });
+  const t = themeFor({ specKey, option, weekOf });
+  const CONSTANCY =
+    'Locked static camera; no zoom, no pan. The background remains completely static. ' +
+    'Colors, saturation and lighting remain exactly constant for the entire duration; no fading, no color drift.';
   if (style === 'eon_connected') {
-    const t = travelFor(option);
-    return `Smooth continuous motion: the hero subject ${t.verb} steadily from the ${t.start} edge of the frame ` +
-      `all the way to the ${t.end} edge, moving across the full width at a constant, even speed. ` +
-      `The background stays continuous; seamless and loopable.`;
+    const tr = travelFor(option);
+    return `Smooth continuous motion: ${t.subject} ${tr.verb} steadily from the ${tr.start} edge of the frame ` +
+      `all the way to the ${tr.end} edge, entering at the first frame and reaching the far edge only in the final frame, ` +
+      `moving across the full width at a perfectly constant speed. ${CONSTANCY}`;
   }
   if (style === 'frame_break') {
-    return `Subtle cinematic motion: ${theme}; the hero subject eases gently forward toward the viewer. ` +
-      `Smooth, premium, seamless loop.`;
+    return `Subtle cinematic motion: ${t.subject} eases gently forward toward the viewer with premium, smooth movement. ${CONSTANCY}`;
   }
-  return `Gentle ambient motion: ${theme}; slow drift and shimmer, smooth and seamless loop.`;
+  return `Gentle ambient motion: ${t.subject} moves with slow drift and shimmer, smooth and calm. ${CONSTANCY}`;
 }
 
 export { THEMES };
-export default { buildStillPrompt, buildMotionPrompt, travelFor, THEMES };
+export default { buildStillPrompt, buildMotionPrompt, travelFor, themeFor, THEMES };

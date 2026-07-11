@@ -132,6 +132,22 @@ export function buildFrameBreakArgs({
   return { args, inner: { width: innerW, height: innerH }, subjY };
 }
 
+/**
+ * Palindrome ("ping-pong") loop: forward then reversed, so the clip's last
+ * frame equals its first and it loops seamlessly on a DOOH player. Doubles the
+ * duration. For ambient motion only — directional travel would visibly reverse.
+ */
+export function buildPingPongArgs({ input, output }) {
+  return [
+    '-y',
+    '-i', input,
+    '-filter_complex', '[0:v]split[fwd][tmp];[tmp]reverse[rev];[fwd][rev]concat=n=2:v=1,format=yuv420p[out]',
+    '-map', '[out]',
+    ...H264,
+    output,
+  ];
+}
+
 /** Single-frame JPEG thumbnail at `atSeconds`. */
 export function buildThumbnailArgs({ input, output, width, height, atSeconds = 0 }) {
   return [
@@ -199,14 +215,21 @@ export async function cropColumn(opts) {
   return { output: opts.output, width: opts.width, height: opts.height };
 }
 
+export async function pingpong(opts) {
+  await run(buildPingPongArgs(opts));
+  return { output: opts.output };
+}
+
 export default {
   buildConformArgs,
   buildCropArgs,
   buildFrameBreakArgs,
   buildThumbnailArgs,
+  buildPingPongArgs,
   conform,
   frameBreakComposite,
   thumbnail,
   cropColumn,
+  pingpong,
   probe,
 };

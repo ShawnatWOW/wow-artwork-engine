@@ -13,7 +13,15 @@ async function req(method, path, body) {
     headers: body ? { 'Content-Type': 'application/json' } : undefined,
     body: body ? JSON.stringify(body) : undefined,
   });
-  if (!res.ok) throw new Error(`${method} ${path} → ${res.status}`);
+  if (!res.ok) {
+    // Surface the server's explanation, not just the status code (UX review).
+    let message;
+    try {
+      const data = await res.json();
+      message = data.message || data.error;
+    } catch { /* non-JSON error body */ }
+    throw new Error(message || `${method} ${path} → ${res.status}`);
+  }
   return res.status === 204 ? null : res.json();
 }
 
@@ -24,6 +32,7 @@ export const api = {
   getRun: (id) => req('GET', `/runs/${id}`),
   generate: (weekOf) => req('POST', '/runs', { triggeredBy: 'dashboard', ...(weekOf ? { weekOf } : {}) }),
   animate: (runId) => req('POST', `/runs/${runId}/animate`),
+  animateOne: (artworkId) => req('POST', `/artworks/${artworkId}/animate`),
   select: (id) => req('POST', `/artworks/${id}/select`),
   unselect: (id) => req('DELETE', `/artworks/${id}/select`),
   approve: (id) => req('POST', `/artworks/${id}/approve`),

@@ -12,9 +12,11 @@
 
 import { Router } from 'express';
 import { createReadStream, existsSync, statSync } from 'node:fs';
+import logger from '../config/logger.js';
 import { getRepo } from '../db/index.js';
 import { getStore } from '../services/storage/index.js';
 import { contentTypeFor } from '../services/storage/s3.js';
+import { animateRun } from '../services/orchestrator.js';
 
 const router = Router();
 
@@ -52,6 +54,27 @@ router.delete('/artworks/:id/select', async (req, res, next) => {
     if (!artwork) return;
     await getRepo().removeSelection(artwork.id);
     res.status(204).end();
+  } catch (err) {
+    next(err);
+  }
+});
+
+// (Re-)animate ONE approved still — the retry path after a moderation refusal
+// or a rejected motion (UX review P0). Clears the stale error, then runs
+// Phase 2 targeted at just this still (bypasses the already-animated skip).
+router.post('/artworks/:id/animate', async (req, res, next) => {
+  try {
+    const artwork = await loadArtwork(req, res);
+    if (!artwork) return;
+    if (artwork.stage !== 'still') return res.status(400).json({ error: 'not_a_still', message: 'Only style stills can be animated.' });
+    if (artwork.status !== 'approved') return res.status(409).json({ error: 'not_approved', message: 'Approve this style first, then animate it.' });
+
+    await getRepo().updateArtwork(artwork.id, { error: null });
+    const run = await new Promise((resolve, reject) => {
+      animateRun({ runId: artwork.run_id, stillIds: [artwork.id], triggeredBy: req.get('x-user-email') || 'dashboard', onStart: resolve })
+        .catch((err) => { logger.error({ err: err.message }, 'Background per-still animate failed'); reject(err); });
+    });
+    res.status(202).json({ runId: run.id, stillId: artwork.id, status: 'running' });
   } catch (err) {
     next(err);
   }
