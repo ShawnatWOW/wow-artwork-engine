@@ -23,6 +23,7 @@ const ARTWORK_COLUMNS = {
   error: 'error',
   stage: 'stage',
   motionPrompt: 'motion_prompt',
+  remoteUrl: 'remote_url',
 };
 
 export const pgRepo = {
@@ -61,8 +62,8 @@ export const pgRepo = {
       `INSERT INTO artworks
          (run_id, surface, style, media_type, spec_key, width, height,
           duration_s, prompt, model, s3_key_raw, s3_key_final, thumbnail_key, status, error,
-          stage, motion_prompt, source_still_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+          stage, motion_prompt, source_still_id, remote_url)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
        RETURNING *`,
       [
         a.runId, a.surface, a.style, a.mediaType, a.specKey,
@@ -71,6 +72,7 @@ export const pgRepo = {
         a.s3KeyFinal ?? null, a.thumbnailKey ?? null,
         a.status ?? 'generating', a.error ?? null,
         a.stage ?? 'motion', a.motionPrompt ?? null, a.sourceStillId ?? null,
+        a.remoteUrl ?? null,
       ],
     );
     return rows[0];

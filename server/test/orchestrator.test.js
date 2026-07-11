@@ -41,11 +41,12 @@ test('Phase 1: runWeek generates one still per surface/option (nothing animated)
     assert.ok(stills.every((a) => a.stage === 'still' && a.media_type === 'still' && a.status === 'ready'));
     assert.ok(stills.every((a) => a.prompt && a.motion_prompt), 'each still carries a still + motion prompt');
 
-    // The still is a real image at its generation size.
+    // The still is a real image at its catalog generation size.
     const spec = stills.find((a) => a.style === 'frame_break');
+    const gen = SURFACES.find((s) => s.style === 'frame_break').gen;
     const probed = await ffmpeg.probe(store.localPath(spec.s3_key_final));
-    assert.equal(probed.width, 1280);
-    assert.equal(probed.height, 720);
+    assert.equal(probed.width, gen.width);
+    assert.equal(probed.height, gen.height);
   } finally {
     await rm(base, { recursive: true, force: true });
   }

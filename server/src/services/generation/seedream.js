@@ -18,7 +18,16 @@ export const MODEL_STILL = 'seedream-v4@fal';
 
 const auth = () => ({ Authorization: `Key ${config.fal.key}`, 'Content-Type': 'application/json', Accept: 'application/json' });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const clamp = (n, lo, hi) => Math.min(hi, Math.max(lo, Math.round(n)));
+
+// Seedream requires each dimension in [960, 4096]. Scale PROPORTIONALLY into
+// range (never clamp per-axis — that would distort the aspect ratio).
+export function fitDims(width, height, min = 960, max = 4096) {
+  let scale = 1;
+  scale = Math.max(scale, min / width, min / height);
+  scale = Math.min(scale, max / width, max / height);
+  const even = (n) => Math.round(n / 2) * 2;
+  return { width: even(width * scale), height: even(height * scale) };
+}
 
 async function downloadTo(url, output) {
   const res = await fetch(url);
@@ -34,9 +43,7 @@ export const stillProvider = {
 
     const base = config.fal.queueBase.replace(/\/$/, '');
     const model = config.fal.seedreamModel;
-    // Seedream requires each dimension in [960, 4096].
-    const w = clamp(width, 960, 4096);
-    const h = clamp(height, 960, 4096);
+    const { width: w, height: h } = fitDims(width, height);
 
     const submit = await fetch(`${base}/${model}`, {
       method: 'POST', headers: auth(),

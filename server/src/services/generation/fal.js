@@ -63,7 +63,12 @@ export const motionProvider = {
 
     const result = await (await fetch(statusUrl.replace(/\/status\/?$/, ''), { headers: auth() })).json();
     const videoUrl = result?.video?.url || result?.videos?.[0]?.url || result?.output?.video?.url;
-    if (!videoUrl) throw new Error(`fal Seedance completed but returned no video url`);
+    if (!videoUrl) {
+      // fal's queue marks even bad model paths COMPLETED, with the real error in
+      // `detail` — surface it instead of a vague "no video url".
+      const detail = typeof result?.detail === 'string' ? result.detail : JSON.stringify(result).slice(0, 200);
+      throw new Error(`fal Seedance returned no video url: ${detail}`);
+    }
     await downloadTo(videoUrl, output);
 
     return { path: output, model: MODEL_MOTION, durationS, jobId: sd.request_id };

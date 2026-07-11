@@ -70,6 +70,7 @@ export function createMemoryRepo() {
         stage: a.stage ?? 'motion',
         motion_prompt: a.motionPrompt ?? null,
         source_still_id: a.sourceStillId ?? null,
+        remote_url: a.remoteUrl ?? null,
         created_at: null,
       };
       artworks.push(row);
@@ -83,7 +84,7 @@ export function createMemoryRepo() {
         width: 'width', height: 'height', durationS: 'duration_s', prompt: 'prompt',
         model: 'model', s3KeyRaw: 's3_key_raw', s3KeyFinal: 's3_key_final',
         thumbnailKey: 'thumbnail_key', status: 'status', error: 'error',
-        stage: 'stage', motionPrompt: 'motion_prompt',
+        stage: 'stage', motionPrompt: 'motion_prompt', remoteUrl: 'remote_url',
       };
       for (const [key, col] of Object.entries(map)) {
         if (patch[key] !== undefined) row[col] = patch[key];

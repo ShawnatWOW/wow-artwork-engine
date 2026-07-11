@@ -26,6 +26,8 @@ export const POST = { FRAME_BREAK: 'frame_break', CONFORM: 'conform', EON_SLICE:
 
 // The surfaces generated every week. `gen` is the ratio/size handed to the
 // model (a standard ratio at high res); the pipeline conforms to `specKey`.
+// Gen sizes: high-res standard ratios, every dimension >= 960 (Seedream's
+// minimum) so live stills keep their exact aspect; FFmpeg conforms downstream.
 export const SURFACES = [
   {
     key: 'spectacular',
@@ -33,7 +35,7 @@ export const SURFACES = [
     specKey: 'spectacular_wow1_8',
     style: 'frame_break', // the WOW signature 3D frame-break look
     mediaType: 'video',
-    gen: { kind: 'motion', width: 1280, height: 720, ratio: '16:9' },
+    gen: { kind: 'motion', width: 1920, height: 1080, ratio: '16:9' },
     post: POST.FRAME_BREAK,
   },
   {
@@ -42,7 +44,7 @@ export const SURFACES = [
     specKey: 'eon_master_3pod',
     style: 'eon_connected', // one wide master that travels across the 3 pods
     mediaType: 'video',
-    gen: { kind: 'motion', width: 1536, height: 768, ratio: '2:1' },
+    gen: { kind: 'motion', width: 2048, height: 1024, ratio: '2:1' },
     post: POST.EON_SLICE,
   },
   {
@@ -51,7 +53,7 @@ export const SURFACES = [
     specKey: 'eon_face',
     style: 'eon_single', // a standalone single-face piece
     mediaType: 'video',
-    gen: { kind: 'motion', width: 512, height: 768, ratio: '2:3' },
+    gen: { kind: 'motion', width: 1024, height: 1536, ratio: '2:3' },
     post: POST.CONFORM,
   },
 ];

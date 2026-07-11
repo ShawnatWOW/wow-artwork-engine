@@ -49,3 +49,16 @@ test('NO catalog prompt mentions placement/hardware, and all pass the guardrail'
     assert.ok(checkPrompt(still).allowed && checkPrompt(motion).allowed);
   }
 });
+
+test('every still prompt excludes people (likeness risk + video-moderation blocks)', () => {
+  // Live finding (2026-07-10): "hero subject" alone made Seedream render
+  // photoreal people; Seedance then refused to animate ("likenesses of real
+  // people"). Every still prompt must steer non-human and say so explicitly.
+  for (const job of planJobs({ optionsPerSurface: 3 })) {
+    const still = buildStillPrompt({ style: job.style, specKey: job.specKey, option: job.option, weekOf: '2026-08-10' });
+    assert.match(still, /No people, no faces, no human figures/, `missing people exclusion: ${still}`);
+    if (/hero subject/.test(still)) {
+      assert.match(still, /non-human hero subject/, `hero subject not steered non-human: ${still}`);
+    }
+  }
+});

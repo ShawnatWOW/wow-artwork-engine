@@ -113,6 +113,9 @@ async function generateStill(job, ctx) {
       runId, surface: job.surface, style: job.style, mediaType: 'still', stage: 'still',
       specKey: job.specKey, width: job.gen.width, height: job.gen.height,
       prompt, motionPrompt, model: gen.model,
+      // Live providers return the fal-hosted URL; Phase 2 hands it to Seedance
+      // as the image-to-video first frame (fixture mode has no URL).
+      remoteUrl: gen.url ?? null,
       s3KeyFinal: put.key, thumbnailKey: put.key, status: 'ready',
     });
     return { ready: 1, failed: 0, blocked: 0 };
@@ -164,6 +167,7 @@ export async function animateRun({ runId, triggeredBy = 'dashboard', onStart, de
       }
       try {
         counts.ready += await animateStill(still, { runId, repo, store, providers, duration, fps, workDir });
+        if (still.error) await repo.updateArtwork(still.id, { error: null }); // clear a stale retry error
       } catch (err) {
         logger.error({ runId, stillId: still.id, err: err.message }, 'Animation failed');
         await repo.updateArtwork(still.id, { error: err.message });
@@ -200,7 +204,9 @@ async function animateStill(still, ctx) {
   const raw = path.join(dir, 'raw.mp4');
   const gen = await providers.motion.generate({
     width: surface.gen.width, height: surface.gen.height, ratio: surface.gen.ratio,
-    durationS: duration, fps, output: raw, prompt: still.motion_prompt, referenceImage: ref,
+    durationS: duration, fps, output: raw, prompt: still.motion_prompt,
+    referenceImage: ref,                       // local file — fixture mode
+    referenceImageUrl: still.remote_url ?? null, // fal-hosted URL — live Seedance
   });
 
   const keyBase = `runs/${runId}/motion/still${still.id}`;

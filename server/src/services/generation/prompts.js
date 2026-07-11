@@ -27,9 +27,12 @@ const THEMES = [
 ];
 
 // Per-style composition for the STILL (in-frame art direction only).
+// "hero subject" alone makes image models default to a photoreal PERSON —
+// which is a likeness/brand risk AND gets refused by video-model moderation
+// ("likenesses of real people"). Always steer to non-human subjects.
 const STILL_FRAMING = {
-  frame_break: 'A single bold hero subject centered with generous empty margins, cinematic depth and dramatic lighting',
-  eon_single: 'A self-contained vertical composition with a strong central focal point, in a tall vertical frame',
+  frame_break: 'A single bold non-human hero subject (a sculptural object, animal, plant, or abstract form) centered with generous empty margins, cinematic depth and dramatic lighting',
+  eon_single: 'A self-contained vertical composition with a strong non-human central focal point, in a tall vertical frame',
 };
 
 // In-frame travel direction per option, so the three options differ and we can
@@ -60,7 +63,7 @@ function themeFor({ specKey, option, weekOf }) {
   return THEMES[hash(`${weekOf || 'week'}:${specKey}:${option}`) % THEMES.length];
 }
 
-const SAFE = 'Ultra high detail, no text, no logos, no watermarks.';
+const SAFE = 'Ultra high detail. No people, no faces, no human figures, no text, no logos, no watermarks.';
 
 /**
  * The still (first-frame) prompt for one option — art + composition only.
@@ -73,7 +76,7 @@ export function buildStillPrompt({ style, specKey, option, weekOf }) {
     // space across the rest so there's room to travel. No mention of pods.
     const t = travelFor(option);
     return `An ultra-wide continuous panoramic composition. Style: ${theme}. ` +
-      `A single clear hero subject positioned at the ${t.start} side of the frame, with open, ` +
+      `A single clear non-human hero subject (an animal, object, or abstract form) positioned at the ${t.start} side of the frame, with open, ` +
       `uncluttered negative space filling the rest of the width; evenly lit edge to edge, no hard breaks. ${SAFE}`;
   }
   const framing = STILL_FRAMING[style] || 'A striking abstract composition';

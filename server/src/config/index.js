@@ -3,7 +3,8 @@
 // available, so individual scripts can `import config` without ceremony.
 try {
   const { config: dotenvConfig } = await import('dotenv');
-  dotenvConfig();
+  dotenvConfig(); // ./.env (cwd — server/.env in production deploys)
+  dotenvConfig({ path: '../.env' }); // repo-root .env when run from server/ (local dev)
 } catch {
   // dotenv optional (e.g. before npm install or in CI with real env vars).
 }
