@@ -4,9 +4,15 @@ import config from '../config/index.js';
 
 const router = Router();
 
-// Liveness: always 200 if the process is up.
+// Liveness: always 200 if the process is up. generationMode is surfaced so the
+// dashboard can show an honest LIVE (spends money) vs FIXTURES ($0) indicator.
 router.get('/health', (_req, res) => {
-  res.json({ status: 'ok', service: 'wow-artwork-engine', env: config.env });
+  res.json({
+    status: 'ok',
+    service: 'wow-artwork-engine',
+    env: config.env,
+    generationMode: config.generationMode,
+  });
 });
 
 // Readiness: 200 only when dependencies (DB) are reachable.

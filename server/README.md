@@ -3,9 +3,63 @@
 Node.js + Express backend: generation orchestration, media pipeline, API, and
 the weekly scheduler. See `../WOW_Artwork_Engine_Build_Plan.md` for the full plan.
 
-## Status: Milestone 0 (Foundations) + the two spikes
+## Status: Milestone 1 (Generation Engine)
 
-Implemented in this scaffold:
+M1 wires the M0 primitives into a full weekly pipeline:
+
+- **Run orchestrator** (`src/services/orchestrator.js`) — `runWeek()` fans out
+  `optionsPerSurface` (locked: 3) options for every surface in the catalog,
+  generates → conforms/composites → slices → thumbnails → stores each asset,
+  and records `generation_runs` / `artworks` / `eon_sequences`. The **guardrail
+  runs before the provider is ever called**, so a blocked prompt never spends a
+  credit. Every dependency (repo, store, providers, guardrails) is injected, so
+  the whole pipeline is unit-tested end-to-end on fixtures with no DB or AWS.
+- **Generation catalog** (`src/services/generation/catalog.js`) — the surfaces
+  a week produces + their exact specs and post-processing steps. Prompts come
+  from `generation/prompts.js` (deterministic, guardrail-safe).
+- **Asset store** (`src/services/storage/`) — `local` disk (default, $0) or
+  `s3`, one interface, keyed `runs/<id>/<surface>/opt<n>/…`.
+- **Weekly scheduler** (`src/services/scheduler.js`) — dependency-free cron
+  matcher + in-process trigger, opt-in via `SCHEDULER_ENABLED`.
+- **Run API** (`src/routes/runs.js`) — `POST /runs`, `GET /runs`,
+  `GET /runs/:id` (run + artworks + EON sequences) — feeds the M2 dashboard.
+
+Run one batch on fixtures (no DB, no cost):
+
+```bash
+npm run generate            # this week
+npm run generate 2026-08-10 # a specific Monday
+```
+
+## Milestone 2 (Dashboard)
+
+Weekly **review/pick** surface. The API is namespaced under `/api` so it drops
+into the shared WOW dashboard (`unstuckllc/wow-contract-query`) behind its `/api`
+proxy; the generation worker + scheduler run **in-process** with the API.
+
+- `POST /api/runs` — trigger a run (202 + `runId`, generation continues async)
+- `GET  /api/runs` · `GET /api/runs/:id` — run + artworks + EON sequences + selections
+- `POST/DELETE /api/artworks/:id/select` — pick / un-pick a favorite (`selections`)
+- `POST /api/artworks/:id/approve` · `/reject` — flip `artworks.status`
+- `GET  /api/artworks/:id/media` · `/thumbnail` — stream from the asset store
+  (local disk with HTTP range support, or S3)
+
+The React + Vite + Tailwind dashboard lives in `web/` (built to embed as the
+"Artwork Engine" tab in `wow-contract-query`). **No database required** — with
+`DATABASE_URL` unset the whole app uses an in-memory repo, so it demos at $0:
+
+```bash
+# terminal 1 — API (in-memory repo when DATABASE_URL is unset)
+npm start
+# terminal 2 — dashboard (proxies /api + /health to :4000)
+cd ../web && npm install && npm run dev   # http://localhost:5173
+```
+
+Click **Generate this week** to populate the grid, then pick / approve / reject.
+
+## Milestone 0 (Foundations) + the two spikes
+
+Implemented in the M0 scaffold:
 
 - **Schema + migrations + seed** — all tables from Build Plan §6, `specs`
   seeded from §4. Forward-only runner in `src/db/migrate.js`.
@@ -82,14 +136,19 @@ a paid API in that mode. Switching to `live` throws unless both `FAL_KEY`
 server/
 ├── src/
 │   ├── config/        # config, logger, Secrets Manager loader
-│   ├── db/            # pool, migration runner
-│   ├── routes/        # health (more in M1–M3)
+│   ├── db/            # pool, migration runner, repo (pg) + memoryRepo (tests/demo)
+│   ├── routes/        # health, runs (trigger/list/inspect)
 │   └── services/
-│       ├── ffmpeg.js          # conform / encode / thumbnail / frame-break
-│       ├── eonSlicer.js       # 768→3×256
-│       ├── guardrails.js      # loose brand safety (no nudity)
-│       ├── email.js           # Jeff notification
-│       ├── generation/        # interface + fixture + fal (Seedance) + nanobanana
-│       └── delivery/          # drive (primary) + ftp (fallback)
-└── test/              # ffmpeg + eonSlicer + guardrails tests
+│       ├── orchestrator.js     # runWeek() — the M1 generation engine
+│       ├── scheduler.js        # dependency-free cron + weekly trigger
+│       ├── dates.js            # week_of / cron date helpers
+│       ├── ffmpeg.js           # conform / encode / thumbnail / frame-break
+│       ├── eonSlicer.js        # 768→3×256
+│       ├── guardrails.js       # loose brand safety (no nudity)
+│       ├── email.js            # Jeff notification
+│       ├── generation/         # catalog + prompts + interface + fixture/fal/nanobanana
+│       ├── storage/            # asset store: local (default) + s3
+│       └── delivery/           # drive (primary) + ftp (fallback)
+└── test/              # ffmpeg, eonSlicer, guardrails, catalog, prompts,
+                       # storage, scheduler, orchestrator (e2e on fixtures)
 ```

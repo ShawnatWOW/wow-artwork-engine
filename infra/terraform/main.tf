@@ -1,11 +1,15 @@
-# WOW Artwork Engine — AWS infrastructure skeleton (Build Plan M0 · infra).
+# WOW Artwork Engine — AWS infrastructure REFERENCE (Build Plan M0 · infra).
 #
-# Provisions the building blocks from the architecture: EC2 app server, RDS
-# Postgres, an S3 asset bucket, and a Secrets Manager secret. This is a
-# starting point to fill in with real VPC/subnet/security-group wiring during
-# the "Provision AWS" task — it is intentionally minimal and not yet applied.
+# NOTE: production does NOT provision a new standalone stack. The engine deploys
+# into WOW's EXISTING AWS account (Shawn-managed) alongside the live Content
+# Automation pipeline: the shared EC2 app servers (staging + production, via
+# PM2 — see infra/pm2 and .github/workflows/*-deploy.yml), the shared Postgres,
+# and the WOW asset bucket. This file is kept only as a reference for the
+# resource shapes and for any future dedicated environment; it is NOT applied
+# as-is. Prefer reusing the existing resources (set DATABASE_URL, S3_BUCKET,
+# and Secrets Manager ids in the environment) over `terraform apply` here.
 #
-#   terraform init && terraform plan -var-file=prod.tfvars
+#   terraform init && terraform plan -var-file=prod.tfvars   # reference only
 
 terraform {
   required_version = ">= 1.5"

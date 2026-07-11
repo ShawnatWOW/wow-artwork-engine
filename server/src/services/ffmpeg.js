@@ -132,6 +132,22 @@ export function buildFrameBreakArgs({
   return { args, inner: { width: innerW, height: innerH }, subjY };
 }
 
+/**
+ * Palindrome ("ping-pong") loop: forward then reversed, so the clip's last
+ * frame equals its first and it loops seamlessly on a DOOH player. Doubles the
+ * duration. For ambient motion only — directional travel would visibly reverse.
+ */
+export function buildPingPongArgs({ input, output }) {
+  return [
+    '-y',
+    '-i', input,
+    '-filter_complex', '[0:v]split[fwd][tmp];[tmp]reverse[rev];[fwd][rev]concat=n=2:v=1,format=yuv420p[out]',
+    '-map', '[out]',
+    ...H264,
+    output,
+  ];
+}
+
 /** Single-frame JPEG thumbnail at `atSeconds`. */
 export function buildThumbnailArgs({ input, output, width, height, atSeconds = 0 }) {
   return [
@@ -156,6 +172,36 @@ async function run(args) {
     const tail = (err.stderr || '').toString().split('\n').slice(-12).join('\n');
     throw new Error(`ffmpeg failed: ${err.message}\n${tail}`);
   }
+}
+
+/**
+ * Detect the content region of a video, ignoring letterbox/pillarbox bars
+ * (video models often return a fixed square with the art letterboxed inside).
+ * Samples a few seconds with cropdetect and returns { width, height, x, y }
+ * or null when the full frame is content.
+ */
+export async function detectContentCrop(input, { seconds = 2, limit = 24 } = {}) {
+  const args = [
+    '-i', input,
+    '-t', String(seconds),
+    '-vf', `cropdetect=limit=${limit}:round=2:reset=0`,
+    '-f', 'null', '-',
+  ];
+  let stderr = '';
+  try {
+    ({ stderr } = await execFileP(FFMPEG(), args, { maxBuffer: 1024 * 1024 * 32 }));
+  } catch (err) {
+    stderr = String(err.stderr || '');
+    if (!stderr.includes('crop=')) throw err;
+  }
+  const matches = [...stderr.matchAll(/crop=(\d+):(\d+):(\d+):(\d+)/g)];
+  if (!matches.length) return null;
+  const [, w, h, x, y] = matches[matches.length - 1].map(Number);
+  const probed = await probe(input);
+  // Treat near-full-frame as "no bars" (within 4px per axis).
+  if (!probed.width || (probed.width - w <= 4 && probed.height - h <= 4)) return null;
+  if (w < 16 || h < 16) return null; // degenerate detection (all-dark scene)
+  return { width: w, height: h, x, y };
 }
 
 /** ffprobe → { width, height, duration } for an output file. */
@@ -199,14 +245,22 @@ export async function cropColumn(opts) {
   return { output: opts.output, width: opts.width, height: opts.height };
 }
 
+export async function pingpong(opts) {
+  await run(buildPingPongArgs(opts));
+  return { output: opts.output };
+}
+
 export default {
   buildConformArgs,
   buildCropArgs,
   buildFrameBreakArgs,
   buildThumbnailArgs,
+  buildPingPongArgs,
   conform,
   frameBreakComposite,
   thumbnail,
   cropColumn,
+  pingpong,
   probe,
+  detectContentCrop,
 };

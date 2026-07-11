@@ -32,10 +32,15 @@ infra/         PM2, GitHub Actions, Terraform skeleton
 ```bash
 cd server && npm install
 cp ../.env.example ../.env        # fill in; .env is gitignored
-npm run migrate                   # needs DATABASE_URL
-npm test                          # 18 tests (real ffmpeg round-trips)
+npm run migrate                   # optional — no DATABASE_URL = in-memory repo
+npm test                          # 37 tests (real ffmpeg round-trips)
+npm run generate                  # a full weekly batch on fixtures — no API cost
+npm start                         # API on :4000 (in-memory repo w/o DATABASE_URL)
 npm run spike:frame-break         # fixtures only — no API cost
 npm run spike:eon
+
+# review dashboard (M2) — proxies /api to the server on :4000
+cd ../web && npm install && npm run dev   # http://localhost:5173
 ```
 
 ## Locked decisions

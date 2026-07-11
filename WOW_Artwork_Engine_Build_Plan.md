@@ -55,12 +55,22 @@ WOW covers the AI generation costs directly. The build is one upfront, $450/mo t
 
 ### Locked decisions (§10)
 
-- **Repo:** separate `wow-artwork-engine` repo (this one).
+- **Repo:** separate `wow-artwork-engine` repo (this one) for the backend worker/API.
 - **Options per week:** 3 per surface.
-- **Handoff:** Google Drive (watched folder) + Jeff email notification.
+- **Handoff:** Google Drive (watched folder) + Jeff email notification. Email is
+  sent via the **Gmail API + a Google service account** (domain-wide delegation)
+  from a real `@wowmedia.com` address — same as the live Content Automation
+  pipeline, no SMTP/SES/third party.
 - **Brand guardrails:** loose — block nudity only (config-driven).
 - **Motion model:** Seedance 2.0 via fal.ai. **Stills:** Nano Banana Pro (Gemini).
 - **API accounts:** WOW/Shawn holds the fal + Gemini keys.
+- **Infrastructure:** deploy into **WOW's existing AWS account** (Shawn-managed),
+  NOT a new standalone stack. Backend worker + weekly scheduler run **in-process**
+  with the API on the shared **EC2 + PM2** hosts; CI/CD is GitHub auto-deploy
+  (`dev` → staging, `master` → production); state in the shared **Postgres**.
+- **Dashboard:** **React + Vite + Tailwind embedded as a tab in the existing WOW
+  dashboard repo `unstuckllc/wow-contract-query`** (served under `wowautomation.ai`).
+  Built in `web/` here as a portable module + standalone dev shell.
 
 ---
 
@@ -102,8 +112,21 @@ See `migrations/001_init.sql`. Tables: `specs`, `generation_runs`, `artworks`,
 
 ## Milestones
 
-- **M0 Foundations** (this scaffold): repo, schema + seed, Express skeleton,
+- **M0 Foundations** (DONE): repo, schema + seed, Express skeleton,
   FFmpeg post-processing + EON slicer, the two spikes.
-- **M1 Generation Engine**, **M2 Dashboard**, **M3 Handoff**, **M4 QA & Delivery**.
+- **M1 Generation Engine** (DONE): `runWeek()` orchestrator (3 options/surface,
+  guardrail-before-spend, generate → conform/composite → slice → thumbnail →
+  store, writing `generation_runs`/`artworks`/`eon_sequences`), weekly
+  scheduler, local/S3 asset store, and the `/runs` API. `npm run generate` runs
+  a full week on fixtures at $0.
+- **M2 Dashboard** (DONE): weekly review/pick surface — `/api/runs` +
+  `/api/artworks` (select / approve / reject / media streaming), embedded as the
+  "Artwork Engine" tab in `wow-contract-query`. Two-phase: review cheap Seedream
+  **stills** first, then **animate approved** with Seedance.
+- **M3 Handoff** (DONE): one-click ship of approved pieces to the watched Drive
+  folder + a Jeff email via the **Gmail API service account** (offline-first,
+  honest "not sent" fallback; `deliveries` tracked). "Review & send" dialog.
+- **M4 QA & Delivery** — next: deploy into WOW's existing AWS (no new stack),
+  first live run with keys, rotate the leaked SA key (DEL-143).
 
 Target date: 2026-08-14.

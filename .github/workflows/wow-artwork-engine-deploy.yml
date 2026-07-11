@@ -1,20 +1,28 @@
-name: WOW Artwork Engine Deploy
+name: Deploy Artwork Engine to EC2
 
-# Deploys to the EC2 app server over SSH and reloads PM2. Mirrors the WOW
-# Content Automation deploy pattern. Triggered manually or on main.
+# Deploys the Artwork Engine BACKEND onto WOW's existing EC2 as its own PM2 app
+# (pm2 name "artwork-engine", port 4000). The wow-contract-query dashboard
+# proxies to it at http://localhost:4000 (ARTWORK_ENGINE_API_BASE), so nothing
+# needs to be exposed publicly. Mirrors the wow-contract-query deploy exactly:
+# config is pulled from S3, code is shipped over SSH, PM2 runs it.
+#
+#   dev    -> staging EC2   (secrets.EC2_HOST)
+#   master -> production EC2 (secrets.PROD_EC2_HOST)
+#
+# One-time setup on the repo (Settings → Secrets → Actions), same values as
+# wow-contract-query: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, EC2_HOST,
+# PROD_EC2_HOST, EC2_SSH_KEY. And upload the engine's env to
+# s3://wow-server--use2-az1--x-s3/wow-artwork-engine.env
 on:
   workflow_dispatch:
   push:
-    branches: [main]
-    paths:
-      - 'server/**'
-      - 'web/**'
-      - 'migrations/**'
-      - 'infra/**'
+    branches: [master, dev]
+    paths: ['server/**', 'web/**', 'migrations/**', 'infra/**', '.github/workflows/wow-artwork-engine-deploy.yml']
 
-concurrency:
-  group: deploy-wow-artwork-engine
-  cancel-in-progress: false
+env:
+  AWS_REGION: us-east-2
+  S3_BUCKET: wow-server--use2-az1--x-s3
+  APP_DIR: /home/ubuntu/artwork-engine
 
 jobs:
   deploy:
@@ -22,20 +30,55 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Deploy over SSH
-        uses: appleboy/ssh-action@v1.0.3
+      - name: Resolve target host
+        id: target
+        run: |
+          if [ "${{ github.ref_name }}" = "master" ]; then
+            echo "host=${{ secrets.PROD_EC2_HOST }}" >> "$GITHUB_OUTPUT"
+            echo "pm2_env=production" >> "$GITHUB_OUTPUT"
+          else
+            echo "host=${{ secrets.EC2_HOST }}" >> "$GITHUB_OUTPUT"
+            echo "pm2_env=staging" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Pull engine config from S3
+        run: aws s3 cp s3://${{ env.S3_BUCKET }}/wow-artwork-engine.env server/.env
+
+      - name: Package
+        run: zip -r deploy.zip . -x "*.git*" "node_modules/*" "web/node_modules/*" "server/node_modules/*"
+
+      - name: Copy to EC2
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ steps.target.outputs.host }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: deploy.zip
+          target: ${{ env.APP_DIR }}
+
+      - name: Install + start on EC2
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ steps.target.outputs.host }}
+          username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             set -euo pipefail
-            cd /opt/wow-artwork-engine
-            git fetch --all
-            git reset --hard origin/main
-            cd server && npm ci --omit=dev
-            npm run migrate
-            cd ../web && npm ci && npm run build
-            cd ..
-            pm2 startOrReload infra/pm2/ecosystem.config.cjs --env production
+            export NVM_DIR="$HOME/.nvm"; [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+            nvm install 20 >/dev/null && nvm use 20
+            # FFmpeg is required by the media pipeline (wow-contract-query doesn't need it).
+            command -v ffmpeg >/dev/null || (sudo apt-get update -y && sudo apt-get install -y ffmpeg)
+            cd ${{ env.APP_DIR }} && unzip -o deploy.zip && rm deploy.zip
+            cd ${{ env.APP_DIR }}/server && npm ci --omit=dev
+            # Run migrations only if a database is configured (else in-memory).
+            grep -q '^DATABASE_URL=.\+' .env && npm run migrate || echo "no DATABASE_URL — skipping migrate (in-memory)"
+            # PM2 config uses cwd './server', so invoke it from the app root.
+            cd ${{ env.APP_DIR }} && pm2 startOrReload infra/pm2/ecosystem.config.cjs --env ${{ steps.target.outputs.pm2_env }}
             pm2 save
