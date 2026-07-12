@@ -168,8 +168,12 @@ export async function animateRun({ runId, stillIds, triggeredBy = 'dashboard', o
 
   const run = await repo.getRun(runId);
   if (!run) throw new Error(`Run ${runId} not found`);
-  await onStart?.(run);
+  // Mark running BEFORE responding to the route, so the dashboard reliably sees
+  // status='running' on its immediate reload and starts polling (otherwise it
+  // can read the stale 'complete' from Phase 1 and never poll — the UI looks
+  // frozen while videos are actually being made).
   await repo.setRunStatus(runId, 'running');
+  await onStart?.(run);
 
   const artworks = await repo.listArtworks(runId);
   const animatedStillIds = new Set(artworks.map((a) => a.source_still_id).filter(Boolean));

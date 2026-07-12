@@ -15,8 +15,27 @@ const STATUS_STYLES = {
 // Plain-English labels: "ready" means "waiting for your review".
 export function statusLabel(status, stage) {
   if (status === 'ready') return stage === 'still' ? 'needs review' : stage === 'motion' ? 'review video' : status;
+  if (status === 'generating') return 'making video…';
   if (status === 'complete') return 'done';
   return status;
+}
+
+// A small spinner used in headers/inline.
+export function Spinner({ className = '' }) {
+  return <span className={`inline-block h-4 w-4 animate-spin rounded-full border-2 border-neutral-600 border-t-[#0247FE] ${className}`} />;
+}
+
+// Overlay shown on a card while its video is being generated.
+export function GeneratingOverlay({ label = 'Making video…', sub = 'about 1–2 minutes' }) {
+  return (
+    <div className="absolute inset-0 z-10 grid place-items-center rounded bg-black/70 backdrop-blur-sm">
+      <div className="flex flex-col items-center gap-2 text-center">
+        <span className="h-8 w-8 animate-spin rounded-full border-2 border-neutral-500 border-t-[#0247FE]" />
+        <span className="text-xs font-semibold text-white">{label}</span>
+        <span className="text-[10px] text-neutral-300">{sub}</span>
+      </div>
+    </div>
+  );
 }
 
 export function StatusBadge({ status, stage }) {
@@ -143,19 +162,26 @@ export function Details({ artwork }) {
   );
 }
 
-// A self-contained option card used across surfaces.
-export function Card({ artwork, actions }) {
+// A self-contained option card used across surfaces. When `animating` is true
+// (its video is being generated) the card shows a spinner overlay instead of
+// the approve/pass buttons.
+export function Card({ artwork, actions, animating }) {
   return (
     <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-2">
-      <Preview artwork={artwork} />
+      <div className="relative">
+        <Preview artwork={artwork} />
+        {animating && <GeneratingOverlay />}
+      </div>
       <div className="mt-2 flex items-center justify-between px-0.5">
         <span className="text-[11px] text-neutral-500">{artwork.width}×{artwork.height}</span>
-        <StatusBadge status={artwork.status} stage={artwork.stage} />
+        <StatusBadge status={animating ? 'generating' : artwork.status} stage={artwork.stage} />
       </div>
       <div className="px-0.5">
         <ErrorRibbon artwork={artwork} />
         {artwork.stage === 'motion' && <SourceStill stillId={artwork.source_still_id} />}
-        <Actions {...actions} stage={artwork.stage} />
+        {animating
+          ? <p className="mt-2 flex items-center gap-1.5 text-[11px] text-amber-300"><Spinner className="h-3 w-3" /> Making the video…</p>
+          : <Actions {...actions} stage={artwork.stage} />}
         <Details artwork={artwork} />
       </div>
     </div>

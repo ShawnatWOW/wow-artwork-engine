@@ -6,7 +6,7 @@
 // wow-contract-query "Artwork Engine" tab.
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from './api.js';
-import { Preview, Actions, StatusBadge, Details, Card, ModePill, Stepper } from './ui.jsx';
+import { Preview, Actions, StatusBadge, Details, Card, ModePill, Stepper, Spinner, GeneratingOverlay } from './ui.jsx';
 import SendDialog from './SendDialog.jsx';
 
 export default function App() {
@@ -88,6 +88,14 @@ export function ReviewDashboard() {
     [detail],
   );
 
+  // Is a job actively running, and is it the video-making phase?
+  const running = detail?.run?.status === 'running';
+  const makingVideos = useMemo(() => {
+    if (!running) return false;
+    const animated = new Set(detail.artworks.map((a) => a.source_still_id).filter(Boolean));
+    return detail.artworks.some((a) => a.stage === 'still' && a.status === 'approved' && !animated.has(a.id));
+  }, [running, detail]);
+
   return (
     <main className="mx-auto max-w-6xl p-6">
       <Header
@@ -95,16 +103,17 @@ export function ReviewDashboard() {
         onGenerate={generate} onAnimate={animate} pendingAnimate={pendingAnimate}
         readyToSend={readyToSend} onSend={() => setShowSend(true)}
         busy={busy} run={detail?.run} mode={mode} detail={detail}
+        running={running} makingVideos={makingVideos}
       />
       {error && <p className="mb-4 rounded bg-rose-950 px-3 py-2 text-sm text-rose-200">{error}</p>}
       {!detail && <Empty onGenerate={generate} busy={busy} mode={mode} />}
-      {detail && <RunView detail={detail} onAct={act} busy={busy} />}
+      {detail && <RunView detail={detail} onAct={act} busy={busy} running={running} />}
       {showSend && <SendDialog runId={runId} onClose={() => setShowSend(false)} onSent={() => loadDetail(runId)} />}
     </main>
   );
 }
 
-function Header({ runs, runId, onSelectRun, onGenerate, onAnimate, pendingAnimate, readyToSend, onSend, busy, run, mode, detail }) {
+function Header({ runs, runId, onSelectRun, onGenerate, onAnimate, pendingAnimate, readyToSend, onSend, busy, run, mode, detail, running, makingVideos }) {
   const [health, setHealth] = useState(null);
   useEffect(() => { api.health().then(setHealth); }, []);
   const effectiveMode = mode || health?.generationMode;
@@ -123,41 +132,50 @@ function Header({ runs, runId, onSelectRun, onGenerate, onAnimate, pendingAnimat
         <Stepper detail={detail} />
       </div>
       <div className="flex items-center gap-2">
-        {runs.length > 0 && (
-          <select
-            value={runId ?? ''}
-            onChange={(e) => onSelectRun(Number(e.target.value))}
-            title="Look back at earlier weeks"
-            className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm"
-          >
-            {runs.map((r) => <option key={r.id} value={r.id}>Week of {r.week_of}</option>)}
-          </select>
+        {running ? (
+          <span className="flex items-center gap-2 rounded-md bg-amber-950 px-3 py-1.5 text-sm font-medium text-amber-200">
+            <Spinner className="border-amber-700 border-t-amber-300" />
+            {makingVideos ? 'Making videos… (about 1–2 min each)' : 'Creating designs… (about 1 min)'}
+          </span>
+        ) : (
+          <>
+            {runs.length > 0 && (
+              <select
+                value={runId ?? ''}
+                onChange={(e) => onSelectRun(Number(e.target.value))}
+                title="Look back at earlier weeks"
+                className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm"
+              >
+                {runs.map((r) => <option key={r.id} value={r.id}>Week of {r.week_of}</option>)}
+              </select>
+            )}
+            {pendingAnimate > 0 && (
+              <button
+                type="button" onClick={onAnimate} disabled={busy}
+                title="Turns every design you approved into a video"
+                className="rounded bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+              >
+                {busy ? 'Starting…' : `🎬 Make ${pendingAnimate} video${pendingAnimate === 1 ? '' : 's'}`}
+              </button>
+            )}
+            {readyToSend > 0 && (
+              <button
+                type="button" onClick={onSend} disabled={busy}
+                title="Review the email, then deliver the approved videos to Jeff"
+                className="rounded bg-amber-500 px-3 py-1.5 text-sm font-medium text-neutral-950 hover:bg-amber-400 disabled:opacity-50"
+              >
+                ✉ Send {readyToSend} to Jeff
+              </button>
+            )}
+            <button
+              type="button" onClick={onGenerate} disabled={busy}
+              title="Makes 9 brand-new design options (3 per sign type)"
+              className="rounded bg-[#0247FE] px-3 py-1.5 text-sm font-medium text-white hover:bg-[#0235c9] disabled:opacity-50"
+            >
+              {busy ? 'Starting…' : effectiveMode === 'live' ? '✨ Create new designs (~$0.30)' : '✨ Create sample designs (free)'}
+            </button>
+          </>
         )}
-        {pendingAnimate > 0 && (
-          <button
-            type="button" onClick={onAnimate} disabled={busy}
-            title="Turns every design you approved into a video"
-            className="rounded bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
-          >
-            {busy ? 'Working…' : `🎬 Make ${pendingAnimate} video${pendingAnimate === 1 ? '' : 's'}`}
-          </button>
-        )}
-        {readyToSend > 0 && (
-          <button
-            type="button" onClick={onSend} disabled={busy}
-            title="Review the email, then deliver the approved videos to Jeff"
-            className="rounded bg-amber-500 px-3 py-1.5 text-sm font-medium text-neutral-950 hover:bg-amber-400 disabled:opacity-50"
-          >
-            ✉ Send {readyToSend} to Jeff
-          </button>
-        )}
-        <button
-          type="button" onClick={onGenerate} disabled={busy}
-          title="Makes 9 brand-new design options (3 per sign type)"
-          className="rounded bg-[#0247FE] px-3 py-1.5 text-sm font-medium text-white hover:bg-[#0235c9] disabled:opacity-50"
-        >
-          {busy ? 'Working…' : effectiveMode === 'live' ? '✨ Create new designs (~$0.30)' : '✨ Create sample designs (free)'}
-        </button>
       </div>
     </header>
   );
@@ -184,8 +202,10 @@ function Empty({ onGenerate, busy, mode }) {
   );
 }
 
-function RunView({ detail, onAct, busy }) {
+function RunView({ detail, onAct, busy, running }) {
   const { artworks } = detail;
+  // An approved design with no video yet, while a job is running → it's being made.
+  const isAnimating = (still, motion) => running && !motion && still.status === 'approved';
   const motionsByStill = useMemo(() => {
     const m = new Map();
     for (const a of artworks) {
@@ -223,9 +243,8 @@ function RunView({ detail, onAct, busy }) {
           {stillsOf('frame_break').map((still) => {
             // .at(-1): after a re-roll, show the LATEST video.
             const motion = motionsByStill.get(still.id)?.at(-1);
-            return motion
-              ? <Card key={still.id} artwork={motion} actions={actionsFor(motion)} />
-              : <Card key={still.id} artwork={still} actions={actionsFor(still)} />;
+            const a = motion || still;
+            return <Card key={still.id} artwork={a} actions={actionsFor(a)} animating={isAnimating(still, motion)} />;
           })}
         </div>
       </Section>
@@ -236,7 +255,7 @@ function RunView({ detail, onAct, busy }) {
             const faces = motionsByStill.get(still.id)?.slice(-3); // latest set of 3 after re-rolls
             return faces?.length
               ? <ConnectedSet key={still.id} faces={faces} actions={groupActions(faces)} />
-              : <div key={still.id} className="max-w-2xl"><Card artwork={still} actions={actionsFor(still)} /></div>;
+              : <div key={still.id} className="max-w-2xl"><Card artwork={still} actions={actionsFor(still)} animating={isAnimating(still, null)} /></div>;
           })}
         </div>
       </Section>
@@ -245,7 +264,8 @@ function RunView({ detail, onAct, busy }) {
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
           {stillsOf('eon_single').map((still) => {
             const motion = motionsByStill.get(still.id)?.at(-1);
-            return <Card key={still.id} artwork={motion || still} actions={actionsFor(motion || still)} />;
+            const a = motion || still;
+            return <Card key={still.id} artwork={a} actions={actionsFor(a)} animating={isAnimating(still, motion)} />;
           })}
         </div>
       </Section>
