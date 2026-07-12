@@ -112,12 +112,13 @@ function Header({ runs, runId, onSelectRun, onGenerate, onAnimate, pendingAnimat
     <header className="mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-neutral-800 pb-4">
       <div className="space-y-1">
         <h1 className="flex items-center gap-2 text-xl font-semibold">
-          WOW Artwork Engine <span className="text-[#0247FE]">·</span> Weekly Review
+          WOW Artwork Engine
           <ModePill mode={effectiveMode} />
         </h1>
         <p className="text-xs text-neutral-500">
-          backend <span className={health?.status === 'ok' ? 'text-emerald-400' : 'text-amber-400'}>{health?.status ?? '…'}</span>
-          {run && <> · run #{run.id} · week of {run.week_of} · <StatusBadge status={run.status} /></>}
+          Weekly AI artwork for the WOW signs — you approve everything before anything is made or sent
+          <span className={health?.status === 'ok' ? 'text-emerald-400' : 'text-amber-400'}> · backend {health?.status ?? '…'}</span>
+          {run && <> · week of {run.week_of} · <StatusBadge status={run.status} /></>}
         </p>
         <Stepper detail={detail} />
       </div>
@@ -126,32 +127,36 @@ function Header({ runs, runId, onSelectRun, onGenerate, onAnimate, pendingAnimat
           <select
             value={runId ?? ''}
             onChange={(e) => onSelectRun(Number(e.target.value))}
+            title="Look back at earlier weeks"
             className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm"
           >
-            {runs.map((r) => <option key={r.id} value={r.id}>#{r.id} · {r.week_of} · {r.status}</option>)}
+            {runs.map((r) => <option key={r.id} value={r.id}>Week of {r.week_of}</option>)}
           </select>
         )}
         {pendingAnimate > 0 && (
           <button
             type="button" onClick={onAnimate} disabled={busy}
+            title="Turns every design you approved into a video"
             className="rounded bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
           >
-            {busy ? 'Working…' : `▶ Animate approved (${pendingAnimate})`}
+            {busy ? 'Working…' : `🎬 Make ${pendingAnimate} video${pendingAnimate === 1 ? '' : 's'}`}
           </button>
         )}
         {readyToSend > 0 && (
           <button
             type="button" onClick={onSend} disabled={busy}
+            title="Review the email, then deliver the approved videos to Jeff"
             className="rounded bg-amber-500 px-3 py-1.5 text-sm font-medium text-neutral-950 hover:bg-amber-400 disabled:opacity-50"
           >
-            ✉ Send to Jeff ({readyToSend})
+            ✉ Send {readyToSend} to Jeff
           </button>
         )}
         <button
           type="button" onClick={onGenerate} disabled={busy}
+          title="Makes 9 brand-new design options (3 per sign type)"
           className="rounded bg-[#0247FE] px-3 py-1.5 text-sm font-medium text-white hover:bg-[#0235c9] disabled:opacity-50"
         >
-          {busy ? 'Working…' : effectiveMode === 'live' ? 'Generate styles (~$0.30)' : 'Generate styles ($0)'}
+          {busy ? 'Working…' : effectiveMode === 'live' ? '✨ Create new designs (~$0.30)' : '✨ Create sample designs (free)'}
         </button>
       </div>
     </header>
@@ -162,14 +167,17 @@ function Empty({ onGenerate, busy, mode }) {
   const live = mode === 'live';
   return (
     <div className="grid place-items-center rounded border border-dashed border-neutral-800 py-24 text-center">
-      <div>
-        <p className="text-neutral-400">No runs yet.</p>
-        <p className="mt-1 text-xs text-neutral-600">Step 1 generates style stills. You approve; Step 2 animates only those.</p>
+      <div className="max-w-md">
+        <p className="text-neutral-400">No artwork yet this week.</p>
+        <p className="mt-1 text-xs text-neutral-600">
+          Click below to create 9 design options (3 per sign type). Nothing becomes a video
+          and nothing goes to Jeff until you approve it.
+        </p>
         <button
           type="button" onClick={onGenerate} disabled={busy}
           className="mt-3 rounded bg-[#0247FE] px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
         >
-          {busy ? 'Generating…' : live ? 'Generate styles (~$0.30 real spend)' : 'Generate styles (fixtures, $0)'}
+          {busy ? 'Creating designs…' : live ? 'Create new designs (~$0.30)' : 'Create sample designs (free)'}
         </button>
       </div>
     </div>
@@ -177,8 +185,7 @@ function Empty({ onGenerate, busy, mode }) {
 }
 
 function RunView({ detail, onAct, busy }) {
-  const { artworks, selections } = detail;
-  const selected = useMemo(() => new Set(selections.map((s) => s.artwork_id)), [selections]);
+  const { artworks } = detail;
   const motionsByStill = useMemo(() => {
     const m = new Map();
     for (const a of artworks) {
@@ -191,20 +198,18 @@ function RunView({ detail, onAct, busy }) {
   }, [artworks]);
 
   const actionsFor = (a) => ({
-    selected: selected.has(a.id), status: a.status, busy,
-    onSelect: () => onAct(() => (selected.has(a.id) ? api.unselect(a.id) : api.select(a.id))),
+    status: a.status, busy,
     onApprove: () => onAct(() => api.approve(a.id)),
     onReject: () => onAct(() => api.reject(a.id)),
-    // Explicit retry for an approved still whose animation errored (UX P0).
-    // "qa:" notes are warnings, not animation failures — no retry needed.
+    // Explicit retry for an approved design whose video errored (UX P0).
+    // "qa:" notes are warnings, not failures — no retry needed.
     ...(a.stage === 'still' && a.status === 'approved' && a.error && !a.error.startsWith('qa:')
       ? { onRetry: () => onAct(() => api.animateOne(a.id)) }
       : {}),
   });
   // For a set of faces, apply one action to all three.
   const groupActions = (faces) => ({
-    selected: faces.some((f) => selected.has(f.id)), status: faces[0]?.status, busy,
-    onSelect: () => onAct(() => Promise.all(faces.map((f) => (selected.has(f.id) ? api.unselect(f.id) : api.select(f.id))))),
+    status: faces[0]?.status, busy,
     onApprove: () => onAct(() => Promise.all(faces.map((f) => api.approve(f.id)))),
     onReject: () => onAct(() => Promise.all(faces.map((f) => api.reject(f.id)))),
   });
@@ -213,10 +218,10 @@ function RunView({ detail, onAct, busy }) {
 
   return (
     <div className="space-y-10">
-      <Section title="Spectacular" subtitle="frame-break · 3 styles → 1692×468 motion">
+      <Section title="Spectacular — big street billboard" subtitle="3 design options · the one(s) you approve become 1692×468 videos with the black-frame look">
         <div className="space-y-4">
           {stillsOf('frame_break').map((still) => {
-            // .at(-1): after a re-roll, show the LATEST animation.
+            // .at(-1): after a re-roll, show the LATEST video.
             const motion = motionsByStill.get(still.id)?.at(-1);
             return motion
               ? <Card key={still.id} artwork={motion} actions={actionsFor(motion)} />
@@ -225,7 +230,7 @@ function RunView({ detail, onAct, busy }) {
         </div>
       </Section>
 
-      <Section title="EON — Connected pods" subtitle="one wide style → animates & slices into 3 × 256×384 faces that travel pod-to-pod">
+      <Section title="EON — 3-pillar set" subtitle="one wide design · its video gets split across the three pillars so the artwork travels from pillar to pillar">
         <div className="space-y-6">
           {stillsOf('eon_connected').map((still) => {
             const faces = motionsByStill.get(still.id)?.slice(-3); // latest set of 3 after re-rolls
@@ -236,7 +241,7 @@ function RunView({ detail, onAct, busy }) {
         </div>
       </Section>
 
-      <Section title="EON — Single face" subtitle="256×384 · 3 styles">
+      <Section title="EON — single pillar" subtitle="3 design options · approved ones become 256×384 videos">
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
           {stillsOf('eon_single').map((still) => {
             const motion = motionsByStill.get(still.id)?.at(-1);
@@ -265,14 +270,14 @@ function ConnectedSet({ faces, actions }) {
   return (
     <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-3">
       <div className="mb-2 flex items-center justify-between">
-        <span className="text-xs text-neutral-400">Connected · animated</span>
+        <span className="text-xs text-neutral-400">The 3-pillar video — watch the artwork cross from one pillar to the next</span>
         <StatusBadge status={faces[0]?.status} stage="motion" />
       </div>
       <div className="flex items-end gap-1">
         {faces.map((f, i) => (
           <div key={f.id} className="w-28">
             <Preview artwork={f} />
-            <p className="mt-1 text-center text-[10px] text-neutral-600">pod {i + 1}</p>
+            <p className="mt-1 text-center text-[10px] text-neutral-600">pillar {i + 1}</p>
           </div>
         ))}
       </div>

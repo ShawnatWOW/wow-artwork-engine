@@ -5,7 +5,9 @@
 // routes are mounted somewhere other than /api. In standalone dev, Vite proxies
 // /api and /health to the Express backend on :4000 (see vite.config.js).
 
-const API = (import.meta.env && import.meta.env.VITE_API_BASE) || '/api';
+// Trailing slashes stripped: a base of "/" would otherwise produce "//artworks/…"
+// — a protocol-relative URL (host "artworks") that breaks every <img>/<video>.
+const API = (((import.meta.env && import.meta.env.VITE_API_BASE) || '/api')).replace(/\/+$/, '');
 
 async function req(method, path, body) {
   const res = await fetch(`${API}${path}`, {

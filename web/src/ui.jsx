@@ -1,8 +1,7 @@
 // Shared UI bits for the review dashboard. WOW palette: Blue #0247FE accents.
+// Language is written for a first-time reviewer: designs → videos → send.
 import { useState } from 'react';
 import { api } from './api.js';
-
-const ACCENT = '#0247FE';
 
 const STATUS_STYLES = {
   ready: 'bg-neutral-700 text-neutral-200',
@@ -13,10 +12,10 @@ const STATUS_STYLES = {
   sent: 'bg-sky-600 text-white',
 };
 
-// Stage-aware labels: "ready" means different things for a still (style
-// awaiting review) vs a motion (animation awaiting final approval).
+// Plain-English labels: "ready" means "waiting for your review".
 export function statusLabel(status, stage) {
-  if (status === 'ready') return stage === 'still' ? 'review style' : 'review animation';
+  if (status === 'ready') return stage === 'still' ? 'needs review' : stage === 'motion' ? 'review video' : status;
+  if (status === 'complete') return 'done';
   return status;
 }
 
@@ -28,19 +27,18 @@ export function StatusBadge({ status, stage }) {
   );
 }
 
-// LIVE (spends money) vs FIXTURES ($0) — always visible, honest (UX P0).
+// Honest LIVE (spends) vs TEST ($0) indicator.
 export function ModePill({ mode }) {
   if (!mode) return null;
   const live = mode === 'live';
   return (
     <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${live ? 'bg-rose-600 text-white' : 'bg-emerald-700 text-emerald-100'}`}>
-      {live ? '● Live — real generation costs' : '● Fixtures — $0'}
+      {live ? '● Live — makes real art, costs money' : '● Test mode — free placeholders'}
     </span>
   );
 }
 
-// Error/warning ribbon (UX P0: failures were invisible). Red for hard
-// failures, amber for QA warnings on otherwise-ready pieces.
+// Error/warning ribbon. Red for hard failures, amber for QA warnings.
 export function ErrorRibbon({ artwork }) {
   if (!artwork.error) return null;
   const hard = artwork.status === 'failed' || /refus|moderation|likeness|guardrail|no video/i.test(artwork.error);
@@ -51,7 +49,7 @@ export function ErrorRibbon({ artwork }) {
   );
 }
 
-// Preview an artwork at its true aspect ratio: still → image, motion → video.
+// Preview an artwork at its true aspect ratio: design → image, video → video.
 export function Preview({ artwork }) {
   const aspect = artwork.width && artwork.height ? `${artwork.width} / ${artwork.height}` : '16 / 9';
   return (
@@ -70,52 +68,48 @@ export function Preview({ artwork }) {
   );
 }
 
-// Compact action row; wraps in narrow cards instead of overflowing.
-export function Actions({ selected, status, busy, stage, onSelect, onApprove, onReject, onRetry }) {
+// Two clear choices per card: use it, or pass. (The old "Pick" button
+// duplicated Approve and confused first-time reviewers — removed.)
+export function Actions({ status, busy, stage, onApprove, onReject, onRetry }) {
   const btn = 'inline-flex items-center gap-1 rounded px-2 py-1 text-[11px] font-medium transition disabled:opacity-40';
+  const approveLabel = status === 'approved' ? '✓ Approved' : stage === 'still' ? '✓ Use this design' : '✓ Approve video';
   return (
     <div className="mt-2 flex flex-wrap items-center gap-1.5">
       <button
-        type="button" disabled={busy} onClick={onSelect}
-        className={`${btn} ${selected ? 'text-white' : 'bg-neutral-800 text-neutral-200 hover:bg-neutral-700'}`}
-        style={selected ? { backgroundColor: ACCENT } : undefined}
-      >
-        {selected ? '★ Picked' : '☆ Pick'}
-      </button>
-      <button
         type="button" disabled={busy} onClick={onApprove}
+        title={stage === 'still' ? 'Approve this design — approved designs get turned into videos' : 'Approve this video — approved videos can be sent to Jeff'}
         className={`${btn} ${status === 'approved' ? 'bg-emerald-600 text-white' : 'bg-neutral-800 text-emerald-300 hover:bg-neutral-700'}`}
       >
-        {stage === 'still' ? 'Approve style' : 'Approve'}
+        {approveLabel}
       </button>
       <button
         type="button" disabled={busy} onClick={onReject}
+        title="Pass on this one — nothing else happens with it"
         className={`${btn} ${status === 'rejected' ? 'bg-rose-700 text-white' : 'bg-neutral-800 text-rose-300 hover:bg-neutral-700'}`}
       >
-        Reject
+        {status === 'rejected' ? '✕ Passed' : '✕ Pass'}
       </button>
       {onRetry && (
-        <button type="button" disabled={busy} onClick={onRetry} className={`${btn} bg-amber-600 text-white hover:bg-amber-500`}>
-          ↻ Retry animation
+        <button type="button" disabled={busy} onClick={onRetry} title="Try making the video again" className={`${btn} bg-amber-600 text-white hover:bg-amber-500`}>
+          ↻ Try again
         </button>
       )}
     </div>
   );
 }
 
-// Small "source style" chip on a motion card, so the approved still stays
-// visible/comparable after the animation replaces it (UX P0).
+// The approved design stays visible next to its video.
 export function SourceStill({ stillId }) {
   if (!stillId) return null;
   return (
     <div className="mt-1.5 flex items-center gap-1.5 text-[10px] text-neutral-500">
       <img src={api.thumbUrl(stillId)} alt="" className="h-8 w-12 rounded object-cover" loading="lazy" />
-      <span>approved style ✓</span>
+      <span>made from this approved design</span>
     </div>
   );
 }
 
-// Collapsible details: the still prompt, the proposed motion prompt, + model.
+// Collapsible: exactly what the AI was told to make.
 export function Details({ artwork }) {
   const [open, setOpen] = useState(false);
   return (
@@ -124,17 +118,17 @@ export function Details({ artwork }) {
         type="button" onClick={() => setOpen((v) => !v)}
         className="flex items-center gap-1 text-[11px] text-neutral-400 hover:text-neutral-200"
       >
-        <span className={`transition-transform ${open ? 'rotate-90' : ''}`}>›</span> Prompt
+        <span className={`transition-transform ${open ? 'rotate-90' : ''}`}>›</span> How the AI was instructed
       </button>
       {open && (
         <div className="mt-1 space-y-1.5 rounded bg-neutral-950/60 p-2 text-[11px] leading-snug text-neutral-300">
           <div>
-            <p className="mb-0.5 text-neutral-500">Still prompt</p>
+            <p className="mb-0.5 text-neutral-500">Design instructions</p>
             <p className="whitespace-pre-wrap break-words">{artwork.prompt || '—'}</p>
           </div>
           {artwork.motion_prompt && (
             <div>
-              <p className="mb-0.5 text-neutral-500">Proposed motion (Seedance)</p>
+              <p className="mb-0.5 text-neutral-500">Video motion instructions</p>
               <p className="whitespace-pre-wrap break-words">{artwork.motion_prompt}</p>
             </div>
           )}
@@ -168,7 +162,7 @@ export function Card({ artwork, actions }) {
   );
 }
 
-// The 4-step flow indicator (UX P0: the two-phase model was unexplained).
+// The 4-step flow indicator.
 export function Stepper({ detail }) {
   const artworks = detail?.artworks || [];
   const stills = artworks.filter((a) => a.stage === 'still');
@@ -180,7 +174,7 @@ export function Stepper({ detail }) {
     motions.some((a) => a.status === 'approved'),
   ];
   const current = done.findIndex((d) => !d);
-  const steps = ['Generate styles', 'Approve styles', 'Animate', 'Approve & send'];
+  const steps = ['Create designs', 'Approve favorites', 'Make videos', 'Approve & send to Jeff'];
   return (
     <ol className="flex flex-wrap items-center gap-1 text-[11px]">
       {steps.map((label, i) => (

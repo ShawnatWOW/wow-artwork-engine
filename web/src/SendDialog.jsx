@@ -91,7 +91,7 @@ export default function SendDialog({ runId, onClose, onSent }) {
             </label>
 
             <div className="text-xs text-neutral-400">
-              Attaches {preview.items.length} piece(s): {preview.items.map((i) => `${i.surface}/${i.style}`).join(', ') || '—'}
+              Sending {preview.items.length} approved video{preview.items.length === 1 ? '' : 's'}: {preview.items.map((i) => `${i.surface}/${i.style}`).join(', ') || '—'}
             </div>
 
             <div className="flex justify-end gap-2 pt-1">
