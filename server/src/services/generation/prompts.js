@@ -20,17 +20,22 @@
 
 // (style, subject) pairs — the subject is concrete and non-human by
 // construction. Rotated deterministically by week + option.
+//
+// Art direction (Shawn, 2026-07-12): psychedelic + bright. Every theme leans
+// into saturated, trippy, high-energy color — kaleidoscopes, blacklight neon,
+// liquid marble, op-art — while keeping the poster-contrast rule (vivid hero
+// against a deep dark ground) so it still reads from the street.
 const THEMES = [
-  { style: 'bold neon geometric forms, high-energy, deep contrast', subject: 'a glowing chrome sphere' },
-  { style: 'liquid metallic ribbons flowing across a dark field', subject: 'a ribbon of molten silver' },
-  { style: 'sunrise gradients with drifting particles of light', subject: 'a hot-air balloon' },
-  { style: 'a retro-futuristic grid horizon with a glowing sun', subject: 'a vintage convertible car' },
-  { style: 'lush macro botanicals on black', subject: 'a blooming crimson flower' },
-  { style: 'iridescent soap-bubble textures with prismatic highlights', subject: 'a glassy iridescent bubble' },
-  { style: 'a cosmic nebula swirl with slow parallax stars', subject: 'a luminous comet' },
-  { style: 'crisp folded-paper geometry', subject: 'an origami crane' },
-  { style: 'deep-sea bioluminescence on near-black water', subject: 'a neon jellyfish' },
-  { style: 'autumn wind on a moody sky', subject: 'a monarch butterfly' },
+  { style: 'kaleidoscopic fractal mandalas in electric rainbow hues', subject: 'a radiant geometric lotus flower' },
+  { style: 'swirling liquid-marble psychedelia in hot pink, electric blue and acid green', subject: 'a chrome sphere wrapped in swirling liquid color' },
+  { style: 'melting rainbow gradients with glossy dripping liquid forms', subject: 'a melting iridescent orb' },
+  { style: '1960s psychedelic swirl art with pulsing paisley waves', subject: 'a technicolor peacock feather' },
+  { style: 'ultraviolet blacklight neon glow, trippy and vivid', subject: 'a cluster of glowing neon mushrooms' },
+  { style: 'day-glo tropical jungle psychedelia, hyper-saturated', subject: 'a giant fluorescent orchid' },
+  { style: 'holographic oil-slick iridescence with prismatic flares', subject: 'an iridescent crystal butterfly' },
+  { style: 'cosmic tie-dye nebula bursting with saturated color', subject: 'a luminous spiral of stardust' },
+  { style: 'vibrating op-art waves in clashing complementary colors', subject: 'a pulsing rainbow torus' },
+  { style: 'acid-bright chrome pop surrealism', subject: 'a mirrored ball dripping rainbow paint' },
 ];
 
 // In-frame travel direction per option (frame edges only — never placement).

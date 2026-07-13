@@ -3,20 +3,66 @@
 // Backs the orchestrator's unit tests and the demo CLI so the full weekly
 // pipeline runs end-to-end with no Postgres. Returns snake_case rows to mirror
 // the pg rows callers already read.
+//
+// Optional `persistPath`: snapshot every mutation to a JSON file (atomic
+// tmp+rename) and hydrate from it on boot. Production runs without a
+// DATABASE_URL, so this is what makes runs survive pm2 restarts and deploys —
+// without it every deploy wiped the reviewer's artwork (live finding,
+// 2026-07-12). Tests omit the path and stay purely in-memory.
 
-export function createMemoryRepo() {
-  const runs = [];
-  const artworks = [];
-  const eonSequences = [];
-  const selections = [];
-  const deliveries = [];
-  let runSeq = 0;
-  let artSeq = 0;
-  let seqSeq = 0;
-  let selSeq = 0;
-  let delSeq = 0;
+import fs from 'node:fs';
+import path from 'node:path';
+
+export function createMemoryRepo({ persistPath = null } = {}) {
+  let runs = [];
+  let artworks = [];
+  let eonSequences = [];
+  let selections = [];
+  let deliveries = [];
+
+  // Hydrate from the snapshot, if one exists. A corrupt file starts fresh —
+  // persistence is best-effort, never fatal.
+  if (persistPath && fs.existsSync(persistPath)) {
+    try {
+      const s = JSON.parse(fs.readFileSync(persistPath, 'utf8'));
+      if (Array.isArray(s.runs)) runs = s.runs;
+      if (Array.isArray(s.artworks)) artworks = s.artworks;
+      if (Array.isArray(s.eonSequences)) eonSequences = s.eonSequences;
+      if (Array.isArray(s.selections)) selections = s.selections;
+      if (Array.isArray(s.deliveries)) deliveries = s.deliveries;
+      // A restart mid-generation leaves rows stuck at running/generating that
+      // can never finish — fail them so the dashboard doesn't poll forever.
+      const INTERRUPTED = 'interrupted — the server restarted during generation; start a new batch or retry';
+      for (const r of runs) if (r.status === 'running') { r.status = 'failed'; r.error = INTERRUPTED; }
+      for (const a of artworks) if (a.status === 'generating') { a.status = 'failed'; a.error = a.error || INTERRUPTED; }
+    } catch {
+      runs = []; artworks = []; eonSequences = []; selections = []; deliveries = [];
+    }
+  }
+
+  const maxId = (rows) => rows.reduce((m, r) => Math.max(m, r.id || 0), 0);
+  let runSeq = maxId(runs);
+  let artSeq = maxId(artworks);
+  let seqSeq = maxId(eonSequences);
+  let selSeq = maxId(selections);
+  let delSeq = maxId(deliveries);
 
   const clone = (o) => ({ ...o });
+
+  // Atomic snapshot after every mutation. The state is a few KB and mutations
+  // are infrequent (only during generation/review), so a sync write is fine.
+  const persist = () => {
+    if (!persistPath) return;
+    try {
+      fs.mkdirSync(path.dirname(persistPath), { recursive: true });
+      const tmp = `${persistPath}.tmp`;
+      fs.writeFileSync(tmp, JSON.stringify({ runs, artworks, eonSequences, selections, deliveries }));
+      fs.renameSync(tmp, persistPath);
+    } catch {
+      // best-effort — never let persistence break the request
+    }
+  };
+  persist(); // re-snapshot post-hydration (writes the interrupted-run cleanup)
 
   return {
     async createRun({ weekOf, triggeredBy, status = 'running' }) {
@@ -29,6 +75,7 @@ export function createMemoryRepo() {
         created_at: null,
       };
       runs.push(row);
+      persist();
       return clone(row);
     },
 
@@ -37,6 +84,7 @@ export function createMemoryRepo() {
       if (!row) return null;
       row.status = status;
       row.error = error;
+      persist();
       return clone(row);
     },
 
@@ -74,6 +122,7 @@ export function createMemoryRepo() {
         created_at: null,
       };
       artworks.push(row);
+      persist();
       return clone(row);
     },
 
@@ -89,6 +138,7 @@ export function createMemoryRepo() {
       for (const [key, col] of Object.entries(map)) {
         if (patch[key] !== undefined) row[col] = patch[key];
       }
+      persist();
       return clone(row);
     },
 
@@ -112,6 +162,7 @@ export function createMemoryRepo() {
         created_at: null,
       };
       eonSequences.push(row);
+      persist();
       return clone(row);
     },
 
@@ -127,12 +178,14 @@ export function createMemoryRepo() {
         row = { id: (selSeq += 1), artwork_id: artworkId, selected_by: selectedBy, selected_at: null };
         selections.push(row);
       }
+      persist();
       return clone(row);
     },
 
     async removeSelection(artworkId) {
       const i = selections.findIndex((s) => s.artwork_id === artworkId);
       if (i !== -1) selections.splice(i, 1);
+      persist();
     },
 
     async listSelections(runId) {
@@ -146,6 +199,7 @@ export function createMemoryRepo() {
         status, sent_at: sentAt, jeff_notified_at: null, error, created_at: null,
       };
       deliveries.push(row);
+      persist();
       return clone(row);
     },
 
@@ -154,6 +208,7 @@ export function createMemoryRepo() {
       if (!row) return null;
       const map = { status: 'status', destination: 'destination', sentAt: 'sent_at', jeffNotifiedAt: 'jeff_notified_at', error: 'error' };
       for (const [k, col] of Object.entries(map)) if (patch[k] !== undefined) row[col] = patch[k];
+      persist();
       return clone(row);
     },
 
