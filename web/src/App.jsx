@@ -61,6 +61,13 @@ export function ReviewDashboard() {
     catch (e) { setError(e.message); } finally { setBusy(false); }
   };
 
+  // Per-sign regenerate: fresh options for ONE surface, others untouched.
+  const regenerate = async (surfaceKey) => {
+    setBusy(true); setError(null);
+    try { await api.regenerate(runId, surfaceKey); await loadDetail(runId); }
+    catch (e) { setError(e.message); } finally { setBusy(false); }
+  };
+
   const act = async (fn) => {
     setBusy(true);
     try { await fn(); await loadDetail(runId); }
@@ -107,7 +114,12 @@ export function ReviewDashboard() {
       />
       {error && <p className="mb-4 rounded bg-rose-950 px-3 py-2 text-sm text-rose-200">{error}</p>}
       {!detail && <Empty onGenerate={generate} busy={busy} mode={mode} />}
-      {detail && <RunView detail={detail} onAct={act} busy={busy} running={running} />}
+      {detail && (
+        <RunView
+          detail={detail} onAct={act} busy={busy} running={running}
+          onRegenerate={regenerate} mode={mode}
+        />
+      )}
       {showSend && <SendDialog runId={runId} onClose={() => setShowSend(false)} onSent={() => loadDetail(runId)} />}
     </main>
   );
@@ -135,7 +147,7 @@ function Header({ runs, runId, onSelectRun, onGenerate, onAnimate, pendingAnimat
         {running ? (
           <span className="flex items-center gap-2 rounded-md bg-amber-950 px-3 py-1.5 text-sm font-medium text-amber-200">
             <Spinner className="border-amber-700 border-t-amber-300" />
-            {makingVideos ? 'Making videos… (about 1–2 min each)' : 'Creating designs… (about 1 min)'}
+            {makingVideos ? 'Making videos… (a few minutes each)' : 'Creating designs… (about 1 min)'}
           </span>
         ) : (
           <>
@@ -169,10 +181,10 @@ function Header({ runs, runId, onSelectRun, onGenerate, onAnimate, pendingAnimat
             )}
             <button
               type="button" onClick={onGenerate} disabled={busy}
-              title="Makes 9 brand-new design options (3 per sign type)"
+              title="Makes 9 brand-new design options — 3 per sign type. To redo just one sign, use the button next to that sign below."
               className="rounded bg-[#0247FE] px-3 py-1.5 text-sm font-medium text-white hover:bg-[#0235c9] disabled:opacity-50"
             >
-              {busy ? 'Starting…' : effectiveMode === 'live' ? '✨ Create new designs (~$0.30)' : '✨ Create sample designs (free)'}
+              {busy ? 'Starting…' : effectiveMode === 'live' ? '✨ New batch — all signs (~$0.30)' : '✨ Create sample designs (free)'}
             </button>
           </>
         )}
@@ -202,7 +214,7 @@ function Empty({ onGenerate, busy, mode }) {
   );
 }
 
-function RunView({ detail, onAct, busy, running }) {
+function RunView({ detail, onAct, busy, running, onRegenerate, mode }) {
   const { artworks } = detail;
   // An approved design with no video yet, while a job is running → it's being made.
   const isAnimating = (still, motion) => running && !motion && still.status === 'approved';
@@ -234,11 +246,24 @@ function RunView({ detail, onAct, busy, running }) {
     onReject: () => onAct(() => Promise.all(faces.map((f) => api.reject(f.id)))),
   });
 
-  const stillsOf = (style) => artworks.filter((a) => a.stage === 'still' && a.style === style);
+  // Superseded = retired by a per-sign regenerate; hidden from review.
+  const stillsOf = (style) =>
+    artworks.filter((a) => a.stage === 'still' && a.style === style && a.status !== 'superseded');
+
+  // Per-sign "New designs" button, shown in each section header.
+  const regenFor = (surfaceKey) => (
+    <button
+      type="button" disabled={busy || running} onClick={() => onRegenerate(surfaceKey)}
+      title="Retire these options and create 3 fresh designs for just this sign — designs you already approved stay"
+      className="rounded border border-neutral-700 bg-neutral-900 px-2.5 py-1 text-[11px] font-medium text-neutral-300 transition hover:border-[#0247FE] hover:text-white disabled:opacity-40"
+    >
+      ↻ New designs for this sign{mode === 'live' ? ' (~$0.10)' : ' (free)'}
+    </button>
+  );
 
   return (
     <div className="space-y-10">
-      <Section title="Spectacular — big street billboard" subtitle="3 design options · the one(s) you approve become 1692×468 videos with the black-frame look">
+      <Section title="Spectacular — big street billboard" subtitle="3 design options · the one(s) you approve become 1692×468 videos with the black-frame look" action={regenFor('spectacular')}>
         <div className="space-y-4">
           {stillsOf('frame_break').map((still) => {
             // .at(-1): after a re-roll, show the LATEST video.
@@ -249,7 +274,7 @@ function RunView({ detail, onAct, busy, running }) {
         </div>
       </Section>
 
-      <Section title="EON — 3-pillar set" subtitle="one wide design · its video gets split across the three pillars so the artwork travels from pillar to pillar">
+      <Section title="EON — 3-pillar set" subtitle="one wide design · its video gets split across the three pillars so the artwork travels from pillar to pillar" action={regenFor('eon_connected')}>
         <div className="space-y-6">
           {stillsOf('eon_connected').map((still) => {
             const faces = motionsByStill.get(still.id)?.slice(-3); // latest set of 3 after re-rolls
@@ -260,7 +285,7 @@ function RunView({ detail, onAct, busy, running }) {
         </div>
       </Section>
 
-      <Section title="EON — single pillar" subtitle="3 design options · approved ones become 256×384 videos">
+      <Section title="EON — single pillar" subtitle="3 design options · approved ones become 256×384 videos" action={regenFor('eon_single')}>
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
           {stillsOf('eon_single').map((still) => {
             const motion = motionsByStill.get(still.id)?.at(-1);
@@ -273,12 +298,15 @@ function RunView({ detail, onAct, busy, running }) {
   );
 }
 
-function Section({ title, subtitle, children }) {
+function Section({ title, subtitle, action, children }) {
   return (
     <section>
-      <div className="mb-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-300">{title}</h2>
-        <p className="text-xs text-neutral-500">{subtitle}</p>
+      <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
+        <div>
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-300">{title}</h2>
+          <p className="text-xs text-neutral-500">{subtitle}</p>
+        </div>
+        {action}
       </div>
       {children}
     </section>

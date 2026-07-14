@@ -10,7 +10,8 @@
 import { Router } from 'express';
 import config from '../config/index.js';
 import logger from '../config/logger.js';
-import { runWeek, animateRun } from '../services/orchestrator.js';
+import { runWeek, animateRun, regenerateStills } from '../services/orchestrator.js';
+import { SURFACES } from '../services/generation/catalog.js';
 import { getRepo } from '../db/index.js';
 
 const router = Router();
@@ -30,6 +31,28 @@ router.post('/runs', async (req, res, next) => {
     });
 
     res.status(202).json({ runId: run.id, status: run.status, weekOf: run.week_of });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Regenerate the design options for ONE surface within an existing run (the
+// per-sign "New designs" button) — other signs are left alone. 202 + poll.
+router.post('/runs/:id/regenerate', async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'invalid_run_id' });
+    const surfaceKey = req.body?.surface;
+    if (!SURFACES.some((s) => s.key === surfaceKey)) {
+      return res.status(400).json({ error: 'invalid_surface', valid: SURFACES.map((s) => s.key) });
+    }
+
+    const run = await new Promise((resolve, reject) => {
+      regenerateStills({
+        runId: id, surfaceKey, triggeredBy: req.get('x-user-email') || 'dashboard', onStart: resolve,
+      }).catch((err) => { logger.error({ err: err.message }, 'Background regenerate failed'); reject(err); });
+    });
+    res.status(202).json({ runId: run.id, surface: surfaceKey, status: 'running' });
   } catch (err) {
     next(err);
   }

@@ -85,8 +85,11 @@ export async function runWeek({ weekOf, triggeredBy = 'manual', onStart, deps = 
 
 async function generateStill(job, ctx) {
   const { runId, weekOf, repo, store, providers, guardrails, qa, workDir } = ctx;
-  const prompt = buildStillPrompt({ style: job.style, specKey: job.specKey, option: job.option, weekOf });
-  const motionPrompt = buildMotionPrompt({ style: job.style, specKey: job.specKey, option: job.option, weekOf });
+  // promptSeed defaults to the week — regeneration salts it (see
+  // regenerateStills) so fresh options don't repeat the retired designs.
+  const seed = ctx.promptSeed || weekOf;
+  const prompt = buildStillPrompt({ style: job.style, specKey: job.specKey, option: job.option, weekOf: seed });
+  const motionPrompt = buildMotionPrompt({ style: job.style, specKey: job.specKey, option: job.option, weekOf: seed });
 
   // Guardrail BEFORE the (cheap) still spend.
   const check = guardrails.checkPrompt(prompt);
@@ -147,6 +150,66 @@ async function generateStill(job, ctx) {
       prompt, motionPrompt, status: 'failed', error: err.message,
     });
     return { ready: 0, failed: 1, blocked: 0 };
+  }
+}
+
+/**
+ * Regenerate the still options for ONE surface inside an existing run —
+ * the per-sign "New designs" button. Unapproved stills for that surface are
+ * retired (status 'superseded', hidden by the dashboard); approved stills and
+ * any videos already made from them are untouched. Other surfaces are never
+ * touched — that's the whole point (UX feedback 2026-07-14: the global
+ * regenerate forced a re-spend across every sign).
+ * @returns {Promise<{ runId, phase, status, surface, counts, artworks }>}
+ */
+export async function regenerateStills({ runId, surfaceKey, triggeredBy = 'dashboard', onStart, deps = {} } = {}) {
+  const { repo, guardrails, qa } = resolveDeps(deps);
+  const store = deps.store || (await getStore());
+  const providers = deps.providers || getProviders();
+
+  const surface = (deps.surfaces || SURFACES).find((s) => s.key === surfaceKey);
+  if (!surface) throw new Error(`Unknown surface "${surfaceKey}"`);
+  const run = await repo.getRun(runId);
+  if (!run) throw new Error(`Run ${runId} not found`);
+  // Mark running BEFORE onStart — same polling-race lesson as animateRun.
+  await repo.setRunStatus(runId, 'running');
+  await onStart?.(run);
+
+  const week = run.week_of;
+  const existing = await repo.listArtworks(runId);
+  const mine = existing.filter((a) => a.stage === 'still' && a.style === surface.style);
+  // Retire this surface's unapproved, not-already-retired stills.
+  for (const a of mine.filter((x) => x.status !== 'approved' && x.status !== 'superseded')) {
+    await repo.updateArtwork(a.id, { status: 'superseded' });
+  }
+
+  // Salt the prompt seed with the attempt number. Prompts are deterministic in
+  // (week, surface, option) — without the salt, "new designs" would rebuild the
+  // exact themes and choreography that were just retired.
+  const perBatch = deps.optionsPerSurface ?? config.optionsPerSurface;
+  const attempt = Math.max(1, Math.ceil(mine.length / perBatch));
+  const promptSeed = `${week}#r${attempt}`;
+
+  const jobs = planJobs({ surfaces: [surface], optionsPerSurface: deps.optionsPerSurface });
+  logger.info({ runId, surface: surfaceKey, attempt, options: jobs.length, triggeredBy, mode: providers.mode || config.generationMode }, 'Per-surface regenerate started');
+
+  const workDir = deps.workDir || (await mkdtemp(path.join(os.tmpdir(), `wae-regen-${runId}-`)));
+  const counts = { ready: 0, failed: 0, blocked: 0 };
+  try {
+    for (const job of jobs) {
+      const r = await generateStill(job, { runId, weekOf: week, promptSeed, repo, store, providers, guardrails, qa, workDir });
+      counts.ready += r.ready; counts.failed += r.failed; counts.blocked += r.blocked;
+    }
+    const status = counts.ready === 0 && counts.failed + counts.blocked > 0 ? 'failed' : 'complete';
+    await repo.setRunStatus(runId, status);
+    logger.info({ runId, surface: surfaceKey, status, counts }, 'Per-surface regenerate finished');
+    return { runId, phase: 'stills', status, surface: surfaceKey, counts, artworks: await repo.listArtworks(runId) };
+  } catch (err) {
+    await repo.setRunStatus(runId, 'failed', err.message);
+    logger.error({ runId, surface: surfaceKey, err: err.message }, 'Per-surface regenerate crashed');
+    throw err;
+  } finally {
+    if (!deps.workDir) await rm(workDir, { recursive: true, force: true }).catch(() => {});
   }
 }
 
@@ -363,4 +426,4 @@ async function animateStill(still, ctx) {
   return 1;
 }
 
-export default { runWeek, animateRun };
+export default { runWeek, animateRun, regenerateStills };

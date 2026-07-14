@@ -143,3 +143,44 @@ test('Phase 1 guardrail blocks a still prompt before the still spend', async (t)
     await rm(base, { recursive: true, force: true });
   }
 });
+
+test('regenerateStills: fresh options for ONE surface only, approved kept, new prompts', async (t) => {
+  if (!(await hasFfmpeg())) return t.skip('ffmpeg not installed');
+  const { base, repo, store } = await harness();
+  try {
+    const { runId } = await runWeek({
+      weekOf: '2026-08-10', triggeredBy: 'test',
+      deps: { repo, store, providers, optionsPerSurface: 2, duration: 1 },
+    });
+    const before = await repo.listArtworks(runId);
+    const eonBefore = before.filter((a) => a.style === 'eon_single');
+    const otherBefore = before.filter((a) => a.style !== 'eon_single');
+    // Approve one EON single — it must survive the regenerate untouched.
+    await repo.updateArtwork(eonBefore[0].id, { status: 'approved' });
+
+    const { regenerateStills } = await import('../src/services/orchestrator.js');
+    const summary = await regenerateStills({
+      runId, surfaceKey: 'eon_single',
+      deps: { repo, store, providers, optionsPerSurface: 2, duration: 1 },
+    });
+    assert.equal(summary.status, 'complete');
+    assert.equal(summary.counts.ready, 2);
+
+    const after = await repo.listArtworks(runId);
+    // Approved still kept, unapproved retired (hidden), 2 fresh ones ready.
+    assert.equal((await repo.getArtwork(eonBefore[0].id)).status, 'approved');
+    assert.equal((await repo.getArtwork(eonBefore[1].id)).status, 'superseded');
+    const fresh = after.filter((a) => a.style === 'eon_single' && a.status === 'ready');
+    assert.equal(fresh.length, 2);
+    // The salt gives DIFFERENT prompts — not a rebuild of the retired designs.
+    assert.notEqual(fresh[0].prompt, eonBefore[0].prompt);
+    // Other surfaces are completely untouched.
+    for (const a of otherBefore) {
+      assert.deepEqual(await repo.getArtwork(a.id), a, `surface ${a.style} must be untouched`);
+    }
+    // Run is reviewable again.
+    assert.equal((await repo.getRun(runId)).status, 'complete');
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
+});

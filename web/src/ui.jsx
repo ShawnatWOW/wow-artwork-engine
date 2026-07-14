@@ -17,6 +17,7 @@ export function statusLabel(status, stage) {
   if (status === 'ready') return stage === 'still' ? 'needs review' : stage === 'motion' ? 'review video' : status;
   if (status === 'generating') return 'making video…';
   if (status === 'complete') return 'done';
+  if (status === 'superseded') return 'replaced'; // retired by a per-sign regenerate (normally hidden)
   return status;
 }
 
@@ -26,7 +27,7 @@ export function Spinner({ className = '' }) {
 }
 
 // Overlay shown on a card while its video is being generated.
-export function GeneratingOverlay({ label = 'Making video…', sub = 'about 1–2 minutes' }) {
+export function GeneratingOverlay({ label = 'Making video…', sub = 'about 2–4 minutes' }) {
   return (
     <div className="absolute inset-0 z-10 grid place-items-center rounded bg-black/70 backdrop-blur-sm">
       <div className="flex flex-col items-center gap-2 text-center">

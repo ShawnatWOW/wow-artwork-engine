@@ -40,10 +40,11 @@ const config = {
   // How many options per surface Scott reviews each week (locked: 3).
   optionsPerSurface: num(process.env.OPTIONS_PER_SURFACE, 3),
 
-  // Generation defaults. Short durations keep fixture runs fast; a live run
-  // conforms to the spot length (15/30/60s) downstream.
+  // Generation defaults. 15s is Seedance's max per clip (fal clamps 4–15) and
+  // the standard spot length; ping-pong surfaces loop out to 30s downstream.
+  // (Was 6s — Scott: "videos are too short", 2026-07-14.)
   generation: {
-    durationS: num(process.env.GEN_DURATION_S, 6),
+    durationS: num(process.env.GEN_DURATION_S, 15),
     fps: num(process.env.GEN_FPS, 30),
   },
 

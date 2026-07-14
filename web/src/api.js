@@ -34,6 +34,8 @@ export const api = {
   getRun: (id) => req('GET', `/runs/${id}`),
   generate: (weekOf) => req('POST', '/runs', { triggeredBy: 'dashboard', ...(weekOf ? { weekOf } : {}) }),
   animate: (runId) => req('POST', `/runs/${runId}/animate`),
+  // Fresh design options for ONE sign only — other signs untouched.
+  regenerate: (runId, surface) => req('POST', `/runs/${runId}/regenerate`, { surface }),
   animateOne: (artworkId) => req('POST', `/artworks/${artworkId}/animate`),
   select: (id) => req('POST', `/artworks/${id}/select`),
   unselect: (id) => req('DELETE', `/artworks/${id}/select`),
