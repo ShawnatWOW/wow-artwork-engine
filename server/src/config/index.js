@@ -52,6 +52,13 @@ const config = {
   // stray run can never spend generation credits by accident.
   generationMode: process.env.GENERATION_MODE || 'fixture',
 
+  // Estimated unit costs for the dashboard's month-to-date spend strip.
+  // Tunable so they can track fal's pricing without a code change.
+  costs: {
+    stillUsd: num(process.env.COST_STILL_USD, 0.03),
+    videoPerSecondUsd: num(process.env.COST_VIDEO_PER_SECOND_USD, 0.04),
+  },
+
   // Both models run on fal.ai: Seedance 2.0 (motion, image-to-video) + Seedream
   // (stills — its output URL feeds Seedance as the first frame). Slugs verified
   // against the live wow-contract-query integration + fal docs (2026-07).

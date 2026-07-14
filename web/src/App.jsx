@@ -6,7 +6,7 @@
 // wow-contract-query "Artwork Engine" tab.
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from './api.js';
-import { Preview, Actions, StatusBadge, Details, Card, ModePill, Stepper, Spinner, GeneratingOverlay } from './ui.jsx';
+import { Preview, Actions, StatusBadge, Details, Card, ModePill, SpendPill, Stepper, Spinner, GeneratingOverlay } from './ui.jsx';
 import SendDialog from './SendDialog.jsx';
 
 export default function App() {
@@ -24,16 +24,20 @@ export function ReviewDashboard() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [showSend, setShowSend] = useState(false);
+  const [spend, setSpend] = useState(null);
 
   const loadRuns = useCallback(async () => {
     const { runs: list } = await api.listRuns();
     setRuns(list);
     setRunId((cur) => cur ?? list[0]?.id ?? null);
+    api.spend().then(setSpend).catch(() => {}); // spend shows even with no runs yet
   }, []);
 
   const loadDetail = useCallback(async (id) => {
     if (id == null) return setDetail(null);
     setDetail(await api.getRun(id));
+    // Refresh the MTD spend alongside — cheap, and it tracks every action.
+    api.spend().then(setSpend).catch(() => {});
   }, []);
 
   useEffect(() => { loadRuns().catch((e) => setError(e.message)); }, [loadRuns]);
@@ -110,7 +114,7 @@ export function ReviewDashboard() {
         onGenerate={generate} onAnimate={animate} pendingAnimate={pendingAnimate}
         readyToSend={readyToSend} onSend={() => setShowSend(true)}
         busy={busy} run={detail?.run} mode={mode} detail={detail}
-        running={running} makingVideos={makingVideos}
+        running={running} makingVideos={makingVideos} spend={spend}
       />
       {error && <p className="mb-4 rounded bg-rose-950 px-3 py-2 text-sm text-rose-200">{error}</p>}
       {!detail && <Empty onGenerate={generate} busy={busy} mode={mode} />}
@@ -125,7 +129,7 @@ export function ReviewDashboard() {
   );
 }
 
-function Header({ runs, runId, onSelectRun, onGenerate, onAnimate, pendingAnimate, readyToSend, onSend, busy, run, mode, detail, running, makingVideos }) {
+function Header({ runs, runId, onSelectRun, onGenerate, onAnimate, pendingAnimate, readyToSend, onSend, busy, run, mode, detail, running, makingVideos, spend }) {
   const [health, setHealth] = useState(null);
   useEffect(() => { api.health().then(setHealth); }, []);
   const effectiveMode = mode || health?.generationMode;
@@ -135,6 +139,7 @@ function Header({ runs, runId, onSelectRun, onGenerate, onAnimate, pendingAnimat
         <h1 className="flex items-center gap-2 text-xl font-semibold">
           WOW Artwork Engine
           <ModePill mode={effectiveMode} />
+          <SpendPill spend={spend} />
         </h1>
         <p className="text-xs text-neutral-500">
           Weekly AI artwork for the WOW signs — you approve everything before anything is made or sent

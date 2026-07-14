@@ -31,6 +31,7 @@ export const api = {
   base: API,
   health: () => fetch('/health').then((r) => r.json()).catch(() => ({ status: 'unreachable' })),
   listRuns: () => req('GET', '/runs'),
+  spend: () => req('GET', '/spend'),
   getRun: (id) => req('GET', `/runs/${id}`),
   generate: (weekOf) => req('POST', '/runs', { triggeredBy: 'dashboard', ...(weekOf ? { weekOf } : {}) }),
   animate: (runId) => req('POST', `/runs/${runId}/animate`),

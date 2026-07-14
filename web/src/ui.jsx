@@ -47,6 +47,21 @@ export function StatusBadge({ status, stage }) {
   );
 }
 
+// Month-to-date spend strip — what the art has cost so far this month.
+export function SpendPill({ spend }) {
+  if (!spend) return null;
+  const monthName = new Date(`${spend.month}-15T12:00:00Z`)
+    .toLocaleString('en-US', { month: 'long', timeZone: 'UTC' });
+  return (
+    <span
+      title={`Estimated from usage: ${spend.stills.count} design${spend.stills.count === 1 ? '' : 's'} ($${spend.stills.usd.toFixed(2)}) + ${spend.videos.count} video${spend.videos.count === 1 ? '' : 's'} / ${spend.videos.seconds}s ($${spend.videos.usd.toFixed(2)})`}
+      className="rounded-full bg-neutral-800 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-300"
+    >
+      💰 {monthName} spend: ${spend.totalUsd.toFixed(2)}
+    </span>
+  );
+}
+
 // Honest LIVE (spends) vs TEST ($0) indicator.
 export function ModePill({ mode }) {
   if (!mode) return null;

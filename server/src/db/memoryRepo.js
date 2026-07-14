@@ -72,7 +72,7 @@ export function createMemoryRepo({ persistPath = null } = {}) {
         status,
         triggered_by: triggeredBy ?? null,
         error: null,
-        created_at: null,
+        created_at: new Date().toISOString(), // pg stamps this via DEFAULT now()
       };
       runs.push(row);
       persist();
@@ -119,7 +119,7 @@ export function createMemoryRepo({ persistPath = null } = {}) {
         motion_prompt: a.motionPrompt ?? null,
         source_still_id: a.sourceStillId ?? null,
         remote_url: a.remoteUrl ?? null,
-        created_at: null,
+        created_at: new Date().toISOString(), // pg stamps this via DEFAULT now()
       };
       artworks.push(row);
       persist();

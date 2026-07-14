@@ -12,6 +12,7 @@ import config from '../config/index.js';
 import logger from '../config/logger.js';
 import { runWeek, animateRun, regenerateStills } from '../services/orchestrator.js';
 import { SURFACES } from '../services/generation/catalog.js';
+import { computeSpend } from '../services/spend.js';
 import { getRepo } from '../db/index.js';
 
 const router = Router();
@@ -70,6 +71,17 @@ router.post('/runs/:id/animate', async (req, res, next) => {
         .catch((err) => { logger.error({ err: err.message }, 'Background animate failed'); reject(err); });
     });
     res.status(202).json({ runId: run.id, status: 'running' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Month-to-date spend estimate for the dashboard strip. ?month=YYYY-MM to
+// look back at earlier months.
+router.get('/spend', async (req, res, next) => {
+  try {
+    const month = /^\d{4}-\d{2}$/.test(req.query.month || '') ? req.query.month : undefined;
+    res.json(await computeSpend({ repo: getRepo(), month }));
   } catch (err) {
     next(err);
   }
