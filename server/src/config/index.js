@@ -56,7 +56,9 @@ const config = {
   // Tunable so they can track fal's pricing without a code change.
   costs: {
     stillUsd: num(process.env.COST_STILL_USD, 0.03),
-    videoPerSecondUsd: num(process.env.COST_VIDEO_PER_SECOND_USD, 0.04),
+    // Covers the full 4K video path per raw second: Seedance standard 1080p
+    // + Topaz upscale. (Was 0.04 for the 720p fast tier alone.)
+    videoPerSecondUsd: num(process.env.COST_VIDEO_PER_SECOND_USD, 0.10),
   },
 
   // Both models run on fal.ai: Seedance 2.0 (motion, image-to-video) + Seedream
@@ -64,13 +66,22 @@ const config = {
   // against the live wow-contract-query integration + fal docs (2026-07).
   fal: {
     key: process.env.FAL_KEY,
-    // Seedance app id (no "fal-ai/" prefix — matches Content Automation). `fast`
-    // is the cheap 720p tier; drop `/fast` for Standard (up to 1080p).
-    seedanceModel: process.env.FAL_SEEDANCE_MODEL || 'bytedance/seedance-2.0/fast/image-to-video',
+    // Seedance app id (no "fal-ai/" prefix — matches Content Automation).
+    // Standard tier at 1080p (4K pipeline, 2026-07-14); add `/fast` back for
+    // the cheap 720p tier if costs need trimming.
+    seedanceModel: process.env.FAL_SEEDANCE_MODEL || 'bytedance/seedance-2.0/image-to-video',
     seedreamModel: process.env.FAL_SEEDREAM_MODEL || 'fal-ai/bytedance/seedream/v4/text-to-image',
     queueBase: process.env.FAL_QUEUE_BASE || 'https://queue.fal.run',
-    resolution: process.env.FAL_RESOLUTION || '720p',
+    resolution: process.env.FAL_RESOLUTION || '1080p',
     generateAudio: process.env.FAL_GENERATE_AUDIO === '1', // artwork is silent by default
+    // AI upscale to 4K-class after Seedance (billboards need real sharpness —
+    // a plain ffmpeg blow-up looks soft at street scale). Topaz runs on the
+    // fal-hosted Seedance URL before download. FAL_UPSCALE=0 to disable.
+    upscale: {
+      enabled: process.env.FAL_UPSCALE === undefined ? true : ['1', 'true', 'yes', 'on'].includes(String(process.env.FAL_UPSCALE).toLowerCase()),
+      model: process.env.FAL_UPSCALE_MODEL || 'fal-ai/topaz/upscale/video',
+      factor: num(process.env.FAL_UPSCALE_FACTOR, 2),
+    },
   },
   gemini: {
     apiKey: process.env.GEMINI_API_KEY,

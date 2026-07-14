@@ -268,7 +268,7 @@ function RunView({ detail, onAct, busy, running, onRegenerate, mode }) {
 
   return (
     <div className="space-y-10">
-      <Section title="Spectacular — big street billboard" subtitle="3 design options · the one(s) you approve become 1692×468 videos with the black-frame look" action={regenFor('spectacular')}>
+      <Section title="Spectacular — big street billboard" subtitle="3 design options · the one(s) you approve become 4K (3840×1062) videos with the black-frame look" action={regenFor('spectacular')}>
         <div className="space-y-4">
           {stillsOf('frame_break').map((still) => {
             // .at(-1): after a re-roll, show the LATEST video.
@@ -290,7 +290,7 @@ function RunView({ detail, onAct, busy, running, onRegenerate, mode }) {
         </div>
       </Section>
 
-      <Section title="EON — single pillar" subtitle="3 design options · approved ones become 256×384 videos" action={regenFor('eon_single')}>
+      <Section title="EON — single pillar" subtitle="3 design options · approved ones become 4K-class (1280×1920) videos" action={regenFor('eon_single')}>
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
           {stillsOf('eon_single').map((still) => {
             const motion = motionsByStill.get(still.id)?.at(-1);

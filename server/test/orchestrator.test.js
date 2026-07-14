@@ -72,10 +72,10 @@ test('Phase 2: animateRun animates ONLY approved stills, conformed to spec, link
     // Motions are conformed to the exact sign specs.
     const spec = motions.find((m) => m.style === 'frame_break');
     let p = await ffmpeg.probe(store.localPath(spec.s3_key_final));
-    assert.equal(p.width, 1692); assert.equal(p.height, 468);
+    assert.equal(p.width, 3840); assert.equal(p.height, 1062);
     for (const face of motions.filter((m) => m.style === 'eon_connected')) {
       p = await ffmpeg.probe(store.localPath(face.s3_key_final));
-      assert.equal(p.width, 256); assert.equal(p.height, 384);
+      assert.equal(p.width, 1280); assert.equal(p.height, 1920);
     }
     assert.equal((await repo.listEonSequences(runId)).length, 1);
 

@@ -4,9 +4,9 @@ import assert from 'node:assert/strict';
 import { SPECS, SURFACES, POST, planJobs } from '../src/services/generation/catalog.js';
 
 test('SPECS match the locked Build Plan §4 pixel dimensions', () => {
-  assert.deepEqual(SPECS.spectacular_wow1_8, { surface: 'spectacular', width: 1692, height: 468 });
-  assert.deepEqual(SPECS.eon_face, { surface: 'eon', width: 256, height: 384 });
-  assert.deepEqual(SPECS.eon_master_3pod, { surface: 'eon', width: 768, height: 384 });
+  assert.deepEqual(SPECS.spectacular_wow1_8, { surface: 'spectacular', width: 3840, height: 1062 });
+  assert.deepEqual(SPECS.eon_face, { surface: 'eon', width: 1280, height: 1920 });
+  assert.deepEqual(SPECS.eon_master_3pod, { surface: 'eon', width: 3840, height: 1920 });
 });
 
 test('every surface references a known spec and a known post-step', () => {

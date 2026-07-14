@@ -1,15 +1,18 @@
 // EON slicer (Build Plan M1 · ffmpeg).
 //
 // An EON "connected" piece is generated as one wide 2:1 master
-// (eon_master_3pod, 768x384). The three pods each display a 256-wide column,
-// so a shape choreographed to cross the column boundaries reads as traveling
-// from pod to pod. This module splits one master into three aligned faces.
+// (eon_master_3pod). The three pods each play one third of its width, so a
+// shape choreographed to cross the column boundaries reads as traveling from
+// pod to pod. This module splits one master into three aligned faces.
+// Dimensions derive from the catalog SPECS (4K-class since 2026-07-14) so the
+// slicer can never drift from the delivery spec.
 
 import path from 'node:path';
 import ffmpeg from './ffmpeg.js';
+import { SPECS } from './generation/catalog.js';
 
-export const EON_FACE = { width: 256, height: 384 };
-export const EON_MASTER = { width: 768, height: 384 };
+export const EON_FACE = { width: SPECS.eon_face.width, height: SPECS.eon_face.height };
+export const EON_MASTER = { width: SPECS.eon_master_3pod.width, height: SPECS.eon_master_3pod.height };
 export const POD_COUNT = 3;
 
 /**
@@ -32,7 +35,7 @@ export function computeFaceCrops(masterWidth = EON_MASTER.width, faceWidth = EON
 }
 
 /**
- * Slice a 768x384 master video into three 256x384 face files.
+ * Slice a conformed master video into three aligned face files.
  * @returns {Promise<Array<{pod, path, x, width, height}>>}
  */
 export async function sliceMaster({ masterPath, outDir, basename = 'eon_face', duration }) {

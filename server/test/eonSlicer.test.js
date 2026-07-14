@@ -20,10 +20,10 @@ async function hasFfmpeg() {
   }
 }
 
-test('computeFaceCrops splits 768 into three aligned 256-wide faces', () => {
+test('computeFaceCrops splits the master into three aligned face-wide columns', () => {
   const crops = computeFaceCrops();
   assert.equal(crops.length, 3);
-  assert.deepEqual(crops.map((c) => c.x), [0, 256, 512]);
+  assert.deepEqual(crops.map((c) => c.x), [0, EON_FACE.width, EON_FACE.width * 2]);
   assert.ok(crops.every((c) => c.width === EON_FACE.width && c.height === EON_FACE.height));
 });
 
@@ -31,7 +31,7 @@ test('computeFaceCrops rejects a master that does not divide evenly', () => {
   assert.throws(() => computeFaceCrops(700));
 });
 
-test('sliceMaster produces three aligned 256x384 faces from a 768x384 master', async (t) => {
+test('sliceMaster produces three aligned spec-sized faces from a spec master', async (t) => {
   if (!(await hasFfmpeg())) return t.skip('ffmpeg not installed');
   const dir = await mkdtemp(path.join(os.tmpdir(), 'wae-eon-'));
   try {
@@ -44,8 +44,8 @@ test('sliceMaster produces three aligned 256x384 faces from a 768x384 master', a
     assert.equal(faces.length, 3);
     for (const face of faces) {
       const probed = await ffmpeg.probe(face.path);
-      assert.equal(probed.width, 256);
-      assert.equal(probed.height, 384);
+      assert.equal(probed.width, EON_FACE.width);
+      assert.equal(probed.height, EON_FACE.height);
     }
     assert.deepEqual(faces.map((f) => f.pod), [1, 2, 3]);
   } finally {
@@ -59,7 +59,7 @@ test('sliceMaster rejects a mis-sized master', async (t) => {
   try {
     const master = path.join(dir, 'bad.mp4');
     await motionProvider.generate({ width: 640, height: 384, durationS: 1, output: master });
-    await assert.rejects(() => sliceMaster({ masterPath: master, outDir: dir }), /expected 768x384/);
+    await assert.rejects(() => sliceMaster({ masterPath: master, outDir: dir }), new RegExp(`expected ${EON_MASTER.width}x${EON_MASTER.height}`));
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

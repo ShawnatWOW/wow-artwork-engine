@@ -371,7 +371,7 @@ async function animateStill(still, ctx) {
 
     const faceIds = [];
     for (const face of faces) {
-      const td = thumbDims({ width: 256, height: 384 });
+      const td = thumbDims(SPECS.eon_face);
       const thumb = path.join(dir, `pod${face.pod}_thumb.jpg`);
       await ffmpeg.thumbnail({ input: face.path, output: thumb, width: td.width, height: td.height, atSeconds: Math.min(2, effDuration / 2) });
       const facePut = await store.put({ key: key(`pod${face.pod}.mp4`), sourcePath: face.path });
@@ -398,7 +398,10 @@ async function animateStill(still, ctx) {
     // the black canvas + border around it. The old blind overshoot geometry
     // assumed a known input aspect and showed letterbox when the model
     // returned something else. True pop-out matting = Batch B.
-    const inset = 48;
+    // Inset/border scale with the canvas (tuned at 48px/5px on the old
+    // 1692-wide spec) so the frame reads the same at 4K.
+    const inset = even(finalSpec.width / 35);
+    const borderThickness = Math.max(3, Math.round(finalSpec.width / 340));
     const inner = path.join(dir, 'inner.mp4');
     await ffmpeg.conform({
       input: srcVideo, output: inner,
@@ -407,7 +410,7 @@ async function animateStill(still, ctx) {
     });
     await ffmpeg.frameBreakComposite({
       input: inner, output: final, canvasWidth: finalSpec.width, canvasHeight: finalSpec.height,
-      inset, borderThickness: 5, overshoot: 0, duration: effDuration, fps,
+      inset, borderThickness, overshoot: 0, duration: effDuration, fps,
     });
   } else {
     await ffmpeg.conform({ input: srcVideo, output: final, width: finalSpec.width, height: finalSpec.height, duration: effDuration, fps });

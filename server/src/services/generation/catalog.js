@@ -10,12 +10,15 @@
 
 import config from '../../config/index.js';
 
-// key → exact output pixels. Locked; do not drift from the seed.
+// key → exact output pixels. 4K-class per Shawn (2026-07-14): "output needs
+// to be 4K … keep the same aspect ratios". Each spec keeps the physical sign's
+// aspect with the long edge at 3840; Jeff's players downscale to panel native.
+// (Former panel-native sizes for reference: 1692×468, 256×384, 64×384, 768×384.)
 export const SPECS = {
-  spectacular_wow1_8: { surface: 'spectacular', width: 1692, height: 468 },
-  eon_face: { surface: 'eon', width: 256, height: 384 },
-  eon_spine: { surface: 'eon', width: 64, height: 384 },
-  eon_master_3pod: { surface: 'eon', width: 768, height: 384 },
+  spectacular_wow1_8: { surface: 'spectacular', width: 3840, height: 1062 },
+  eon_face: { surface: 'eon', width: 1280, height: 1920 },
+  eon_spine: { surface: 'eon', width: 320, height: 1920 },
+  eon_master_3pod: { surface: 'eon', width: 3840, height: 1920 },
 };
 
 // Post-processing kinds the orchestrator knows how to run:
@@ -38,9 +41,9 @@ export const SURFACES = [
     specKey: 'spectacular_wow1_8',
     style: 'frame_break', // the WOW signature 3D frame-break look
     mediaType: 'video',
-    // Native ~3.6:1 (matches 1692x468) — the whole composition survives the
-    // band; no center-crop lottery (art review, 2026-07-10).
-    gen: { kind: 'motion', width: 3456, height: 960, ratio: '21:9' },
+    // Native ~3.6:1 (matches the spec) — the whole composition survives the
+    // band; no center-crop lottery (art review, 2026-07-10). Seedream max 4096.
+    gen: { kind: 'motion', width: 4096, height: 1132, ratio: '21:9' },
     post: POST.FRAME_BREAK,
     loop: 'pingpong',
   },
@@ -50,7 +53,7 @@ export const SURFACES = [
     specKey: 'eon_master_3pod',
     style: 'eon_connected', // one wide master that travels across the 3 pods
     mediaType: 'video',
-    gen: { kind: 'motion', width: 2048, height: 1024, ratio: '2:1' },
+    gen: { kind: 'motion', width: 4096, height: 2048, ratio: '2:1' },
     post: POST.EON_SLICE,
     // Directional travel: no ping-pong. Loop policy = enter/exit clip.
   },
@@ -60,7 +63,7 @@ export const SURFACES = [
     specKey: 'eon_face',
     style: 'eon_single', // a standalone single-face piece
     mediaType: 'video',
-    gen: { kind: 'motion', width: 1024, height: 1536, ratio: '2:3' },
+    gen: { kind: 'motion', width: 2560, height: 3840, ratio: '2:3' },
     post: POST.CONFORM,
     loop: 'pingpong',
   },
