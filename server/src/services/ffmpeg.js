@@ -111,10 +111,12 @@ export function buildFrameBreakArgs({
   // filter_complex:
   //  [0:v] scale subject to inner width, preserve ratio        -> [subj]
   //  color black canvas                                        -> [bg]
-  //  draw the inner frame border on the canvas                 -> [framed]
+  //  draw the bright frame border on the canvas                -> [framed]
   //  overlay subject onto framed canvas at (inset, subjY)      -> [out]
+  // The subject can move in front of or behind the frame edge for 3D effect.
   const filter = [
     `color=c=black:s=${canvasWidth}x${canvasHeight}:r=${fps}[bg]`,
+    // Bright frame border: transparent inner area, opaque border on black canvas
     `[bg]drawbox=x=${inset}:y=${inset}:w=${innerW}:h=${innerH}:` +
       `color=white@0.85:t=${borderThickness}[framed]`,
     `[0:v]scale=${subjectW}:-2[subj]`,
