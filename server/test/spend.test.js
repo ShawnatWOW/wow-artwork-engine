@@ -27,7 +27,7 @@ test('spend: live stills billed flat, fixture and blocked rows free', async () =
   assert.equal(s.totalUsd, Math.round(2 * stillUsd * 100) / 100);
 });
 
-test('spend: EON connected set bills ONE Seedance call; ping-pong halved', async () => {
+test('spend: EON connected set bills ONE Seedance call; all videos at base duration', async () => {
   const repo = createMemoryRepo();
   const run = await seed(repo, { weekOf: `${THIS_MONTH}-03` });
   const motion = { runId: run.id, mediaType: 'video', stage: 'motion', model: 'seedance-2.0-fast' };
@@ -38,10 +38,10 @@ test('spend: EON connected set bills ONE Seedance call; ping-pong halved', async
       s3KeyRaw: 'runs/1/motion/still9/raw.mp4', durationS: 15,
     });
   }
-  // One ambient single-pod video: 30s FINAL (ping-ponged) = 15s raw billed.
+  // One single-pod video: 15s (no ping-pong — user wants full-scene motion throughout, not seamless loop).
   await repo.insertArtwork({
     ...motion, surface: 'eon', style: 'eon_single', specKey: 'eon_face',
-    s3KeyRaw: 'runs/1/motion/still10/raw.mp4', durationS: 30,
+    s3KeyRaw: 'runs/1/motion/still10/raw.mp4', durationS: 15,
   });
 
   const s = await computeSpend({ repo });

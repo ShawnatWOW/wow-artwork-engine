@@ -54,49 +54,32 @@ const TRAVELS = [
 // the frame with continuous motion (a stalled subject reads as a frozen loop).
 const CHOREOGRAPHIES = [
   (s, tr) =>
-    `${s} explodes through a vertical loop-the-loop in the ${tr.start} third, diving down then soaring up ` +
-    `while moving forward in space, leaving streaking trails of light, then ` +
-    `barrel-rolls through the middle third with aggressive rotational energy, growing and shrinking with depth, ` +
-    `finally accelerates toward the viewer and crashes landing at the ${tr.end} edge dramatically`,
+    `Scene is in perpetual motion: the entire background swirls and morphs continuously; ${s} performs a violent vertical loop-the-loop in the ${tr.start} third diving and soaring while the scene around it churns with streaming color trails, then barrel-rolls through the middle third with the environment rippling in sync, finally explodes toward viewer landing at the ${tr.end} edge as the entire frame crackles with kinetic energy`,
   (s, tr) =>
-    `${s} fractures into a violent burst of spinning particles from the ${tr.start} third, ` +
-    `the fragments explode outward in all directions including toward and away from the camera through the middle third, ` +
-    `ricocheting and swirling in aggressive eddies, then snap back together with kinetic force ` +
-    `to arrive as a unified whole rocketing to the ${tr.end} edge in the final frame`,
+    `Background is alive and turbulent: shapes pulse and undulate across the full frame; ${s} fractures into spinning particles from the ${tr.start} third as the scene around it fragments, particles and environment swirl chaotically through the middle third in aggressive eddies, then snap back together merging with the dynamic background as ${s} rockets to the ${tr.end} edge in a wave of cascading color`,
   (s, tr) =>
-    `${s} rides towering rolling wave-arcs from the ${tr.start} third, plunging deep down into the frame and launching upward, ` +
-    `crests spectacularly at the center of the frame growing larger as it approaches the viewer with blinding light, ` +
-    `then plummets downward in a steep arc to the ${tr.end} edge with tremendous velocity in the final frame`,
+    `Entire scene undulates with hypnotic motion: the background flows like living liquid; ${s} rides towering rolling wave-arcs from the ${tr.start} third plunging and launching upward while the environment crests and dips in perfect sync, reaches the center of the frame as lighting blazes and shockwaves ripple outward across the entire composition, then plummets to the ${tr.end} edge with tremendous force as the scene explodes with light`,
   (s, tr) =>
-    `${s} spins violently in place in the ${tr.start} third, shedding explosive bursts of color in all directions, ` +
-    `then whips into a chaotic orbit around a blazing core of light at the center of the frame, getting closer and farther with ` +
-    `dizzying speed and energy, finally spirals outward and streaks through the frame to the ${tr.end} edge`,
+    `Background rotates and orbits continuously: the scene is one unified vortex of motion; ${s} spins violently in the ${tr.start} third shedding explosive bursts as the surrounding environment whips and spirals, then enters a chaotic orbit around the center of the frame with the entire scene rotating faster, finally spirals outward to the ${tr.end} edge as the whole composition culminates in a crescendo of movement`,
   (s, tr) =>
-    `${s} zigzags with frenetic energy from the ${tr.start} third, bouncing between top and bottom while moving forward in space, ` +
-    `expanding and contracting with violent momentum, reaches the center of the frame and detonates with rippling waves of color, ` +
-    `then rockets in a blazing arc straight toward the viewer before veering to the ${tr.end} edge in the final frame`,
+    `Everything ricochets and bounces: the background is filled with kinetic particles and light in constant collision; ${s} zigzags with frenetic energy from the ${tr.start} third bouncing between top and bottom while the entire frame vibrates with resonant light waves, reaches the center of the frame and detonates with the whole scene exploding outward, then rockets to the ${tr.end} edge through a maelstrom of motion`,
   (s, tr) =>
-    `${s} shatters into three glowing echoes in the ${tr.start} third and chases itself chaotically through the middle, ` +
-    `the echoes collide and rebound through the frame approaching and receding from the camera in a dizzying chase, ` +
-    `then slam together with explosive force at the center and merge into one accelerating to the ${tr.end} edge`,
+    `Scene pulses with unified rhythm: the entire background and subject are one organism; ${s} shatters into glowing echoes in the ${tr.start} third as the background fragments in sync, echoes and environment chase and rebound through the middle third in dizzying spirals, then merge back at the center of the frame with the whole composition snapping together and accelerating as a unified force to the ${tr.end} edge`,
   (s, tr) =>
-    `${s} hurls itself through the ${tr.start} third in a violent barrel-roll streaming ribbons of blazing light, ` +
-    `carves a massive aggressive figure-eight across the center of the frame growing and shrinking as it moves through depth, ` +
-    `momentum building with each loop until it explodes forward in an arc to the ${tr.end} edge in the final frame`,
+    `Background swirls in aggressive figure-eights: the entire space is defined by continuous motion; ${s} hurls itself through the ${tr.start} third in a violent barrel-roll leaving trails as the background streams and twists around it, carves a massive figure-eight across the center of the frame with the entire scene rotating through the motion, momentum builds with each loop as the environment crescendos, then explodes forward in an arc to the ${tr.end} edge through waves of kinetic color`,
   (s, tr) =>
-    `${s} erupts upward from the ${tr.start} third with explosive force, spiraling faster and faster while also surging forward toward the viewer, ` +
-    `blossoms into a massive fractal explosion of radiating color and movement at the center of the frame, ` +
-    `then collapses and rockets backward away from the camera before streaking down to the ${tr.end} edge with tremendous energy`,
+    `Entire scene detonates and reforms: the background fractalizes and blooms explosively; ${s} erupts upward from the ${tr.start} third with explosive force spiraling and surging as the scene around it explodes outward in fractals, blossoms into massive radiating patterns at the center of the frame with the entire composition expanding with kinetic light, then collapses and rockets backward with the environment imploding inward before streaking to the ${tr.end} edge as one unified detonation`,
 ];
 
-// Dynamic motion for the standalone surfaces — aggressive 3D depth, vertical travel, moving backgrounds.
+// Dynamic motion for standalone surfaces — entire SCENE in constant motion, not just the subject.
+// Seedance responds to scene-wide activity descriptions better than subject-only prompts.
 const SOLO_MOTIONS = [
-  (s) => `${s} explodes toward the viewer with violent acceleration, growing massive with streaming trails, ricocheting between top and bottom edges`,
-  (s) => `${s} spirals chaotically at high speed toward the camera while rotating, growing and shrinking with aggressive depth changes, radiating explosive bursts of light`,
-  (s) => `${s} detonates open dramatically unfurling layers outward in all directions at high energy, bursting toward the viewer with tremendous force`,
-  (s) => `${s} spins violently at the center with massive rotational energy, waves of color exploding outward at the edges while it accelerates in 3D space`,
-  (s) => `${s} launches in frantic non-stop motion across the full frame, bouncing between all edges, shooting toward and away from the camera with wild momentum`,
-  (s) => `${s} pulses violently like a detonating heart, each massive pulse sending kaleidoscopic shockwaves rippling across the entire frame with explosive force`,
+  (s) => `Intense scene: the entire background is rippling and swirling with dynamic color shifts; ${s} surges directly toward the viewer growing massive, while the scene around it churns with streaming light trails and vibrant motion across every pixel of the frame`,
+  (s) => `Hyperactive scene: kaleidoscopic patterns pulse and rotate continuously across the entire background; ${s} spirals chaotically through the center at high speed while the surrounding environment explodes with color bursts and kinetic light effects`,
+  (s) => `Explosive scene: the full background is alive with blooming fractals and radiating waves of color; ${s} unfolds dramatically in layers while the entire frame crackles with electric movement and cascading light`,
+  (s) => `Turbulent scene: swirling vortexes of color consume the full frame in constant motion; ${s} spins with violent rotational energy at the center while waves of light ripple outward to the edges, engulfing the entire composition`,
+  (s) => `Frenetic scene: the entire frame is a non-stop whirlwind of motion with particles and light ricocheting between all edges; ${s} launches wildly through the chaos, colliding with and bouncing through the kinetic environment`,
+  (s) => `Detonating scene: the background itself pulses like a massive beating heart with waves of color exploding outward; ${s} expands and contracts in sync, sending shockwaves of kaleidoscopic light rippling across the entire width and height of the frame`,
 ];
 
 /** The in-frame travel spec for a wide-composition option (1-based). Pure. */
@@ -164,12 +147,11 @@ export function buildStillPrompt({ style, specKey, option, weekOf }) {
       `${CONTRAST} ${SAFE}`;
   }
   if (style === 'frame_break') {
-    return `An ultra-wide cinematic scene with dramatic layered depth. Style: ${t.style}. ` +
-      `The single hero subject is ${t.subject}, centered, with generous open margins on both sides and ` +
-      `the entire subject contained in the central horizontal band of the frame (the top and bottom edges are ` +
-      `expendable background texture that extends deep into the distance). Multiple depth layers: ` +
-      `the background environment is rich and dynamic, suggesting the subject can move forward and backward through the scene. ` +
-      `${ENERGY} Extreme cinematic depth with dramatic lighting that creates strong shadows and highlights. ${CONTRAST} ${SAFE}`;
+    return `An ultra-wide cinematic scene with strong 3D depth planes. Style: ${t.style}. ` +
+      `Composition: a dark vignette frame around the edges (naturally framing the scene), with ${t.subject} centered in the bright focal area. ` +
+      `The subject sits in the middle plane with a rich, detailed background behind it receding into deep distance, and a foreground layer in front suggested by lighting and shadow. ` +
+      `The subject is large enough to break partially out of the bright central frame into the darker edge area, creating a natural 3D depth effect. ` +
+      `${ENERGY} Dramatic cinematic lighting creates clear foreground-to-background separation and casts strong shadows suggesting multiple planes. ${CONTRAST} ${SAFE}`;
   }
   // eon_single: tall portrait composition.
   return `A tall vertical scene. Style: ${t.style}. ` +
@@ -189,21 +171,23 @@ export function buildMotionPrompt({ style, specKey, option, weekOf }) {
   if (style === 'eon_connected') {
     const tr = travelFor(option);
     const acts = choreographyFor({ specKey, option, weekOf })(t.subject, tr);
-    return `Dynamic continuous choreography with aggressive background motion: ${acts}. ` +
+    return `Choreographed whole-scene motion: ${acts}. ` +
       `The journey starts in the ${tr.start} third of the frame in the very first frame and finishes at the ` +
       `${tr.end} edge of the frame only in the final frame; the subject stays inside the frame and keeps ` +
       `fluid, continuous motion the whole time — it never stops or hovers in place. ` +
-      `The background environment is also in motion — swirling, flowing, and shifting as the subject travels, ` +
-      `creating a sense of speed and space. The entire scene feels alive and dynamic, not static. ${CONSTANCY}`;
+      `Critically: the entire background is in constant motion at all times — not calm or steady. ` +
+      `The background environment swirls, ripples, flows, shifts, and evolves continuously in sync with the subject's journey; ` +
+      `every pixel of the composition is active. The entire scene is kinetic and alive, never static or passive. ${CONSTANCY}`;
   }
   const solo = soloMotionFor({ specKey, option, weekOf })(t.subject);
   if (style === 'frame_break') {
-    return `Extreme cinematic motion with deep 3D perspective: ${solo}. ` +
-      `The subject moves through 3D space — approaching the camera to fill the frame, ` +
-      `receding away, moving vertically and diagonally across the entire width and height. ` +
-      `The visible black frame border creates the illusion of depth; the subject should move through and around this frame, ` +
-      `sometimes appearing to move BEHIND the frame edge (occluding), sometimes in front. ` +
-      `Smooth, premium, explosive high-energy movement — never jittery. ${CONSTANCY}`;
+    return `Cinematic scene-wide motion with extreme 3D depth: ${solo}. ` +
+      `The entire composition is in perpetual motion — the background environment shifts, flows, and evolves continuously; ` +
+      `foreground elements ripple and shimmer; lighting pulses and moves across the scene; the subject moves through three spatial planes ` +
+      `(foreground, middle subject plane, deep background) creating the natural illusion of 3D depth without letterboxing. ` +
+      `The subject darts toward camera, retreats into distance, and travels diagonally across the full width. ` +
+      `The dark vignette edge of the scene is natural framing, not a barrier — the subject moves naturally through all spatial zones. ` +
+      `Smooth, premium, explosive high-energy movement — never static, never jittery. ${CONSTANCY}`;
   }
   return `Vivid ambient motion: ${solo}. Smooth and hypnotic, never chaotic or jittery. ${CONSTANCY}`;
 }

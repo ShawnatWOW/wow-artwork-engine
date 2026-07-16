@@ -45,7 +45,8 @@ export const SURFACES = [
     // band; no center-crop lottery (art review, 2026-07-10). Seedream max 4096.
     gen: { kind: 'motion', width: 4096, height: 1132, ratio: '21:9' },
     post: POST.FRAME_BREAK,
-    loop: 'pingpong',
+    // No ping-pong: continuous kinetic motion throughout (user: "whole scene active")
+    // makes seamless looping less critical than full-frame activity.
   },
   {
     key: 'eon_connected',
@@ -65,7 +66,8 @@ export const SURFACES = [
     mediaType: 'video',
     gen: { kind: 'motion', width: 2560, height: 3840, ratio: '2:3' },
     post: POST.CONFORM,
-    loop: 'pingpong',
+    // No ping-pong: continuous kinetic motion throughout (user: "whole scene active")
+    // makes seamless looping less critical than full-frame activity.
   },
 ];
 
