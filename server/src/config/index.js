@@ -52,13 +52,25 @@ const config = {
   // stray run can never spend generation credits by accident.
   generationMode: process.env.GENERATION_MODE || 'fixture',
 
-  // Estimated unit costs for the dashboard's month-to-date spend strip.
-  // Tunable so they can track fal's pricing without a code change.
+  // Unit costs for the dashboard's month-to-date spend strip. These are fal's
+  // REAL published prices (verified 2026-07-19), itemized per billable
+  // operation so the estimate matches an invoice instead of a blended guess.
+  // NOTE: the fal account is shared across WOW Artwork + Content Automation +
+  // Broken News, so fal's own billing API reports all three combined — this
+  // per-generation estimate is the ONLY project-specific figure.
+  // Tunable via env so they track fal's pricing without a code change.
   costs: {
+    // Seedream v4 text-to-image: $0.03 / image (flat).
     stillUsd: num(process.env.COST_STILL_USD, 0.03),
-    // Covers the full 4K video path per raw second: Seedance standard 1080p
-    // + Topaz upscale. (Was 0.04 for the 720p fast tier alone.)
-    videoPerSecondUsd: num(process.env.COST_VIDEO_PER_SECOND_USD, 0.10),
+    // Seedance 2.0 image-to-video, billed per RAW second. The true price is the
+    // token formula (H*W*24/1024 * $0.014/1000), which nets to ~$0.68/s at
+    // 1080p (standard tier) and ~$0.30/s at 720p (/fast tier). We pick the rate
+    // per row from its model string ('fast' → 720p).
+    seedanceStdPerSecondUsd: num(process.env.COST_SEEDANCE_STD_PER_SECOND_USD, 0.68),
+    seedanceFastPerSecondUsd: num(process.env.COST_SEEDANCE_FAST_PER_SECOND_USD, 0.30),
+    // Topaz video upscale, per second of output. Our 2x pass yields >1080p → $0.08/s.
+    // Only added for rows whose model string records that Topaz ran ('+topaz').
+    topazPerSecondUsd: num(process.env.COST_TOPAZ_PER_SECOND_USD, 0.08),
   },
 
   // Both models run on fal.ai: Seedance 2.0 (motion, image-to-video) + Seedream

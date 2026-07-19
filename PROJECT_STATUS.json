@@ -1,0 +1,198 @@
+{
+  "_meta": {
+    "purpose": "Fast-load context for the WOW Artwork Engine. Read this first each session to know where we are without re-deriving from code. Keep updated as the project moves.",
+    "lastUpdated": "2026-07-18",
+    "maintainer": "shawn@wowmedia.com",
+    "repo": "github.com/ShawnatWOW/wow-artwork-engine",
+    "productionRepo": "wow-contract-query (the Artwork Engine tab lives inside WOW's existing dashboard)"
+  },
+
+  "project": {
+    "name": "WOW Artwork Engine",
+    "oneLiner": "Automated weekly AI artwork for WOW Media's billboard network — generate, human-approve, auto-deliver.",
+    "goal": "Every week: generate original AI artwork for the signs, Scott (WOW CEO) reviews/approves on a dashboard, approved videos auto-ship to Jeff (the Projectionist) via Google Drive + email.",
+    "people": {
+      "shawn": "Owner/operator (you). shawn@wowmedia.com",
+      "scott": "WOW CEO — reviews and approves artwork on the dashboard",
+      "jeff": "Projectionist — receives approved videos (Google Drive folder + Gmail notification)"
+    },
+    "tracking": {
+      "linear": "dllmlabs/Delivery, issues DEL-138..143",
+      "slack": "via Linear channel link"
+    }
+  },
+
+  "status": {
+    "overall": "LIVE IN PRODUCTION. Core pipeline shipped and working. Currently iterating on art direction (motion/3D) and validating the Google delivery handoff.",
+    "liveSince": "2026-07-11 (Artwork Engine tab on wowautomation.ai / wow-contract-query dashboard)",
+    "generationMode": "live in production (spends real fal.ai money); fixture ($0) locally",
+    "tests": "59/59 passing as of 2026-07-18",
+    "currentFocus": "Motion realism — user wants full-scene active motion on every artwork + real 3D depth baked into the creative prompt (not post-processed letterbox).",
+    "milestones": {
+      "M0_foundations": "done",
+      "M1_generation": "done",
+      "M2_review_dashboard": "done",
+      "M2.5_two_phase_stills_then_video": "done",
+      "M3_delivery_google_drive_gmail": "credentials configured 2026-07-16; test send NOT yet verified end-to-end",
+      "M4_first_live_run": "in progress — art direction being tuned before a real weekly send",
+      "M5_scheduler": "built but SCHEDULER_ENABLED=false; turn on once art + delivery are signed off"
+    }
+  },
+
+  "architecture": {
+    "principle": "Deploy INTO WOW's existing AWS infra (same as the Broken News project). NOT a new stack.",
+    "frontend": "React tab inside wow-contract-query dashboard (wcq/src/pages/ArtworkEngine.tsx). Standalone dev shell at web/src/App.jsx mirrors it.",
+    "backend": "Node/Express in server/. Deployed on EC2 via PM2 (dev + master boxes).",
+    "database": "Postgres via pgRepo when DATABASE_URL is set; production currently runs WITHOUT DATABASE_URL, so it uses memoryRepo with JSON snapshot persistence (var/storage/state.json). State survives PM2 restart/deploy.",
+    "storage": "Generated media on disk (var/storage) in prod; S3 driver available. Both media and state.json are preserved across 'git reset --hard' deploys.",
+    "deployFlow": "push to main (this repo) OR push to wow-contract-query dev -> CI -> staging; PR dev->master + merge -> production. Empty commit triggers redeploy.",
+    "email": "Gmail API via Google service account with domain-wide delegation (gmail.send). Sends AS a real @wowmedia.com person (no SMTP)."
+  },
+
+  "pipeline": {
+    "phase1_stills": "Seedream v4 text-to-image (~$0.03/still). 9 options per batch = 3 per surface. Cheap style gate — Scott approves before any video spend.",
+    "phase2_video": "Seedance 2.0 image-to-video runs ONLY on approved stills. Standard tier @1080p, then Topaz 2x upscale to 4K-class. Graceful fallback to 1080p if upscale fails.",
+    "qaGate": "Luma readability check on stills for outdoor visibility (blocks <25 or >200 luma; warns 25-55 with 'qa:' prefix, non-blocking).",
+    "delivery": "Approved videos -> Google Drive folder + Gmail notification to Jeff. Offline fallback writes .eml + local files and reports NOT sent.",
+    "surfaces": {
+      "spectacular": {
+        "style": "frame_break",
+        "spec4k": "3840x1062",
+        "gen": "4096x1132 (21:9)",
+        "note": "WOW signature 3D frame-break look. Currently composites a black canvas + border in ffmpeg (frameBreakComposite). USER FEEDBACK: 3D must be baked into the creative prompt, not a post-processed letterbox the subject can't break through."
+      },
+      "eon_connected": {
+        "style": "eon_connected",
+        "spec4k": "eon_master_3pod 3840x1920 -> sliced into three 1280x1920 faces",
+        "gen": "4096x2048 (2:1)",
+        "note": "ONE wide master, subject choreographed to travel across the 3 pods (pod-to-pod illusion). 3-act journey rotates weekly. Billed as ONE Seedance call despite 3 face rows."
+      },
+      "eon_single": {
+        "style": "eon_single",
+        "spec4k": "eon_face 1280x1920",
+        "gen": "2560x3840 (2:3)",
+        "note": "Standalone single-pillar piece."
+      }
+    }
+  },
+
+  "config": {
+    "defaults": {
+      "GEN_DURATION_S": 15,
+      "GEN_FPS": 30,
+      "FAL_RESOLUTION": "1080p",
+      "FAL_UPSCALE": "on (Topaz, factor 2)",
+      "OPTIONS_PER_SURFACE": 3,
+      "COST_STILL_USD": 0.03,
+      "COST_VIDEO_PER_SECOND_USD": 0.10,
+      "SCHEDULER_ENABLED": false,
+      "WEEKLY_RUN_CRON": "0 9 * * 1 (Mondays 9am)"
+    },
+    "pingpong": "REMOVED 2026-07-16 from spectacular + eon_single. Previously doubled 15s clips to 30s for seamless looping; user found 30s unnecessary. eon_connected never used it (directional travel)."
+  },
+
+  "costModel": {
+    "_verified": "2026-07-19 against fal model pages. Decision: keep full 4K quality (Scott/Shawn).",
+    "sharedFalAccount": "CRITICAL: the fal account is shared across WOW Artwork + WOW Content Automation + WOW Broken News. fal's billing API (GET api.fal.ai/v1/account/billing?expand=credits and /v1/account/focus) reports ALL THREE COMBINED and cannot isolate artwork. Our per-generation estimate (spend.js) is the ONLY artwork-specific figure. Use fal's account total only as an all-projects ceiling.",
+    "realPrices": {
+      "still_seedream_v4": "$0.03 per image (flat)",
+      "seedance_2.0_standard_1080p": "~$0.68 per raw second (token formula H*W*24/1024 * $0.014/1000)",
+      "seedance_2.0_fast_720p": "~$0.30 per raw second",
+      "topaz_upscale_above_1080p": "$0.08 per second (our 2x pass to 4K)"
+    },
+    "perVideoApprox": "15s at full 4K = Seedance ~$10.20 + Topaz ~$1.20 = ~$11.40 per finished video (NOT the ~$1.50 the old $0.10/sec estimate assumed).",
+    "perFullBatchApprox": "9 stills ($0.27) + videos at ~$11.40 each. One option per surface animated (3 videos) = ~$35. Every option animated = ~$100+.",
+    "history": "The earlier dashboard pill under-reported ~7.6x because it used a blended $0.10/sec. Fixed 2026-07-19 to itemized real rates.",
+    "estimateSource": "server/src/services/spend.js — itemized per billable fal operation from what the engine ACTUALLY generated this month. Estimate, reconciled against fal's account total as an all-projects ceiling.",
+    "billingRules": [
+      "Itemized: stills (Seedream) + Seedance raw-seconds (rate by tier from model string: 'fast'->720p else 1080p) + Topaz seconds (only when model string contains '+topaz').",
+      "Fixture rows (model starts with 'fixture' or no model) are free/excluded.",
+      "A motion row bills a Seedance call ONLY if it produced raw output (s3_key_raw set). EON connected = 3 rows sharing one raw key -> billed once. Rows with no raw key are skipped (never completed a billable generation).",
+      "Seconds = row's RAW generation length (duration_s). Ping-pong retired 2026-07-16 so duration_s == raw for current runs.",
+      "Rows filtered to the current calendar month (created_at, falling back to run week_of).",
+      "QA-failed stills still count (generated on Seedream, then gated).",
+      "Superseded stills (retired by per-sign regen) STILL count — they were generated and did cost money."
+    ],
+    "falBillingApi": {
+      "balance": "GET https://api.fal.ai/v1/account/billing?expand=credits  (Authorization: Key <ADMIN_KEY>) -> current_balance USD. Account-wide (all 3 projects).",
+      "focusReport": "GET https://api.fal.ai/v1/account/focus?source=invoice|estimate&start=ISO&end=ISO -> FOCUS CSV. Account-wide, 90-day lookback for estimates."
+    }
+  },
+
+  "userPreferences": {
+    "art": [
+      "Psychedelic, bright, saturated, dynamic — NOT abstract/plain (rejected 'plain silver ball moving left to right').",
+      "Characterful creatures as subjects (serpent, koi, octopus, peacock, jellyfish, orchid, butterfly, comet), not generic shapes.",
+      "MOTION IS THE POINT: full-scene active motion on every artwork, not subtle. Backgrounds must move too. Subjects travel across the whole screen with 3D depth (in/out, vertical, diagonal).",
+      "3D depth must be built into the creative PROMPT so the subject genuinely interacts with spatial planes — do NOT rely on a post-processed black letterbox/frame the subject can't break through.",
+      "Showcase the full motion capability of the screens.",
+      "4K output — these are giant billboards."
+    ],
+    "ux": [
+      "Plain, non-technical language for Scott. Button labels must be obvious to a first-time viewer ('Use this design', 'Approve video', 'Pass', 'Try again').",
+      "Clear visual feedback during long operations (spinner/overlay while making videos; 'Making videos... a few minutes each').",
+      "Per-sign regeneration, not all-or-nothing (regenerate just Spectacular, or just EON single, etc.).",
+      "Show month-to-date spend at the top of the dashboard.",
+      "Videos long enough to feel substantial (moved 6s -> 15s), but 30s was too long."
+    ],
+    "process": [
+      "Wants to operate production via the Claude browser extension / AWS console when possible (drop-in JSON, guided clicks), not always CLI.",
+      "Wants durable status/context files so we don't waste tokens re-establishing position each session (this file).",
+      "Ship to production readily — 'Scott won't test it until it's there anyways.'"
+    ]
+  },
+
+  "problemsEncountered": [
+    {"issue": "Images not loading on dashboard", "cause": "VITE_API_URL='/' + '/api/...' produced '//api/...' protocol-relative URL", "fix": "strip trailing slashes in both API clients", "status": "fixed"},
+    {"issue": "'Make video' looked frozen / unresponsive", "cause": "polling race — 202 sent before run.status set to 'running', so dashboard saw stale 'complete'", "fix": "set 'running' BEFORE onStart callback; added spinner overlay + disabled buttons during animation", "status": "fixed"},
+    {"issue": "Artwork disappeared on refresh/deploy", "cause": "in-memory repo lost all state on process restart", "fix": "JSON snapshot persistence (atomic tmp+rename) in memoryRepo; hydrate on boot; fail interrupted 'running' rows", "status": "fixed"},
+    {"issue": "Art too simple ('plain silver ball left to right')", "cause": "generic subjects + straight-line motion", "fix": "characterful creatures + 8 dynamic 3-act choreographies; psychedelic/bright themes", "status": "fixed then further amplified"},
+    {"issue": "Regenerate forced ALL signs", "cause": "single global regenerate", "fix": "per-surface regenerateStills() route + per-section buttons; unapproved marked 'superseded' and hidden; seed salted per attempt", "status": "fixed"},
+    {"issue": "Videos too short", "cause": "6s default", "fix": "GEN_DURATION_S 6 -> 15", "status": "fixed"},
+    {"issue": "Not 4K for billboards", "cause": "specs + Seedance tier too low", "fix": "SPECS bumped to 4K; Seedance 1080p standard + Topaz 2x upscale; frame/inset scale with canvas width", "status": "fixed"},
+    {"issue": "Motion extended to 30s + minimal actual motion", "cause": "ping-pong doubling; prompts described subject-only motion which Seedance under-renders", "fix": "removed ping-pong (back to 15s); rewrote prompts to describe whole-SCENE motion (backgrounds churn, every pixel active)", "status": "shipped 2026-07-16, awaiting visual confirmation"},
+    {"issue": "3D frame-break not convincing", "cause": "relied on ffmpeg-drawn black border/letterbox; subject can't truly break through a post-processed frame", "fix": "moved 3D into the still + motion PROMPTS (foreground/subject/background planes, dark vignette as natural framing); ffmpeg composite still present and may need to be reduced/removed", "status": "in progress"},
+    {"issue": "System could not send artwork to team; spend not visible", "cause": "Google creds missing; spend strip not wired", "fix": "spend strip shipped; Google Drive + service-account JSON configured in S3/.env 2026-07-16", "status": "creds in place; end-to-end test send NOT yet verified"},
+    {"issue": "Total spend shows 'over $3K' (2026-07-18)", "cause": "under investigation — see openQuestions", "fix": "TBD", "status": "open"}
+  ],
+
+  "openItems": [
+    "Verify motion/3D visually on a fresh live batch after the 2026-07-16 prompt overhaul.",
+    "Decide whether to reduce/remove the ffmpeg frameBreakComposite black border now that 3D is prompt-driven.",
+    "Verify Google delivery end-to-end: create batch -> approve -> Send to Jeff (live) -> confirm Drive folder populated + email arrives.",
+    "RESOLVED 2026-07-19: the 'over $3K' figure is the shared fal ACCOUNT total (all 3 WOW projects), not artwork. Our spend formula rebuilt to itemized real rates; artwork-only is a fraction. See costModel.",
+    "DEL-143 (user-owned): rotate leaked google-drive-server-account.json.",
+    "Turn on SCHEDULER_ENABLED once art + delivery are signed off."
+  ],
+
+  "openQuestions": {
+    "why_spend_over_3k": {
+      "summary": "The dashboard number is an ESTIMATE from server/src/services/spend.js, computed from every LIVE generation THIS CALENDAR MONTH — not a real fal.ai bill.",
+      "likelyDrivers": [
+        "All of the project's live art-direction iteration landed in one month (July 2026). Each 'too simple' / 'psychedelic' / '4K' / 'motion' round triggered full live regenerations across all surfaces and options, and each is summed into the single month figure.",
+        "Rate was bumped to $0.10/raw-second (4K path) and is applied RETROACTIVELY to all historical videos, including ones actually generated on the old $0.04 720p tier.",
+        "Duration grew 6s -> 15s (2.5x more seconds per video, all billed).",
+        "Per-sign regenerations pile up: superseded stills still count, and any errored/retried video rows may be counted even if they produced no usable output.",
+        "REGRESSION I introduced 2026-07-16: removing ping-pong emptied PINGPONG_STYLES, so historical 30s ping-pong rows (frame_break/eon_single) are now billed at 30s instead of the 15s raw — doubling those."
+      ],
+      "howToPinpoint": "Hover the spend pill — the tooltip shows 'N designs ($X) + M videos / Ss ($Y)'. If M/S is absurd it's a count/duration bug; if the rate*seconds is the driver it's the retroactive 4K rate. The definitive source is production var/storage/state.json (or the real fal.ai dashboard).",
+      "proposedFix": "Make the estimate honest: (a) exclude motion rows that failed with no output, (b) split historical vs current per-second rates, (c) stop retroactively re-pricing old tiers, (d) optionally scope the strip to 'this week' not 'this month'. Confirm against the real fal invoice before trusting either number."
+    }
+  },
+
+  "keyFiles": {
+    "server/src/services/orchestrator.js": "runWeek (stills), animateRun (video), regenerateStills (per-sign). Guardrails before spend; QA luma gate; EON slice; frame-break composite.",
+    "server/src/services/generation/prompts.js": "THEMES, CHOREOGRAPHIES (8 3-act journeys), SOLO_MOTIONS, buildStillPrompt/buildMotionPrompt. Whole-scene motion + 3D-plane language lives here.",
+    "server/src/services/generation/catalog.js": "SPECS (4K dims), SURFACES, planJobs. Source of truth for dimensions.",
+    "server/src/services/generation/fal.js": "fal.ai queue logic: Seedream, Seedance 1080p, Topaz upscale with graceful fallback.",
+    "server/src/services/ffmpeg.js": "frameBreakComposite, pingpong, conform, thumbnail, cropdetect. The black-frame border is drawn here.",
+    "server/src/services/spend.js": "computeSpend — the MTD estimate behind the $ figure in question.",
+    "server/src/services/eonSlicer.js": "slices the wide master into 3 faces (derives dims from catalog).",
+    "server/src/db/memoryRepo.js": "in-memory repo + JSON snapshot persistence (production data store).",
+    "server/src/routes/runs.js": "REST: generate, animate, approve/reject, regenerate, /spend.",
+    "server/src/config/index.js": "all env-driven config + cost rates.",
+    "web/src/App.jsx + web/src/ui.jsx": "standalone dev dashboard (SpendPill, cards, actions).",
+    "wcq/src/pages/ArtworkEngine.tsx": "production tab inside wow-contract-query (mirrors App.jsx).",
+    "KEYS.md": "credentials checklist (fal, Google Drive folder, service-account JSON)."
+  }
+}

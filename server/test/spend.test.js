@@ -5,7 +5,7 @@ import { computeSpend, monthKey } from '../src/services/spend.js';
 import { createMemoryRepo } from '../src/db/memoryRepo.js';
 import config from '../src/config/index.js';
 
-const { stillUsd, videoPerSecondUsd } = config.costs;
+const { stillUsd, seedanceStdPerSecondUsd, seedanceFastPerSecondUsd, topazPerSecondUsd } = config.costs;
 const THIS_MONTH = monthKey(new Date());
 
 async function seed(repo, { weekOf }) {
@@ -27,7 +27,7 @@ test('spend: live stills billed flat, fixture and blocked rows free', async () =
   assert.equal(s.totalUsd, Math.round(2 * stillUsd * 100) / 100);
 });
 
-test('spend: EON connected set bills ONE Seedance call; all videos at base duration', async () => {
+test('spend: EON connected set bills ONE Seedance call; grouped by raw key', async () => {
   const repo = createMemoryRepo();
   const run = await seed(repo, { weekOf: `${THIS_MONTH}-03` });
   const motion = { runId: run.id, mediaType: 'video', stage: 'motion', model: 'seedance-2.0-fast' };
@@ -47,7 +47,43 @@ test('spend: EON connected set bills ONE Seedance call; all videos at base durat
   const s = await computeSpend({ repo });
   assert.equal(s.videos.count, 2, 'two Seedance calls, not four rows');
   assert.equal(s.videos.seconds, 30); // 15 + 15
-  assert.equal(s.videos.usd, Math.round(30 * videoPerSecondUsd * 100) / 100);
+  // Both rows are /fast tier (no topaz) → 30s at the fast per-second rate.
+  assert.equal(s.breakdown.seedance.usd, Math.round(30 * seedanceFastPerSecondUsd * 100) / 100);
+  assert.equal(s.breakdown.topaz.usd, 0);
+  assert.equal(s.videos.usd, Math.round(30 * seedanceFastPerSecondUsd * 100) / 100);
+});
+
+test('spend: standard-tier video with Topaz bills gen + upscale itemized', async () => {
+  const repo = createMemoryRepo();
+  const run = await seed(repo, { weekOf: `${THIS_MONTH}-03` });
+  // The real production model string once the 4K upscale succeeds.
+  await repo.insertArtwork({
+    runId: run.id, surface: 'spectacular', style: 'frame_break', mediaType: 'video', stage: 'motion',
+    specKey: 'spectacular_wow1_8', model: 'seedance-2.0@fal+topaz2x',
+    s3KeyRaw: 'runs/1/motion/still1/raw.mp4', durationS: 15,
+  });
+
+  const s = await computeSpend({ repo });
+  assert.equal(s.videos.count, 1);
+  assert.equal(s.breakdown.seedance.usd, Math.round(15 * seedanceStdPerSecondUsd * 100) / 100);
+  assert.equal(s.breakdown.topaz.usd, Math.round(15 * topazPerSecondUsd * 100) / 100);
+  assert.equal(
+    s.videos.usd,
+    Math.round((15 * seedanceStdPerSecondUsd + 15 * topazPerSecondUsd) * 100) / 100,
+  );
+});
+
+test('spend: a motion row with no raw output never bills (Seedance never completed)', async () => {
+  const repo = createMemoryRepo();
+  const run = await seed(repo, { weekOf: `${THIS_MONTH}-03` });
+  await repo.insertArtwork({
+    runId: run.id, surface: 'spectacular', style: 'frame_break', mediaType: 'video', stage: 'motion',
+    specKey: 'spectacular_wow1_8', model: 'seedance-2.0@fal', status: 'failed', durationS: 15,
+    // no s3KeyRaw → generation never produced billable output
+  });
+  const s = await computeSpend({ repo });
+  assert.equal(s.videos.count, 0);
+  assert.equal(s.totalUsd, 0);
 });
 
 test('spend: only the requested month counts (week_of fallback for old rows)', async () => {

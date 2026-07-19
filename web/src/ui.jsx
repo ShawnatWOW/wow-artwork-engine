@@ -47,14 +47,26 @@ export function StatusBadge({ status, stage }) {
   );
 }
 
-// Month-to-date spend strip — what the art has cost so far this month.
+// Month-to-date spend strip — what THIS project's art has cost so far this
+// month. Itemized (designs / motion / 4K upscale) at fal's real prices. Note:
+// the fal account is shared with Content Automation + Broken News, so fal's own
+// dashboard shows all three combined — this figure is artwork-only.
 export function SpendPill({ spend }) {
   if (!spend) return null;
   const monthName = new Date(`${spend.month}-15T12:00:00Z`)
     .toLocaleString('en-US', { month: 'long', timeZone: 'UTC' });
+  const b = spend.breakdown;
+  const lines = [
+    `Artwork-only estimate at fal's real prices:`,
+    `• ${spend.stills.count} design${spend.stills.count === 1 ? '' : 's'} → $${spend.stills.usd.toFixed(2)}`,
+    b && `• ${spend.videos.count} video${spend.videos.count === 1 ? '' : 's'} / ${b.seedance.seconds}s motion → $${b.seedance.usd.toFixed(2)}`,
+    b && b.topaz.usd > 0 && `• 4K upscale / ${b.topaz.seconds}s → $${b.topaz.usd.toFixed(2)}`,
+    ``,
+    `fal's account bill also covers Content Automation + Broken News — this is artwork only.`,
+  ].filter(Boolean).join('\n');
   return (
     <span
-      title={`Estimated from usage: ${spend.stills.count} design${spend.stills.count === 1 ? '' : 's'} ($${spend.stills.usd.toFixed(2)}) + ${spend.videos.count} video${spend.videos.count === 1 ? '' : 's'} / ${spend.videos.seconds}s ($${spend.videos.usd.toFixed(2)})`}
+      title={lines}
       className="rounded-full bg-neutral-800 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-300"
     >
       💰 {monthName} spend: ${spend.totalUsd.toFixed(2)}
