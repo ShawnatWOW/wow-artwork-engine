@@ -117,7 +117,7 @@ export function Preview({ artwork }) {
 
 // Two clear choices per card: use it, or pass. (The old "Pick" button
 // duplicated Approve and confused first-time reviewers — removed.)
-export function Actions({ status, busy, stage, onApprove, onReject, onRetry }) {
+export function Actions({ status, busy, stage, onApprove, onReject, onRetry, onRegen }) {
   const btn = 'inline-flex items-center gap-1 rounded px-2 py-1 text-[11px] font-medium transition disabled:opacity-40';
   const approveLabel = status === 'approved' ? '✓ Approved' : stage === 'still' ? '✓ Use this design' : '✓ Approve video';
   return (
@@ -141,8 +141,25 @@ export function Actions({ status, busy, stage, onApprove, onReject, onRetry }) {
           ↻ Try again
         </button>
       )}
+      {onRegen && (
+        <button
+          type="button" disabled={busy} onClick={onRegen}
+          title="Replace just this design with a brand-new one — the other options stay"
+          className={`${btn} bg-neutral-800 text-sky-300 hover:bg-neutral-700`}
+        >
+          ↻ New design
+        </button>
+      )}
     </div>
   );
+}
+
+// Live progress while a batch is generating: "Creating designs… 3/9".
+export function progressLabel(run) {
+  const p = run?.progress;
+  if (!p || !p.total) return null;
+  if (p.phase === 'videos') return `Making videos… ${p.done}/${p.total} (a few minutes each)`;
+  return `Creating designs… ${p.done}/${p.total}`;
 }
 
 // The approved design stays visible next to its video.

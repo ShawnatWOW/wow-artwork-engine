@@ -184,3 +184,76 @@ test('regenerateStills: fresh options for ONE surface only, approved kept, new p
     await rm(base, { recursive: true, force: true });
   }
 });
+
+test('regenerateStill: replaces ONE design only — siblings, other signs, approved all untouched', async (t) => {
+  if (!(await hasFfmpeg())) return t.skip('ffmpeg not installed');
+  const { base, repo, store } = await harness();
+  try {
+    const { runId } = await runWeek({
+      weekOf: '2026-08-10', triggeredBy: 'test',
+      deps: { repo, store, providers, optionsPerSurface: 2, duration: 1 },
+    });
+    const before = await repo.listArtworks(runId);
+    const eonBefore = before.filter((a) => a.style === 'eon_single');
+    const others = before.filter((a) => a.style !== 'eon_single');
+    const target = eonBefore[1];
+    const sibling = eonBefore[0];
+
+    const { regenerateStill } = await import('../src/services/orchestrator.js');
+    const summary = await regenerateStill({
+      artworkId: target.id,
+      deps: { repo, store, providers, optionsPerSurface: 2, duration: 1 },
+    });
+    assert.equal(summary.status, 'complete');
+    assert.equal(summary.counts.ready, 1);
+
+    // Target retired; its SIBLING option is untouched (the whole point).
+    assert.equal((await repo.getArtwork(target.id)).status, 'superseded');
+    assert.deepEqual(await repo.getArtwork(sibling.id), sibling);
+    for (const a of others) assert.deepEqual(await repo.getArtwork(a.id), a);
+
+    // Exactly one fresh design, in the retired card's option slot, new theme.
+    const after = await repo.listArtworks(runId);
+    const fresh = after.filter((a) => a.style === 'eon_single' && a.status === 'ready' && a.id !== sibling.id);
+    assert.equal(fresh.length, 1);
+    assert.notEqual(fresh[0].prompt, target.prompt, 'salted seed must not rebuild the retired design');
+    const slot = (k) => /\/opt(\d+)\//.exec(k)?.[1];
+    assert.equal(slot(fresh[0].s3_key_final), slot(target.s3_key_final), 'replacement fills the same option slot');
+
+    // Guards: non-stills and already-replaced cards are refused.
+    await assert.rejects(() => regenerateStill({ artworkId: target.id, deps: { repo, store, providers } }), /already replaced/);
+    assert.equal((await repo.getRun(runId)).status, 'complete');
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
+});
+
+test('run progress: runWeek and animateRun record phase/done/total for the dashboard', async (t) => {
+  if (!(await hasFfmpeg())) return t.skip('ffmpeg not installed');
+  const { base, repo, store } = await harness();
+  try {
+    const seen = [];
+    const spyRepo = { ...repo, setRunProgress: async (id, p) => { seen.push({ ...p }); return repo.setRunProgress(id, p); } };
+    const { runId } = await runWeek({
+      weekOf: '2026-08-10', triggeredBy: 'test',
+      deps: { repo: spyRepo, store, providers, optionsPerSurface: 1, duration: 1 },
+    });
+    // designs 0/3 … 3/3, monotonically.
+    const designs = seen.filter((p) => p.phase === 'designs');
+    assert.equal(designs[0].done, 0);
+    assert.equal(designs.at(-1).done, 3);
+    assert.equal(designs.at(-1).total, 3);
+    assert.deepEqual((await repo.getRun(runId)).progress, { phase: 'designs', done: 3, total: 3 });
+
+    // Animate one approved still → videos 0/1 … 1/1.
+    const stills = await repo.listArtworks(runId);
+    await repo.updateArtwork(stills.find((a) => a.style === 'eon_single').id, { status: 'approved' });
+    seen.length = 0;
+    await animateRun({ runId, deps: { repo: spyRepo, store, providers, duration: 1 } });
+    const videos = seen.filter((p) => p.phase === 'videos');
+    assert.equal(videos[0].done, 0);
+    assert.deepEqual(videos.at(-1), { phase: 'videos', done: 1, total: 1 });
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
+});

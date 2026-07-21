@@ -67,9 +67,14 @@ export async function runWeek({ weekOf, triggeredBy = 'manual', onStart, deps = 
   const workDir = deps.workDir || (await mkdtemp(path.join(os.tmpdir(), `wae-still-${run.id}-`)));
   const counts = { ready: 0, failed: 0, blocked: 0 };
   try {
+    // Live progress for the dashboard ("Creating designs… 3/9").
+    let done = 0;
+    await repo.setRunProgress?.(run.id, { phase: 'designs', done, total: jobs.length });
     for (const job of jobs) {
       const r = await generateStill(job, { runId: run.id, weekOf: week, repo, store, providers, guardrails, qa, workDir });
       counts.ready += r.ready; counts.failed += r.failed; counts.blocked += r.blocked;
+      done += 1;
+      await repo.setRunProgress?.(run.id, { phase: 'designs', done, total: jobs.length });
     }
     const status = counts.ready === 0 && counts.failed + counts.blocked > 0 ? 'failed' : 'complete';
     await repo.setRunStatus(run.id, status);
@@ -205,9 +210,13 @@ export async function regenerateStills({ runId, surfaceKey, triggeredBy = 'dashb
   const workDir = deps.workDir || (await mkdtemp(path.join(os.tmpdir(), `wae-regen-${runId}-`)));
   const counts = { ready: 0, failed: 0, blocked: 0 };
   try {
+    let done = 0;
+    await repo.setRunProgress?.(runId, { phase: 'designs', done, total: jobs.length });
     for (const job of jobs) {
       const r = await generateStill(job, { runId, weekOf: week, promptSeed, repo, store, providers, guardrails, qa, workDir });
       counts.ready += r.ready; counts.failed += r.failed; counts.blocked += r.blocked;
+      done += 1;
+      await repo.setRunProgress?.(runId, { phase: 'designs', done, total: jobs.length });
     }
     const status = counts.ready === 0 && counts.failed + counts.blocked > 0 ? 'failed' : 'complete';
     await repo.setRunStatus(runId, status);
@@ -216,6 +225,64 @@ export async function regenerateStills({ runId, surfaceKey, triggeredBy = 'dashb
   } catch (err) {
     await repo.setRunStatus(runId, 'failed', err.message);
     logger.error({ runId, surface: surfaceKey, err: err.message }, 'Per-surface regenerate crashed');
+    throw err;
+  } finally {
+    if (!deps.workDir) await rm(workDir, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
+/**
+ * Regenerate ONE design (a single still option) — the per-card "New design"
+ * button. Only the clicked design is retired and replaced; its siblings, all
+ * other surfaces, approved stills and existing videos are untouched. (UX
+ * feedback 2026-07-21: per-surface regen still rebuilt 3 designs when the
+ * reviewer only disliked one.)
+ * @returns {Promise<{ runId, phase, status, artworkId, counts }>}
+ */
+export async function regenerateStill({ artworkId, triggeredBy = 'dashboard', onStart, deps = {} } = {}) {
+  const { repo, guardrails, qa } = resolveDeps(deps);
+  const store = deps.store || (await getStore());
+  const providers = deps.providers || getProviders();
+
+  const still = await repo.getArtwork(artworkId);
+  if (!still) throw new Error(`Artwork ${artworkId} not found`);
+  if (still.stage !== 'still') throw new Error('Only style designs can be regenerated');
+  if (still.status === 'superseded') throw new Error('This design was already replaced');
+  const surface = (deps.surfaces || SURFACES).find((s) => s.style === still.style);
+  if (!surface) throw new Error(`No surface for style "${still.style}"`);
+  const run = await repo.getRun(still.run_id);
+  if (!run) throw new Error(`Run ${still.run_id} not found`);
+
+  // Which option slot does this card occupy? The storage key records it
+  // (runs/<id>/<surface>/opt<n>/still.png); blocked rows without a key fall
+  // back to slot 1 — the slot only steers theme rotation, nothing structural.
+  const optMatch = /\/opt(\d+)\//.exec(still.s3_key_final || still.thumbnail_key || '');
+  const option = optMatch ? Number(optMatch[1]) : 1;
+
+  // Mark running BEFORE onStart — same polling-race lesson as animateRun.
+  await repo.setRunStatus(run.id, 'running');
+  await onStart?.(run);
+  await repo.updateArtwork(still.id, { status: 'superseded' });
+
+  // Salt the seed with THIS card's id: deterministic, but guaranteed different
+  // from the design being replaced and from every earlier regen attempt.
+  const promptSeed = `${run.week_of}#a${still.id}`;
+  const jobs = planJobs({ surfaces: [surface], optionsPerSurface: deps.optionsPerSurface });
+  const job = jobs.find((j) => j.option === option) || jobs[0];
+  logger.info({ runId: run.id, artworkId, surface: surface.key, option, triggeredBy, mode: providers.mode || config.generationMode }, 'Per-design regenerate started');
+
+  const workDir = deps.workDir || (await mkdtemp(path.join(os.tmpdir(), `wae-regen1-${run.id}-`)));
+  try {
+    await repo.setRunProgress?.(run.id, { phase: 'designs', done: 0, total: 1 });
+    const counts = await generateStill(job, { runId: run.id, weekOf: run.week_of, promptSeed, repo, store, providers, guardrails, qa, workDir });
+    await repo.setRunProgress?.(run.id, { phase: 'designs', done: 1, total: 1 });
+    const status = counts.ready === 0 ? 'failed' : 'complete';
+    await repo.setRunStatus(run.id, status);
+    logger.info({ runId: run.id, artworkId, status }, 'Per-design regenerate finished');
+    return { runId: run.id, phase: 'stills', status, artworkId, counts };
+  } catch (err) {
+    await repo.setRunStatus(run.id, 'failed', err.message);
+    logger.error({ runId: run.id, artworkId, err: err.message }, 'Per-design regenerate crashed');
     throw err;
   } finally {
     if (!deps.workDir) await rm(workDir, { recursive: true, force: true }).catch(() => {});
@@ -265,6 +332,10 @@ export async function animateRun({ runId, stillIds, triggeredBy = 'dashboard', o
   const workDir = deps.workDir || (await mkdtemp(path.join(os.tmpdir(), `wae-motion-${runId}-`)));
   const counts = { ready: 0, failed: 0, blocked: 0 };
   try {
+    // Live progress for the dashboard ("Making videos… 1/3"). One unit per
+    // still being animated (an EON set is one Seedance call → one unit).
+    let done = 0;
+    await repo.setRunProgress?.(runId, { phase: 'videos', done, total: toAnimate.length });
     for (const still of toAnimate) {
       // Guardrail BEFORE the expensive motion spend.
       const check = guardrails.checkPrompt(still.motion_prompt || '');
@@ -281,6 +352,8 @@ export async function animateRun({ runId, stillIds, triggeredBy = 'dashboard', o
         await repo.updateArtwork(still.id, { error: err.message });
         counts.failed += 1;
       }
+      done += 1;
+      await repo.setRunProgress?.(runId, { phase: 'videos', done, total: toAnimate.length });
     }
     await repo.setRunStatus(runId, 'complete');
     logger.info({ runId, counts }, 'Phase 2 (animate) finished');
@@ -461,4 +534,4 @@ async function animateStill(still, ctx) {
   return 1;
 }
 
-export default { runWeek, animateRun, regenerateStills };
+export default { runWeek, animateRun, regenerateStills, regenerateStill };

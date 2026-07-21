@@ -37,6 +37,8 @@ export const api = {
   animate: (runId) => req('POST', `/runs/${runId}/animate`),
   // Fresh design options for ONE sign only — other signs untouched.
   regenerate: (runId, surface) => req('POST', `/runs/${runId}/regenerate`, { surface }),
+  // Replace ONE design card only — its siblings stay.
+  regenerateOne: (artworkId) => req('POST', `/artworks/${artworkId}/regenerate`),
   animateOne: (artworkId) => req('POST', `/artworks/${artworkId}/animate`),
   select: (id) => req('POST', `/artworks/${id}/select`),
   unselect: (id) => req('DELETE', `/artworks/${id}/select`),

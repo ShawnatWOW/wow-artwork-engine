@@ -6,7 +6,7 @@
 // wow-contract-query "Artwork Engine" tab.
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from './api.js';
-import { Preview, Actions, StatusBadge, Details, Card, ModePill, SpendPill, Stepper, Spinner, GeneratingOverlay } from './ui.jsx';
+import { Preview, Actions, StatusBadge, Details, Card, ModePill, SpendPill, Stepper, Spinner, GeneratingOverlay, progressLabel } from './ui.jsx';
 import SendDialog from './SendDialog.jsx';
 
 export default function App() {
@@ -72,6 +72,13 @@ export function ReviewDashboard() {
     catch (e) { setError(e.message); } finally { setBusy(false); }
   };
 
+  // Per-design regenerate: replace ONE card only — its siblings stay.
+  const regenerateOne = async (artworkId) => {
+    setBusy(true); setError(null);
+    try { await api.regenerateOne(artworkId); await loadDetail(runId); }
+    catch (e) { setError(e.message); } finally { setBusy(false); }
+  };
+
   const act = async (fn) => {
     setBusy(true);
     try { await fn(); await loadDetail(runId); }
@@ -117,11 +124,19 @@ export function ReviewDashboard() {
         running={running} makingVideos={makingVideos} spend={spend}
       />
       {error && <p className="mb-4 rounded bg-rose-950 px-3 py-2 text-sm text-rose-200">{error}</p>}
+      {/* A failed batch says exactly WHY — never a silent page of missing art. */}
+      {detail?.run?.status === 'failed' && (
+        <p className="mb-4 rounded border border-rose-900 bg-rose-950 px-3 py-2 text-sm text-rose-200">
+          <span className="font-semibold">This batch failed.</span>{' '}
+          {detail.run.error || 'Some designs could not be generated — the cards below show details.'}{' '}
+          You can retry with a new batch, or regenerate just the affected designs below.
+        </p>
+      )}
       {!detail && <Empty onGenerate={generate} busy={busy} mode={mode} />}
       {detail && (
         <RunView
           detail={detail} onAct={act} busy={busy} running={running}
-          onRegenerate={regenerate} mode={mode}
+          onRegenerate={regenerate} onRegenerateOne={regenerateOne} mode={mode}
         />
       )}
       {showSend && <SendDialog runId={runId} onClose={() => setShowSend(false)} onSent={() => loadDetail(runId)} />}
@@ -152,7 +167,7 @@ function Header({ runs, runId, onSelectRun, onGenerate, onAnimate, pendingAnimat
         {running ? (
           <span className="flex items-center gap-2 rounded-md bg-amber-950 px-3 py-1.5 text-sm font-medium text-amber-200">
             <Spinner className="border-amber-700 border-t-amber-300" />
-            {makingVideos ? 'Making videos… (a few minutes each)' : 'Creating designs… (about 1 min)'}
+            {progressLabel(run) || (makingVideos ? 'Making videos… (a few minutes each)' : 'Creating designs… (about 1 min)')}
           </span>
         ) : (
           <>
@@ -163,7 +178,7 @@ function Header({ runs, runId, onSelectRun, onGenerate, onAnimate, pendingAnimat
                 title="Look back at earlier weeks"
                 className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm"
               >
-                {runs.map((r) => <option key={r.id} value={r.id}>Week of {r.week_of}</option>)}
+                {runs.map((r) => <option key={r.id} value={r.id}>Week of {r.week_of} · batch #{r.id}</option>)}
               </select>
             )}
             {pendingAnimate > 0 && (
@@ -219,7 +234,7 @@ function Empty({ onGenerate, busy, mode }) {
   );
 }
 
-function RunView({ detail, onAct, busy, running, onRegenerate, mode }) {
+function RunView({ detail, onAct, busy, running, onRegenerate, onRegenerateOne, mode }) {
   const { artworks } = detail;
   // An approved design with no video yet, while a job is running → it's being made.
   const isAnimating = (still, motion) => running && !motion && still.status === 'approved';
@@ -235,13 +250,17 @@ function RunView({ detail, onAct, busy, running, onRegenerate, mode }) {
   }, [artworks]);
 
   const actionsFor = (a) => ({
-    status: a.status, busy,
+    status: a.status, busy: busy || running,
     onApprove: () => onAct(() => api.approve(a.id)),
     onReject: () => onAct(() => api.reject(a.id)),
     // Explicit retry for an approved design whose video errored (UX P0).
     // "qa:" notes are warnings, not failures — no retry needed.
     ...(a.stage === 'still' && a.status === 'approved' && a.error && !a.error.startsWith('qa:')
       ? { onRetry: () => onAct(() => api.animateOne(a.id)) }
+      : {}),
+    // Replace just THIS design (approved ones are protected — Pass first).
+    ...(a.stage === 'still' && a.status !== 'approved'
+      ? { onRegen: () => onRegenerateOne(a.id) }
       : {}),
   });
   // For a set of faces, apply one action to all three.

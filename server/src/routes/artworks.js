@@ -16,7 +16,7 @@ import logger from '../config/logger.js';
 import { getRepo } from '../db/index.js';
 import { getStore } from '../services/storage/index.js';
 import { contentTypeFor } from '../services/storage/s3.js';
-import { animateRun } from '../services/orchestrator.js';
+import { animateRun, regenerateStill } from '../services/orchestrator.js';
 
 const router = Router();
 
@@ -75,6 +75,26 @@ router.post('/artworks/:id/animate', async (req, res, next) => {
         .catch((err) => { logger.error({ err: err.message }, 'Background per-still animate failed'); reject(err); });
     });
     res.status(202).json({ runId: run.id, stillId: artwork.id, status: 'running' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Regenerate ONE design — retire this card only and create a fresh design in
+// its slot. Siblings, other signs, approved designs and videos are untouched.
+// 202 + poll GET /runs/:id (run.progress shows designs 0/1 → 1/1).
+router.post('/artworks/:id/regenerate', async (req, res, next) => {
+  try {
+    const artwork = await loadArtwork(req, res);
+    if (!artwork) return;
+    if (artwork.stage !== 'still') return res.status(400).json({ error: 'not_a_still', message: 'Only style designs can be regenerated.' });
+    if (artwork.status === 'superseded') return res.status(409).json({ error: 'already_replaced', message: 'This design was already replaced.' });
+
+    const run = await new Promise((resolve, reject) => {
+      regenerateStill({ artworkId: artwork.id, triggeredBy: req.get('x-user-email') || 'dashboard', onStart: resolve })
+        .catch((err) => { logger.error({ err: err.message }, 'Background per-design regenerate failed'); reject(err); });
+    });
+    res.status(202).json({ runId: run.id, artworkId: artwork.id, status: 'running' });
   } catch (err) {
     next(err);
   }

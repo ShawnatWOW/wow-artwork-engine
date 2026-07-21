@@ -72,6 +72,10 @@ export function createMemoryRepo({ persistPath = null } = {}) {
         status,
         triggered_by: triggeredBy ?? null,
         error: null,
+        // Live generation progress: { phase: 'designs'|'videos', done, total }.
+        // Written by the orchestrator as each item completes so the dashboard
+        // can show "Creating designs… 3/9" instead of an opaque spinner.
+        progress: null,
         created_at: new Date().toISOString(), // pg stamps this via DEFAULT now()
       };
       runs.push(row);
@@ -84,6 +88,14 @@ export function createMemoryRepo({ persistPath = null } = {}) {
       if (!row) return null;
       row.status = status;
       row.error = error;
+      persist();
+      return clone(row);
+    },
+
+    async setRunProgress(id, progress) {
+      const row = runs.find((r) => r.id === id);
+      if (!row) return null;
+      row.progress = progress ? { ...progress } : null;
       persist();
       return clone(row);
     },
