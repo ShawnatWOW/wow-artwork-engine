@@ -119,6 +119,12 @@ export function createMemoryRepo({ persistPath = null } = {}) {
         motion_prompt: a.motionPrompt ?? null,
         source_still_id: a.sourceStillId ?? null,
         remote_url: a.remoteUrl ?? null,
+        // Immutable cost ledger: the fal request id(s) that produced this row and
+        // the USD it cost, computed at generation time from falPricing so spend
+        // is never retroactively re-priced. null on old rows / fixtures.
+        fal_request_id: a.falRequestId ?? null,
+        upscale_request_id: a.upscaleRequestId ?? null,
+        cost_usd: a.costUsd ?? null,
         created_at: new Date().toISOString(), // pg stamps this via DEFAULT now()
       };
       artworks.push(row);
@@ -134,6 +140,7 @@ export function createMemoryRepo({ persistPath = null } = {}) {
         model: 'model', s3KeyRaw: 's3_key_raw', s3KeyFinal: 's3_key_final',
         thumbnailKey: 'thumbnail_key', status: 'status', error: 'error',
         stage: 'stage', motionPrompt: 'motion_prompt', remoteUrl: 'remote_url',
+        falRequestId: 'fal_request_id', upscaleRequestId: 'upscale_request_id', costUsd: 'cost_usd',
       };
       for (const [key, col] of Object.entries(map)) {
         if (patch[key] !== undefined) row[col] = patch[key];

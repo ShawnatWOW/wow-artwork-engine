@@ -69,7 +69,7 @@ export const stillProvider = {
     if (!imageUrl) throw new Error(`fal Seedream returned no image url`);
     await downloadTo(imageUrl, output);
 
-    return { path: output, model: MODEL_STILL, url: imageUrl, width: w, height: h, prompt };
+    return { path: output, model: MODEL_STILL, url: imageUrl, width: w, height: h, prompt, jobId: sd.request_id ?? null };
   },
 };
 

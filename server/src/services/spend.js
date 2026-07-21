@@ -30,6 +30,7 @@
 // - QA-failed stills still spent (generated on Seedream, then gated) — counted.
 
 import config from '../config/index.js';
+import falPricing from './generation/falPricing.js';
 
 /** 'YYYY-MM' for a date-ish value (Date, ISO string, 'YYYY-MM-DD'), else null. */
 export function monthKey(v) {
@@ -39,8 +40,21 @@ export function monthKey(v) {
 }
 
 const isLive = (a) => Boolean(a.model) && !String(a.model).startsWith('fixture');
-const isFastTier = (model) => /fast/i.test(model || '');
-const hasTopaz = (model) => /topaz/i.test(model || '');
+
+// Estimate the Seedance + Topaz cost of a pre-ledger motion row from its stored
+// FINAL dims (the row predates cost_usd being recorded). Seedance is billed on
+// its 1080p render, so re-derive the render dims for the row's aspect + tier.
+function estimateMotionUsd(a) {
+  const seconds = a.duration_s || config.generation.durationS;
+  const aspect = a.width && a.height ? a.width / a.height : 16 / 9;
+  const tier = falPricing.seedanceTier(a.model);
+  const render = falPricing.renderDimsForTier(aspect, tier);
+  const seedance = falPricing.seedanceCostUsd({ ...render, durationS: seconds, tier });
+  const topaz = falPricing.usedTopaz(a.model)
+    ? falPricing.topazCostUsd({ width: a.width, height: a.height, durationS: seconds })
+    : 0;
+  return { seedance, topaz };
+}
 
 /**
  * Estimated spend for one calendar month across all runs.
@@ -49,11 +63,11 @@ const hasTopaz = (model) => /topaz/i.test(model || '');
  */
 export async function computeSpend({ repo, month } = {}) {
   const m = month || monthKey(new Date());
-  const rates = config.costs;
 
   const runs = await repo.listRuns({ limit: 1000 });
   let stillCount = 0;
-  // raw key → one Seedance call: { seconds, fast, topaz }. Dedupes EON faces.
+  let stillsUsd = 0;
+  // raw key → the rows of ONE Seedance call (EON's 3 faces share a key).
   const calls = new Map();
 
   for (const run of runs) {
@@ -66,18 +80,13 @@ export async function computeSpend({ repo, month } = {}) {
 
       if (a.stage === 'still') {
         stillCount += 1;
+        // Prefer the immutable ledger; fall back to the flat Seedream price.
+        stillsUsd += a.cost_usd != null ? a.cost_usd : falPricing.seedreamCostUsd({ count: 1 });
       } else if (a.stage === 'motion') {
-        const key = a.s3_key_raw;
-        if (!key) continue; // no raw produced → this call never billed
-        const seconds = a.duration_s || config.generation.durationS;
-        const rec = calls.get(key) || {
-          seconds: 0, fast: isFastTier(a.model), topaz: hasTopaz(a.model),
-        };
-        rec.seconds = Math.max(rec.seconds, seconds);
-        // If any face of the set records Topaz/fast, treat the call that way.
-        rec.fast = rec.fast || isFastTier(a.model);
-        rec.topaz = rec.topaz || hasTopaz(a.model);
-        calls.set(key, rec);
+        const keyOf = a.s3_key_raw;
+        if (!keyOf) continue; // no raw produced → this call never billed
+        if (!calls.has(keyOf)) calls.set(keyOf, []);
+        calls.get(keyOf).push(a);
       }
     }
   }
@@ -86,17 +95,26 @@ export async function computeSpend({ repo, month } = {}) {
   let topazUsd = 0;
   let videoSeconds = 0;
   let topazSeconds = 0;
-  for (const rec of calls.values()) {
-    const rate = rec.fast ? rates.seedanceFastPerSecondUsd : rates.seedanceStdPerSecondUsd;
-    seedanceUsd += rec.seconds * rate;
-    videoSeconds += rec.seconds;
-    if (rec.topaz) {
-      topazUsd += rec.seconds * rates.topazPerSecondUsd;
-      topazSeconds += rec.seconds;
-    }
+  for (const rows of calls.values()) {
+    const seconds = Math.max(...rows.map((r) => r.duration_s || config.generation.durationS));
+    const rep = rows[0];
+    // Seedance/Topaz split, from the canonical formula (informational breakdown).
+    const est = estimateMotionUsd({ ...rep, duration_s: seconds });
+    const estTotal = est.seedance + est.topaz;
+    // Immutable-ledger rows carry cost_usd (EON split across its 3 faces, so the
+    // call's true cost is their SUM). Older rows have no ledger → use the estimate.
+    const ledgered = rows.some((r) => r.cost_usd != null);
+    const callTotal = ledgered
+      ? rows.reduce((s, r) => s + (r.cost_usd || 0), 0)
+      : estTotal;
+    // Scale the seedance:topaz split to match the (exact) ledger total.
+    const f = estTotal > 0 ? callTotal / estTotal : 1;
+    seedanceUsd += estTotal > 0 ? est.seedance * f : callTotal;
+    topazUsd += est.topaz * f;
+    videoSeconds += seconds;
+    if (est.topaz > 0) topazSeconds += seconds;
   }
 
-  const stillsUsd = stillCount * rates.stillUsd;
   const videosUsd = seedanceUsd + topazUsd; // full per-video cost (gen + upscale)
   const round = (n) => Math.round(n * 100) / 100;
   return {
@@ -113,7 +131,8 @@ export async function computeSpend({ repo, month } = {}) {
       topaz: { seconds: round(topazSeconds), usd: round(topazUsd) },
     },
     totalUsd: round(stillsUsd + videosUsd),
-    rates,
+    // The canonical rate book these figures come from (for display/audit).
+    rates: falPricing.REFERENCE_PER_SECOND,
   };
 }
 

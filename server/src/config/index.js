@@ -52,26 +52,14 @@ const config = {
   // stray run can never spend generation credits by accident.
   generationMode: process.env.GENERATION_MODE || 'fixture',
 
-  // Unit costs for the dashboard's month-to-date spend strip. These are fal's
-  // REAL published prices (verified 2026-07-19), itemized per billable
-  // operation so the estimate matches an invoice instead of a blended guess.
-  // NOTE: the fal account is shared across WOW Artwork + Content Automation +
-  // Broken News, so fal's own billing API reports all three combined — this
-  // per-generation estimate is the ONLY project-specific figure.
-  // Tunable via env so they track fal's pricing without a code change.
-  costs: {
-    // Seedream v4 text-to-image: $0.03 / image (flat).
-    stillUsd: num(process.env.COST_STILL_USD, 0.03),
-    // Seedance 2.0 image-to-video, billed per RAW second. The true price is the
-    // token formula (H*W*24/1024 * $0.014/1000), which nets to ~$0.68/s at
-    // 1080p (standard tier) and ~$0.30/s at 720p (/fast tier). We pick the rate
-    // per row from its model string ('fast' → 720p).
-    seedanceStdPerSecondUsd: num(process.env.COST_SEEDANCE_STD_PER_SECOND_USD, 0.68),
-    seedanceFastPerSecondUsd: num(process.env.COST_SEEDANCE_FAST_PER_SECOND_USD, 0.30),
-    // Topaz video upscale, per second of output. Our 2x pass yields >1080p → $0.08/s.
-    // Only added for rows whose model string records that Topaz ran ('+topaz').
-    topazPerSecondUsd: num(process.env.COST_TOPAZ_PER_SECOND_USD, 0.08),
-  },
+  // Cost rates now live in the canonical price book — services/generation/
+  // falPricing.js — which encodes fal's exact token formula (aspect-accurate)
+  // and is shared by copy with wow-contract-query so every WOW dashboard bills
+  // the one shared fal account identically. Override rates via the FAL_PRICE_*
+  // env vars documented in .env.example. (The fal account is shared across WOW
+  // Artwork + Content Automation + Broken News, so fal's billing API reports all
+  // three combined — the per-generation ledger is the only project-specific
+  // figure.)
 
   // Both models run on fal.ai: Seedance 2.0 (motion, image-to-video) + Seedream
   // (stills — its output URL feeds Seedance as the first frame). Slugs verified

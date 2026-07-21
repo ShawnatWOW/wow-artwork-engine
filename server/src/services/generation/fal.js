@@ -88,6 +88,7 @@ export const motionProvider = {
     });
     let videoUrl = videoUrlOf(result, 'Seedance');
     let model = MODEL_MOTION;
+    let upscaleJobId = null;
 
     // 4K pass: upscale the fal-hosted clip before download. Best-effort — a
     // refused/failed upscale must never cost us the (already paid) generation.
@@ -103,13 +104,14 @@ export const motionProvider = {
         });
         videoUrl = videoUrlOf(upscaled.result, 'Topaz upscale');
         model = `${MODEL_MOTION}+topaz${up.factor}x`;
+        upscaleJobId = upscaled.requestId;
       } catch (err) {
         logger.warn({ err: err.message }, 'Topaz upscale failed — delivering the un-upscaled clip');
       }
     }
 
     await downloadTo(videoUrl, output);
-    return { path: output, model, durationS, jobId: requestId };
+    return { path: output, model, durationS, jobId: requestId, upscaleJobId };
   },
 };
 

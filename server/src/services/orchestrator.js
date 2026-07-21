@@ -26,6 +26,7 @@ import * as guardrailsModule from './guardrails.js';
 import * as qaModule from './qa.js';
 import { planJobs, POST, SURFACES, SPECS } from './generation/catalog.js';
 import { buildStillPrompt, buildMotionPrompt } from './generation/prompts.js';
+import falPricing from './generation/falPricing.js';
 import { getProviders } from './generation/index.js';
 import { getStore, artworkKey } from './storage/index.js';
 import { getRepo } from '../db/index.js';
@@ -114,6 +115,14 @@ async function generateStill(job, ctx) {
     const key = artworkKey({ runId, surfaceKey: job.key, option: job.option, name: 'still.png' });
     const put = await store.put({ key, sourcePath: stillPath });
 
+    // The Seedream image was billed the moment it generated ($0.03 flat), even
+    // if it then fails QA — record the immutable cost. Fixtures are free.
+    const stillLive = !String(gen.model || '').startsWith('fixture');
+    const stillLedger = {
+      falRequestId: stillLive ? gen.jobId ?? null : null,
+      costUsd: stillLive ? falPricing.seedreamCostUsd({ count: 1 }) : 0,
+    };
+
     // QA gate BEFORE review: outdoor readability (art review 2026-07-10). The
     // file is stored either way so a failed card can still show what happened.
     const gate = await qa.lumaGate(stillPath);
@@ -123,7 +132,7 @@ async function generateStill(job, ctx) {
         specKey: job.specKey, width: job.gen.width, height: job.gen.height,
         prompt, motionPrompt, model: gen.model, remoteUrl: gen.url ?? null,
         s3KeyFinal: put.key, thumbnailKey: put.key,
-        status: 'failed', error: `qa: ${gate.reason}`,
+        status: 'failed', error: `qa: ${gate.reason}`, ...stillLedger,
       });
       logger.warn({ runId, surface: job.key, option: job.option, yavg: gate.yavg }, 'Still failed luma QA gate');
       return { ready: 0, failed: 1, blocked: 0 };
@@ -139,7 +148,7 @@ async function generateStill(job, ctx) {
       s3KeyFinal: put.key, thumbnailKey: put.key, status: 'ready',
       // Borderline-dark scenes reach review with an amber note (emissive LED
       // signs handle dark backgrounds; the reviewer decides).
-      error: gate.warn ? `qa: ${gate.reason}` : null,
+      error: gate.warn ? `qa: ${gate.reason}` : null, ...stillLedger,
     });
     return { ready: 1, failed: 0, blocked: 0 };
   } catch (err) {
@@ -357,6 +366,27 @@ async function animateStill(still, ctx) {
   const key = (name) => `${keyBase}/${name}`;
   const rawPut = await store.put({ key: key('raw.mp4'), sourcePath: raw });
 
+  // Immutable cost ledger, computed here where BOTH the Seedance 1080p render
+  // dims and the 4K final dims are known. Billed on the RAW generation seconds
+  // (`duration`) — ping-pong doubles playback locally at no fal cost. Fixtures
+  // are free. See services/generation/falPricing.js for the rate book.
+  const live = !String(gen.model || '').startsWith('fixture');
+  const tier = falPricing.seedanceTier(gen.model);
+  const aspect = finalSpec.width / finalSpec.height;
+  const render = falPricing.renderDimsForTier(aspect, tier);
+  const seedanceUsd = live ? falPricing.seedanceCostUsd({ ...render, durationS: duration, tier }) : 0;
+  const topazUsd = live && falPricing.usedTopaz(gen.model)
+    ? falPricing.topazCostUsd({ width: finalSpec.width, height: finalSpec.height, durationS: duration, fps })
+    : 0;
+  const callCostUsd = Math.round((seedanceUsd + topazUsd) * 1e4) / 1e4;
+  // One fal call = one bill. EON_SLICE stores 3 face rows from that single call,
+  // so split the cost across them; every other surface is one row = full cost.
+  const ledger = (share = 1) => ({
+    falRequestId: live ? gen.jobId ?? null : null,
+    upscaleRequestId: live ? gen.upscaleJobId ?? null : null,
+    costUsd: live ? Math.round((callCostUsd * share) * 1e4) / 1e4 : 0,
+  });
+
   const insertMotion = (extra) => repo.insertArtwork({
     runId, surface: surface.surface, style: surface.style, mediaType: 'video', stage: 'motion',
     sourceStillId: still.id, prompt: still.prompt, motionPrompt: still.motion_prompt, model: gen.model,
@@ -381,6 +411,7 @@ async function animateStill(still, ctx) {
         specKey: 'eon_face', width: face.width, height: face.height,
         durationS: Math.round(probed.duration ?? effDuration),
         s3KeyFinal: facePut.key, thumbnailKey: thumbPut.key, status: 'ready',
+        ...ledger(1 / 3), // one Seedance call, split across the 3 faces
       });
       faceIds.push(a.id);
     }
@@ -425,6 +456,7 @@ async function animateStill(still, ctx) {
     specKey: surface.specKey, width: finalSpec.width, height: finalSpec.height,
     durationS: Math.round(probed.duration ?? effDuration),
     s3KeyFinal: finalPut.key, thumbnailKey: thumbPut.key, status: 'ready',
+    ...ledger(1),
   });
   return 1;
 }
