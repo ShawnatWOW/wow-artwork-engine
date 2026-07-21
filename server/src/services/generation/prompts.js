@@ -147,11 +147,19 @@ export function buildStillPrompt({ style, specKey, option, weekOf }) {
       `${CONTRAST} ${SAFE}`;
   }
   if (style === 'frame_break') {
-    return `An ultra-wide cinematic scene with strong 3D depth planes. Style: ${t.style}. ` +
-      `Composition: a dark vignette frame around the edges (naturally framing the scene), with ${t.subject} centered in the bright focal area. ` +
-      `The subject sits in the middle plane with a rich, detailed background behind it receding into deep distance, and a foreground layer in front suggested by lighting and shadow. ` +
-      `The subject is large enough to break partially out of the bright central frame into the darker edge area, creating a natural 3D depth effect. ` +
-      `${ENERGY} Dramatic cinematic lighting creates clear foreground-to-background separation and casts strong shadows suggesting multiple planes. ${CONTRAST} ${SAFE}`;
+    // The WOW signature 3D pop-out. The black border is PAINTED INTO the scene
+    // (trompe-l'oeil) and the subject physically breaks through it, overlapping
+    // the border in front. Never rely on a post-composited letterbox — that
+    // clips the art BEHIND the border so nothing can ever pop out
+    // (Shawn, 2026-07-15 + 2026-07-21).
+    return `An ultra-wide trompe-l'oeil 3D pop-out illusion. Style: ${t.style}. ` +
+      `Composition: a bold matte-black rectangular border is painted into the image, inset from the outer edges ` +
+      `like the mouth of a deep shadow box, with solid black filling the area outside the border. Seen through ` +
+      `the border opening, the scene recedes into deep vivid distance. The single hero subject is ${t.subject}, ` +
+      `bursting OUT through the opening toward the viewer: its body, limbs and trailing light spill across and ` +
+      `clearly overlap the black border — rendered IN FRONT of the border, partially covering it, casting soft ` +
+      `shadows onto it — unmistakably closer to the viewer than the border plane, while the deep scene stays ` +
+      `behind the opening. ${ENERGY} ${CONTRAST} ${SAFE}`;
   }
   // eon_single: tall portrait composition.
   return `A tall vertical scene. Style: ${t.style}. ` +
@@ -181,12 +189,14 @@ export function buildMotionPrompt({ style, specKey, option, weekOf }) {
   }
   const solo = soloMotionFor({ specKey, option, weekOf })(t.subject);
   if (style === 'frame_break') {
-    return `Cinematic scene-wide motion with extreme 3D depth: ${solo}. ` +
-      `The entire composition is in perpetual motion — the background environment shifts, flows, and evolves continuously; ` +
-      `foreground elements ripple and shimmer; lighting pulses and moves across the scene; the subject moves through three spatial planes ` +
-      `(foreground, middle subject plane, deep background) creating the natural illusion of 3D depth without letterboxing. ` +
-      `The subject darts toward camera, retreats into distance, and travels diagonally across the full width. ` +
-      `The dark vignette edge of the scene is natural framing, not a barrier — the subject moves naturally through all spatial zones. ` +
+    return `Trompe-l'oeil 3D pop-out motion: ${solo}. ` +
+      `The painted matte-black border stays perfectly fixed in place for the whole clip — it never moves, bends or fades. ` +
+      `The subject repeatedly punches THROUGH the border opening toward the viewer: lunging out so its body and trailing ` +
+      `light pass OVER and IN FRONT of the black border (covering parts of it), then swinging back behind the opening into ` +
+      `the deep scene — in front, behind, in front again — so the 3D pop-out illusion reads instantly and constantly. ` +
+      `Whenever the subject crosses the border it visibly occludes it, casting moving shadows onto it. ` +
+      `Inside the opening the scene stays in perpetual motion — the environment swirls, flows and evolves continuously; ` +
+      `lighting pulses across the scene; every pixel is alive. ` +
       `Smooth, premium, explosive high-energy movement — never static, never jittery. ${CONSTANCY}`;
   }
   return `Vivid ambient motion: ${solo}. Smooth and hypnotic, never chaotic or jittery. ${CONSTANCY}`;

@@ -496,29 +496,16 @@ async function animateStill(still, ctx) {
   }
 
   // Spectacular (frame-break) and EON single: one motion artwork.
+  //
+  // FRAME_BREAK no longer composites a border in post (Shawn, 2026-07-21: a
+  // post-drawn letterbox clips the art BEHIND the frame — nothing can ever pop
+  // out of a border that's painted on top afterwards). The 3D frame now lives
+  // IN the generation: the still prompt paints a trompe-l'oeil black border
+  // into the scene and the motion prompt drives the subject through it, over
+  // and in front — so the pop-out is real pixels, model-rendered. Here we just
+  // conform full-bleed to spec like every other surface.
   const final = path.join(dir, 'final.mp4');
-  if (surface.post === POST.FRAME_BREAK) {
-    // Conform the content to the inner window FIRST (cover-crop), then draw
-    // the black canvas + border around it. The old blind overshoot geometry
-    // assumed a known input aspect and showed letterbox when the model
-    // returned something else. True pop-out matting = Batch B.
-    // Inset/border scale with the canvas (tuned at 48px/5px on the old
-    // 1692-wide spec) so the frame reads the same at 4K.
-    const inset = even(finalSpec.width / 35);
-    const borderThickness = Math.max(3, Math.round(finalSpec.width / 340));
-    const inner = path.join(dir, 'inner.mp4');
-    await ffmpeg.conform({
-      input: srcVideo, output: inner,
-      width: finalSpec.width - inset * 2, height: finalSpec.height - inset * 2,
-      duration: effDuration, fps,
-    });
-    await ffmpeg.frameBreakComposite({
-      input: inner, output: final, canvasWidth: finalSpec.width, canvasHeight: finalSpec.height,
-      inset, borderThickness, overshoot: 0, duration: effDuration, fps,
-    });
-  } else {
-    await ffmpeg.conform({ input: srcVideo, output: final, width: finalSpec.width, height: finalSpec.height, duration: effDuration, fps });
-  }
+  await ffmpeg.conform({ input: srcVideo, output: final, width: finalSpec.width, height: finalSpec.height, duration: effDuration, fps });
   const td = thumbDims(finalSpec);
   const thumb = path.join(dir, 'thumb.jpg');
   await ffmpeg.thumbnail({ input: final, output: thumb, width: td.width, height: td.height, atSeconds: Math.min(2, effDuration / 2) });

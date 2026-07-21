@@ -85,7 +85,14 @@ export function buildCropArgs({ input, output, width, height, x = 0, y = 0, dura
   return args;
 }
 
-/** Composite a subject clip onto a black canvas — the frame-break style. */
+/**
+ * LEGACY — no longer in the pipeline (2026-07-21). Compositing a border in
+ * post clips the art BEHIND the frame, so nothing can ever pop out of it; the
+ * 3D frame-break now lives in the generation prompts (trompe-l'oeil border
+ * painted into the scene, subject rendered in front of it). Kept only because
+ * it's a pure arg-builder with tests; delete alongside them when convenient.
+ * Composite a subject clip onto a black canvas — the frame-break style.
+ */
 export function buildFrameBreakArgs({
   input,
   output,
