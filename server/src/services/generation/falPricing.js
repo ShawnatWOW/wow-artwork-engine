@@ -114,6 +114,29 @@ export function renderDimsForTier(aspect, tier = 'standard') {
   return { width, height };
 }
 
+// Canonical 16:9 dims for a fal resolution string — for callers (e.g. Content
+// Automation) that only know the resolution tier, not exact output pixels.
+const RESOLUTION_DIMS = {
+  '480p': { width: 854, height: 480 },
+  '720p': { width: 1280, height: 720 },
+  '1080p': { width: 1920, height: 1080 },
+};
+
+/** Output dims for a resolution string ('720p'…), defaulting to 720p. Pure. */
+export function dimsForResolution(resolution = '720p') {
+  return RESOLUTION_DIMS[resolution] || RESOLUTION_DIMS['720p'];
+}
+
+/**
+ * Extract the fal request_id from a status_url like
+ * https://queue.fal.run/<app>/requests/<id>/status — the reconciliation key.
+ * Returns null if not a fal queue URL.
+ */
+export function requestIdFromStatusUrl(statusUrl = '') {
+  const m = String(statusUrl).match(/\/requests\/([^/]+)/);
+  return m ? m[1] : null;
+}
+
 /**
  * Total USD for one finished video: Seedance generation (+ Topaz upscale if it
  * ran). Itemized so a dashboard can show where the money went. `outWidth/Height`
@@ -144,6 +167,7 @@ export const REFERENCE_PER_SECOND = {
 
 export default {
   seedanceTier, usedTopaz, seedanceTokens, seedanceCostUsd, topazCostUsd,
-  seedreamCostUsd, renderDimsForTier, videoCostUsd, REFERENCE_PER_SECOND,
+  seedreamCostUsd, renderDimsForTier, dimsForResolution, videoCostUsd,
+  requestIdFromStatusUrl, REFERENCE_PER_SECOND,
   SEEDANCE_RATE_PER_1K, TOPAZ_PER_SECOND, SEEDREAM_PER_IMAGE,
 };
