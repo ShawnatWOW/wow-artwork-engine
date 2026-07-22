@@ -164,21 +164,69 @@ test('regenerateStills: fresh options for ONE surface only, approved kept, new p
       deps: { repo, store, providers, optionsPerSurface: 2, duration: 1 },
     });
     assert.equal(summary.status, 'complete');
-    assert.equal(summary.counts.ready, 2);
+    // Only the ONE retired slot is refilled — the section must not balloon
+    // past optionsPerSurface just because a design was kept.
+    assert.equal(summary.counts.ready, 1);
 
     const after = await repo.listArtworks(runId);
-    // Approved still kept, unapproved retired (hidden), 2 fresh ones ready.
+    // Approved still kept, unapproved retired (hidden), 1 fresh one ready.
     assert.equal((await repo.getArtwork(eonBefore[0].id)).status, 'approved');
     assert.equal((await repo.getArtwork(eonBefore[1].id)).status, 'superseded');
     const fresh = after.filter((a) => a.style === 'eon_single' && a.status === 'ready');
-    assert.equal(fresh.length, 2);
-    // The salt gives DIFFERENT prompts — not a rebuild of the retired designs.
-    assert.notEqual(fresh[0].prompt, eonBefore[0].prompt);
+    assert.equal(fresh.length, 1);
+    // The salt gives a DIFFERENT prompt — not a rebuild of the retired design.
+    assert.notEqual(fresh[0].prompt, eonBefore[1].prompt);
     // Other surfaces are completely untouched.
     for (const a of otherBefore) {
       assert.deepEqual(await repo.getArtwork(a.id), a, `surface ${a.style} must be untouched`);
     }
     // Run is reviewable again.
+    assert.equal((await repo.getRun(runId)).status, 'complete');
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
+});
+
+test('regenerateStills: saved designs survive and only unsaved slots are replaced', async (t) => {
+  if (!(await hasFfmpeg())) return t.skip('ffmpeg not installed');
+  const { base, repo, store } = await harness();
+  try {
+    const { runId } = await runWeek({
+      weekOf: '2026-08-10', triggeredBy: 'test',
+      deps: { repo, store, providers, optionsPerSurface: 2, duration: 1 },
+    });
+    const eonBefore = (await repo.listArtworks(runId)).filter((a) => a.style === 'eon_single');
+    // Save (bookmark) one — no approval, just "keep this while I re-roll".
+    await repo.addSelection(eonBefore[0].id, 'reviewer@wow');
+    const saved = await repo.getArtwork(eonBefore[0].id);
+    const unsaved = eonBefore[1];
+
+    const { regenerateStills } = await import('../src/services/orchestrator.js');
+    const summary = await regenerateStills({
+      runId, surfaceKey: 'eon_single',
+      deps: { repo, store, providers, optionsPerSurface: 2, duration: 1 },
+    });
+    assert.equal(summary.status, 'complete');
+    assert.equal(summary.counts.ready, 1);
+
+    // Saved card is byte-for-byte untouched; only the unsaved one was retired.
+    assert.deepEqual(await repo.getArtwork(saved.id), saved);
+    assert.equal((await repo.getArtwork(unsaved.id)).status, 'superseded');
+
+    // Exactly one fresh design, and it fills the retired card's option slot.
+    const fresh = (await repo.listArtworks(runId))
+      .filter((a) => a.style === 'eon_single' && a.status === 'ready' && a.id !== saved.id);
+    assert.equal(fresh.length, 1);
+    const slot = (k) => /\/opt(\d+)\//.exec(k)?.[1];
+    assert.equal(slot(fresh[0].s3_key_final), slot(unsaved.s3_key_final), 'replacement fills the retired slot');
+
+    // Everything now saved/approved → regenerate has nothing to do and says so
+    // BEFORE touching the run (it must stay reviewable, not flip to running).
+    await repo.updateArtwork(fresh[0].id, { status: 'approved' });
+    await assert.rejects(
+      () => regenerateStills({ runId, surfaceKey: 'eon_single', deps: { repo, store, providers, optionsPerSurface: 2, duration: 1 } }),
+      /saved or approved/,
+    );
     assert.equal((await repo.getRun(runId)).status, 'complete');
   } finally {
     await rm(base, { recursive: true, force: true });

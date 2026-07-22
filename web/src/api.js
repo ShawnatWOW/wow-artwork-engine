@@ -46,6 +46,8 @@ export const api = {
   reject: (id) => req('POST', `/artworks/${id}/reject`),
   handoffPreview: (runId) => req('GET', `/runs/${runId}/handoff`),
   sendHandoff: (runId, payload) => req('POST', `/runs/${runId}/handoff`, payload),
+  // Cross-run history of everything ever sent to Jeff.
+  deliveries: () => req('GET', '/deliveries'),
   mediaUrl: (id) => `${API}/artworks/${id}/media`,
   thumbUrl: (id) => `${API}/artworks/${id}/thumbnail`,
 };

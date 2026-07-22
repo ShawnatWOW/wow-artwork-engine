@@ -169,10 +169,12 @@ async function generateStill(job, ctx) {
 
 /**
  * Regenerate the still options for ONE surface inside an existing run —
- * the per-sign "New designs" button. Unapproved stills for that surface are
- * retired (status 'superseded', hidden by the dashboard); approved stills and
- * any videos already made from them are untouched. Other surfaces are never
- * touched — that's the whole point (UX feedback 2026-07-14: the global
+ * the per-sign "Redo unsaved designs" button. Unapproved, unsaved stills for
+ * that surface are retired (status 'superseded', hidden by the dashboard) and
+ * ONLY their option slots are refilled; approved stills, SAVED stills (a
+ * selections row — Scott's "keep this one while I re-roll the rest",
+ * 2026-07-21) and any videos already made are untouched. Other surfaces are
+ * never touched — that's the whole point (UX feedback 2026-07-14: the global
  * regenerate forced a re-spend across every sign).
  * @returns {Promise<{ runId, phase, status, surface, counts, artworks }>}
  */
@@ -185,15 +187,29 @@ export async function regenerateStills({ runId, surfaceKey, triggeredBy = 'dashb
   if (!surface) throw new Error(`Unknown surface "${surfaceKey}"`);
   const run = await repo.getRun(runId);
   if (!run) throw new Error(`Run ${runId} not found`);
-  // Mark running BEFORE onStart — same polling-race lesson as animateRun.
-  await repo.setRunStatus(runId, 'running');
-  await onStart?.(run);
 
   const week = run.week_of;
   const existing = await repo.listArtworks(runId);
   const mine = existing.filter((a) => a.stage === 'still' && a.style === surface.style);
-  // Retire this surface's unapproved, not-already-retired stills.
-  for (const a of mine.filter((x) => x.status !== 'approved' && x.status !== 'superseded')) {
+  // "Saved" = the reviewer bookmarked it (selections row) — protected from
+  // regeneration exactly like an approved design, but without committing to it.
+  const selections = await repo.listSelections(runId);
+  const savedIds = new Set(selections.map((s) => s.artwork_id));
+  const toRetire = mine.filter((x) => x.status !== 'approved' && x.status !== 'superseded' && !savedIds.has(x.id));
+  // Refuse BEFORE flipping the run to 'running' (and before onStart resolves
+  // the route) — nothing changed, so the run must stay reviewable and the
+  // dashboard gets a clean 409 instead of a phantom in-progress state.
+  if (toRetire.length === 0) {
+    throw Object.assign(
+      new Error('Every design for this sign is saved or approved — unsave one first if you want to replace it.'),
+      { code: 'nothing_to_regenerate' },
+    );
+  }
+  // Mark running BEFORE onStart — same polling-race lesson as animateRun.
+  await repo.setRunStatus(runId, 'running');
+  await onStart?.(run);
+
+  for (const a of toRetire) {
     await repo.updateArtwork(a.id, { status: 'superseded' });
   }
 
@@ -204,8 +220,27 @@ export async function regenerateStills({ runId, surfaceKey, triggeredBy = 'dashb
   const attempt = Math.max(1, Math.ceil(mine.length / perBatch));
   const promptSeed = `${week}#r${attempt}`;
 
-  const jobs = planJobs({ surfaces: [surface], optionsPerSurface: deps.optionsPerSurface });
-  logger.info({ runId, surface: surfaceKey, attempt, options: jobs.length, triggeredBy, mode: providers.mode || config.generationMode }, 'Per-surface regenerate started');
+  // Replace ONLY the retired option slots — a full planJobs batch here would
+  // balloon the section past optionsPerSurface whenever something was kept.
+  // Slot recovery mirrors regenerateStill: the storage key records the slot
+  // (runs/<id>/<surface>/opt<n>/still.png); keyless rows fall back to slot 1.
+  const allJobs = planJobs({ surfaces: [surface], optionsPerSurface: deps.optionsPerSurface });
+  const slots = [...new Set(toRetire.map((a) => {
+    const m = /\/opt(\d+)\//.exec(a.s3_key_final || a.thumbnail_key || '');
+    return m ? Number(m[1]) : 1;
+  }))];
+  const usedOptions = new Set();
+  const jobs = [];
+  for (const slot of slots) {
+    // A slot from an older, larger batch may not exist in today's plan — fall
+    // back to the first job not already claimed by another retired slot.
+    const job = allJobs.find((j) => j.option === slot && !usedOptions.has(j.option))
+      || allJobs.find((j) => !usedOptions.has(j.option));
+    if (!job) continue;
+    usedOptions.add(job.option);
+    jobs.push(job);
+  }
+  logger.info({ runId, surface: surfaceKey, attempt, options: jobs.length, kept: mine.length - toRetire.length, triggeredBy, mode: providers.mode || config.generationMode }, 'Per-surface regenerate started');
 
   const workDir = deps.workDir || (await mkdtemp(path.join(os.tmpdir(), `wae-regen-${runId}-`)));
   const counts = { ready: 0, failed: 0, blocked: 0 };

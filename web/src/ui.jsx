@@ -116,8 +116,9 @@ export function Preview({ artwork }) {
 }
 
 // Two clear choices per card: use it, or pass. (The old "Pick" button
-// duplicated Approve and confused first-time reviewers — removed.)
-export function Actions({ status, busy, stage, onApprove, onReject, onRetry, onRegen }) {
+// duplicated Approve and confused first-time reviewers — removed.) Stills also
+// get a Save toggle — keep a design out of regeneration without approving it.
+export function Actions({ status, busy, stage, saved, onApprove, onReject, onRetry, onRegen, onToggleSave }) {
   const btn = 'inline-flex items-center gap-1 rounded px-2 py-1 text-[11px] font-medium transition disabled:opacity-40';
   const approveLabel = status === 'approved' ? '✓ Approved' : stage === 'still' ? '✓ Use this design' : '✓ Approve video';
   return (
@@ -129,6 +130,15 @@ export function Actions({ status, busy, stage, onApprove, onReject, onRetry, onR
       >
         {approveLabel}
       </button>
+      {onToggleSave && (
+        <button
+          type="button" disabled={busy} onClick={onToggleSave}
+          title="Keep this design — saved designs are never replaced by a regeneration"
+          className={`${btn} ${saved ? 'bg-violet-600 text-white' : 'bg-neutral-800 text-violet-300 hover:bg-neutral-700'}`}
+        >
+          {saved ? '🔖 Saved' : '🔖 Save'}
+        </button>
+      )}
       <button
         type="button" disabled={busy} onClick={onReject}
         title="Pass on this one — nothing else happens with it"
@@ -209,16 +219,20 @@ export function Details({ artwork }) {
 
 // A self-contained option card used across surfaces. When `animating` is true
 // (its video is being generated) the card shows a spinner overlay instead of
-// the approve/pass buttons.
-export function Card({ artwork, actions, animating }) {
+// the approve/pass buttons. `saved` marks a bookmarked design (violet ring +
+// badge) so it's obvious at a glance which cards a regeneration will skip.
+export function Card({ artwork, actions, animating, saved }) {
   return (
-    <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-2">
+    <div className={`rounded-lg border border-neutral-800 bg-neutral-900 p-2${saved ? ' ring-1 ring-violet-500/60' : ''}`}>
       <div className="relative">
         <Preview artwork={artwork} />
         {animating && <GeneratingOverlay />}
       </div>
       <div className="mt-2 flex items-center justify-between px-0.5">
-        <span className="text-[11px] text-neutral-500">{artwork.width}×{artwork.height}</span>
+        <span className="flex items-center gap-1.5 text-[11px] text-neutral-500">
+          {artwork.width}×{artwork.height}
+          {saved && <span className="rounded bg-violet-950 px-1 py-0.5 text-[10px] font-medium text-violet-300">🔖 Saved</span>}
+        </span>
         <StatusBadge status={animating ? 'generating' : artwork.status} stage={artwork.stage} />
       </div>
       <div className="px-0.5">

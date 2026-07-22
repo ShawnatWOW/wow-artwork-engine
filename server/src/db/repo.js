@@ -183,6 +183,22 @@ export const pgRepo = {
     );
     return rows;
   },
+
+  // Cross-run "Sent to Jeff" history — same enriched shape as memoryRepo's
+  // listAllDeliveries so the /deliveries route works on either backend.
+  async listAllDeliveries() {
+    const { rows } = await query(
+      `SELECT d.*,
+              json_build_object('id', a.id, 'surface', a.surface, 'style', a.style,
+                                'spec_key', a.spec_key, 'width', a.width, 'height', a.height) AS artwork,
+              json_build_object('id', r.id, 'week_of', r.week_of) AS run
+         FROM deliveries d
+         JOIN artworks a ON a.id = d.artwork_id
+         JOIN runs r ON r.id = a.run_id
+        ORDER BY COALESCE(d.sent_at, d.created_at) DESC NULLS LAST, d.id DESC`,
+    );
+    return rows;
+  },
 };
 
 export default pgRepo;

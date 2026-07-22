@@ -235,6 +235,30 @@ export function createMemoryRepo({ persistPath = null } = {}) {
       const ids = new Set(artworks.filter((a) => a.run_id === runId).map((a) => a.id));
       return deliveries.filter((d) => ids.has(d.artwork_id)).map(clone);
     },
+
+    // Cross-run "Sent to Jeff" history: every delivery ever recorded, enriched
+    // with just enough artwork + run context that the dashboard needs no
+    // follow-up lookups. Newest first by when it was actually sent (falling
+    // back to when the record was created); undated rows sink to the bottom.
+    async listAllDeliveries() {
+      const when = (d) => {
+        const t = Date.parse(d.sent_at || d.created_at || '');
+        return Number.isNaN(t) ? -Infinity : t; // nulls last under a desc sort
+      };
+      return deliveries
+        .map((d) => {
+          const a = artworks.find((x) => x.id === d.artwork_id);
+          if (!a) return null; // artwork purged — the row has nothing to show
+          const r = runs.find((x) => x.id === a.run_id);
+          return {
+            ...d,
+            artwork: { id: a.id, surface: a.surface, style: a.style, spec_key: a.spec_key, width: a.width, height: a.height },
+            run: r ? { id: r.id, week_of: r.week_of } : null,
+          };
+        })
+        .filter(Boolean)
+        .sort((x, y) => when(y) - when(x));
+    },
   };
 }
 

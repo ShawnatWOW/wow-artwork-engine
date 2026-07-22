@@ -55,6 +55,11 @@ router.post('/runs/:id/regenerate', async (req, res, next) => {
     });
     res.status(202).json({ runId: run.id, surface: surfaceKey, status: 'running' });
   } catch (err) {
+    // Everything saved/approved → thrown before onStart, so the await above
+    // rejects and lands here. 409 with the orchestrator's plain-English reason.
+    if (err.code === 'nothing_to_regenerate') {
+      return res.status(409).json({ error: 'nothing_to_regenerate', message: err.message });
+    }
     next(err);
   }
 });

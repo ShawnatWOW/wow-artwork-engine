@@ -4,6 +4,7 @@
 //   GET  /api/runs/:id/handoff     the editable email draft + attachments + preflight
 //   POST /api/runs/:id/handoff     send (body: sender, recipient, subject, body, test)
 //   GET  /api/runs/:id/deliveries  delivery records for the run
+//   GET  /api/deliveries           cross-run history of everything ever sent
 //
 // The send returns an HONEST result: delivered is true only on a real Gmail
 // send; offline writes report as not sent.
@@ -51,6 +52,14 @@ router.get('/runs/:id/deliveries', async (req, res, next) => {
   try {
     const id = runId(req, res); if (id === null) return;
     res.json({ deliveries: await getRepo().listDeliveries(id) });
+  } catch (err) { next(err); }
+});
+
+// Cross-run "Sent to Jeff" history — every delivery ever, newest first, with
+// its artwork + run attached (Scott: "what have we already sent him?").
+router.get('/deliveries', async (_req, res, next) => {
+  try {
+    res.json({ deliveries: await getRepo().listAllDeliveries() });
   } catch (err) { next(err); }
 });
 

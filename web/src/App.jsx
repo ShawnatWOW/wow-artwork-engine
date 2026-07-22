@@ -8,6 +8,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from './api.js';
 import { Preview, Actions, StatusBadge, Details, Card, ModePill, SpendPill, Stepper, Spinner, GeneratingOverlay, progressLabel } from './ui.jsx';
 import SendDialog from './SendDialog.jsx';
+import SentHistory from './SentHistory.jsx';
 
 export default function App() {
   return (
@@ -24,6 +25,7 @@ export function ReviewDashboard() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [showSend, setShowSend] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
   const [spend, setSpend] = useState(null);
 
   const loadRuns = useCallback(async () => {
@@ -120,6 +122,7 @@ export function ReviewDashboard() {
         runs={runs} runId={runId} onSelectRun={setRunId}
         onGenerate={generate} onAnimate={animate} pendingAnimate={pendingAnimate}
         readyToSend={readyToSend} onSend={() => setShowSend(true)}
+        onHistory={() => setShowHistory(true)}
         busy={busy} run={detail?.run} mode={mode} detail={detail}
         running={running} makingVideos={makingVideos} spend={spend}
       />
@@ -140,11 +143,12 @@ export function ReviewDashboard() {
         />
       )}
       {showSend && <SendDialog runId={runId} onClose={() => setShowSend(false)} onSent={() => loadDetail(runId)} />}
+      {showHistory && <SentHistory onClose={() => setShowHistory(false)} />}
     </main>
   );
 }
 
-function Header({ runs, runId, onSelectRun, onGenerate, onAnimate, pendingAnimate, readyToSend, onSend, busy, run, mode, detail, running, makingVideos, spend }) {
+function Header({ runs, runId, onSelectRun, onGenerate, onAnimate, pendingAnimate, readyToSend, onSend, onHistory, busy, run, mode, detail, running, makingVideos, spend }) {
   const [health, setHealth] = useState(null);
   useEffect(() => { api.health().then(setHealth); }, []);
   const effectiveMode = mode || health?.generationMode;
@@ -181,6 +185,13 @@ function Header({ runs, runId, onSelectRun, onGenerate, onAnimate, pendingAnimat
                 {runs.map((r) => <option key={r.id} value={r.id}>Week of {r.week_of} · batch #{r.id}</option>)}
               </select>
             )}
+            <button
+              type="button" onClick={onHistory}
+              title="Everything ever sent to Jeff, across all weeks"
+              className="rounded border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-sm font-medium text-neutral-300 transition hover:border-neutral-500 hover:text-white"
+            >
+              📤 Sent history
+            </button>
             {pendingAnimate > 0 && (
               <button
                 type="button" onClick={onAnimate} disabled={busy}
@@ -236,6 +247,8 @@ function Empty({ onGenerate, busy, mode }) {
 
 function RunView({ detail, onAct, busy, running, onRegenerate, onRegenerateOne, mode }) {
   const { artworks } = detail;
+  // Saved (bookmarked) design ids — kept while regenerating, without approving.
+  const savedSet = useMemo(() => new Set((detail.selections || []).map((s) => s.artwork_id)), [detail.selections]);
   // An approved design with no video yet, while a job is running → it's being made.
   const isAnimating = (still, motion) => running && !motion && still.status === 'approved';
   const motionsByStill = useMemo(() => {
@@ -258,8 +271,17 @@ function RunView({ detail, onAct, busy, running, onRegenerate, onRegenerateOne, 
     ...(a.stage === 'still' && a.status === 'approved' && a.error && !a.error.startsWith('qa:')
       ? { onRetry: () => onAct(() => api.animateOne(a.id)) }
       : {}),
-    // Replace just THIS design (approved ones are protected — Pass first).
-    ...(a.stage === 'still' && a.status !== 'approved'
+    // Save toggle: bookmark a design so regeneration skips it — commitment-free
+    // (Scott: keep one he likes while re-rolling the rest, 2026-07-21).
+    ...(a.stage === 'still' && a.status !== 'superseded'
+      ? {
+          saved: savedSet.has(a.id),
+          onToggleSave: () => onAct(() => (savedSet.has(a.id) ? api.unselect(a.id) : api.select(a.id))),
+        }
+      : {}),
+    // Replace just THIS design (approved and saved ones are protected —
+    // Pass / unsave first).
+    ...(a.stage === 'still' && a.status !== 'approved' && !savedSet.has(a.id)
       ? { onRegen: () => onRegenerateOne(a.id) }
       : {}),
   });
@@ -274,14 +296,14 @@ function RunView({ detail, onAct, busy, running, onRegenerate, onRegenerateOne, 
   const stillsOf = (style) =>
     artworks.filter((a) => a.stage === 'still' && a.style === style && a.status !== 'superseded');
 
-  // Per-sign "New designs" button, shown in each section header.
+  // Per-sign "Redo unsaved designs" button, shown in each section header.
   const regenFor = (surfaceKey) => (
     <button
       type="button" disabled={busy || running} onClick={() => onRegenerate(surfaceKey)}
-      title="Retire these options and create 3 fresh designs for just this sign — designs you already approved stay"
+      title="Replaces only the designs you haven't saved or approved — saved ones stay."
       className="rounded border border-neutral-700 bg-neutral-900 px-2.5 py-1 text-[11px] font-medium text-neutral-300 transition hover:border-[#0247FE] hover:text-white disabled:opacity-40"
     >
-      ↻ New designs for this sign{mode === 'live' ? ' (~$0.10)' : ' (free)'}
+      ↻ Redo unsaved designs{mode === 'live' ? ' (~$0.03 each)' : ' (free)'}
     </button>
   );
 
@@ -293,7 +315,7 @@ function RunView({ detail, onAct, busy, running, onRegenerate, onRegenerateOne, 
             // .at(-1): after a re-roll, show the LATEST video.
             const motion = motionsByStill.get(still.id)?.at(-1);
             const a = motion || still;
-            return <Card key={still.id} artwork={a} actions={actionsFor(a)} animating={isAnimating(still, motion)} />;
+            return <Card key={still.id} artwork={a} actions={actionsFor(a)} animating={isAnimating(still, motion)} saved={savedSet.has(a.id)} />;
           })}
         </div>
       </Section>
@@ -304,7 +326,7 @@ function RunView({ detail, onAct, busy, running, onRegenerate, onRegenerateOne, 
             const faces = motionsByStill.get(still.id)?.slice(-3); // latest set of 3 after re-rolls
             return faces?.length
               ? <ConnectedSet key={still.id} faces={faces} actions={groupActions(faces)} />
-              : <div key={still.id} className="max-w-2xl"><Card artwork={still} actions={actionsFor(still)} animating={isAnimating(still, null)} /></div>;
+              : <div key={still.id} className="max-w-2xl"><Card artwork={still} actions={actionsFor(still)} animating={isAnimating(still, null)} saved={savedSet.has(still.id)} /></div>;
           })}
         </div>
       </Section>
@@ -314,7 +336,7 @@ function RunView({ detail, onAct, busy, running, onRegenerate, onRegenerateOne, 
           {stillsOf('eon_single').map((still) => {
             const motion = motionsByStill.get(still.id)?.at(-1);
             const a = motion || still;
-            return <Card key={still.id} artwork={a} actions={actionsFor(a)} animating={isAnimating(still, motion)} />;
+            return <Card key={still.id} artwork={a} actions={actionsFor(a)} animating={isAnimating(still, motion)} saved={savedSet.has(a.id)} />;
           })}
         </div>
       </Section>
