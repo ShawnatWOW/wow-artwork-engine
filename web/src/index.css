@@ -1,3 +1,13 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Gentle entrance for cards and toasts — skipped for reduced-motion users. */
+@keyframes card-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+.card-in { animation: card-in 0.3s ease-out both; }
+@media (prefers-reduced-motion: reduce) {
+  .card-in { animation: none; }
+}

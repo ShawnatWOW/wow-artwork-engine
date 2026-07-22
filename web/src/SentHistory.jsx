@@ -40,7 +40,7 @@ export default function SentHistory({ onClose }) {
       <div className="flex max-h-[85vh] w-full max-w-2xl flex-col rounded-lg border border-neutral-700 bg-neutral-900 p-5" onClick={(e) => e.stopPropagation()}>
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-base font-semibold">Sent history</h2>
-          <button type="button" onClick={onClose} className="text-neutral-400 hover:text-white">✕</button>
+          <button type="button" onClick={onClose} aria-label="Close" className="rounded px-1 text-neutral-400 transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0247FE]">✕</button>
         </div>
 
         {!deliveries && !error && <p className="text-sm text-neutral-400">Loading…</p>}
@@ -75,7 +75,7 @@ function DeliveryRow({ d }) {
   const a = d.artwork;
   return (
     <li className="flex items-center gap-3 rounded border border-neutral-800 bg-neutral-950/60 p-2 text-xs">
-      <img src={api.thumbUrl(a.id)} alt="" className="h-16 w-16 shrink-0 rounded object-cover" loading="lazy" />
+      <img src={api.thumbUrl(a.id)} alt="" className="h-16 w-16 shrink-0 rounded object-cover" loading="lazy" decoding="async" />
       <div className="min-w-0 flex-1">
         <p className="truncate text-neutral-200">{a.surface} · {a.width}×{a.height}</p>
         <p className="text-neutral-500">{d.sent_at ? new Date(d.sent_at).toLocaleString() : '—'}</p>

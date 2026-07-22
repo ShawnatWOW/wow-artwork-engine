@@ -43,7 +43,7 @@ export default function SendDialog({ runId, onClose, onSent }) {
       <div className="w-full max-w-lg rounded-lg border border-neutral-700 bg-neutral-900 p-5" onClick={(e) => e.stopPropagation()}>
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-base font-semibold">Send to Jeff</h2>
-          <button type="button" onClick={onClose} className="text-neutral-400 hover:text-white">✕</button>
+          <button type="button" onClick={onClose} aria-label="Close" className="rounded px-1 text-neutral-400 transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0247FE]">✕</button>
         </div>
 
         {!preview && !error && <p className="text-sm text-neutral-400">Loading…</p>}
@@ -74,8 +74,8 @@ export default function SendDialog({ runId, onClose, onSent }) {
             <div>
               <span className="text-xs text-neutral-400">Recipient</span>
               <div className="mt-1 flex gap-2">
-                <button type="button" onClick={() => setTest(true)} className={`rounded px-2 py-1 text-xs ${test ? 'bg-[#0247FE] text-white' : 'bg-neutral-800 text-neutral-300'}`}>Test to me ({sender.split('@')[0]})</button>
-                <button type="button" onClick={() => setTest(false)} className={`rounded px-2 py-1 text-xs ${!test ? 'bg-rose-700 text-white' : 'bg-neutral-800 text-neutral-300'}`}>Live → {pf.gmail.to}</button>
+                <button type="button" onClick={() => setTest(true)} className={`rounded px-2 py-1 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0247FE] ${test ? 'bg-[#0247FE] text-white' : 'bg-neutral-800 text-neutral-300 hover:bg-neutral-700'}`}>Test to me ({sender.split('@')[0]})</button>
+                <button type="button" onClick={() => setTest(false)} className={`rounded px-2 py-1 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0247FE] ${!test ? 'bg-rose-700 text-white' : 'bg-neutral-800 text-neutral-300 hover:bg-neutral-700'}`}>Live → {pf.gmail.to}</button>
               </div>
               {!test && <p className="mt-1 text-[11px] text-rose-300">This goes to the real recipient.</p>}
             </div>
@@ -95,9 +95,9 @@ export default function SendDialog({ runId, onClose, onSent }) {
             </div>
 
             <div className="flex justify-end gap-2 pt-1">
-              <button type="button" onClick={onClose} className="rounded bg-neutral-800 px-3 py-1.5 text-sm text-neutral-200">Cancel</button>
+              <button type="button" onClick={onClose} className="rounded bg-neutral-800 px-3 py-1.5 text-sm text-neutral-200 transition-colors hover:bg-neutral-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0247FE]">Cancel</button>
               <button type="button" onClick={send} disabled={busy || preview.items.length === 0}
-                className="rounded bg-[#0247FE] px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50">
+                className="rounded bg-[#0247FE] px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-[#0235c9] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70">
                 {busy ? 'Sending…' : test ? 'Send test to me' : 'Send to Jeff'}
               </button>
             </div>
