@@ -201,12 +201,13 @@ export function Preview({ artwork }) {
 }
 
 // Two clear choices per card: use it, or pass. (The old "Pick" button
-// duplicated Approve and confused first-time reviewers — removed.) Stills also
-// get a Save toggle — keep a design out of regeneration without approving it.
+// duplicated Approve and confused first-time reviewers — removed.) A plain
+// still also gets "⭐ Keep & explore" — anchor a favourite and spin off
+// variations of it (the original is never lost).
 // Hierarchy (CEO pass, 2026-07-22): Approve is the decision — solid once
-// taken, outlined invitation until then. Save keeps its violet identity.
+// taken, outlined invitation until then. Keep is the amber-star invitation.
 // Pass and New design are quiet ghosts that fill on hover.
-export function Actions({ status, busy, stage, saved, onApprove, onReject, onRetry, onRegen, onToggleSave }) {
+export function Actions({ status, busy, stage, onApprove, onReject, onRetry, onRegen, onKeep }) {
   const btn = `inline-flex items-center gap-1 rounded border px-2 py-1 text-[11px] font-medium transition-colors disabled:opacity-40 ${focusRing}`;
   const ghost = 'border-neutral-700 bg-transparent text-neutral-400 hover:bg-neutral-800';
   const approveLabel = status === 'approved' ? '✓ Approved' : stage === 'still' ? '✓ Use this design' : '✓ Approve video';
@@ -221,13 +222,13 @@ export function Actions({ status, busy, stage, saved, onApprove, onReject, onRet
       >
         {approveLabel}
       </button>
-      {onToggleSave && (
+      {onKeep && (
         <button
-          type="button" disabled={busy} onClick={onToggleSave}
-          title="Keep this design — saved designs are never replaced by a regeneration"
-          className={`${btn} ${saved ? 'border-violet-600 bg-violet-600 text-white' : 'border-transparent bg-neutral-800 text-violet-300 hover:bg-neutral-700'}`}
+          type="button" disabled={busy} onClick={onKeep}
+          title="Keep this as your favourite and generate more versions of it — the original is never lost."
+          className={`${btn} border-amber-500/60 bg-transparent text-amber-300 hover:border-amber-400 hover:bg-amber-500 hover:text-neutral-950`}
         >
-          {saved ? '🔖 Saved' : '🔖 Save'}
+          ⭐ Keep &amp; explore
         </button>
       )}
       <button
@@ -333,6 +334,181 @@ export function Card({ artwork, actions, animating, saved }) {
           ? <p className="mt-2 flex items-center gap-1.5 text-[11px] text-amber-300"><Spinner className="h-3 w-3" /> Making the video…</p>
           : <Actions {...actions} stage={artwork.stage} />}
         <Details artwork={artwork} />
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Keep & explore — the reviewer anchors a design he likes, then explores
+// variations of it in a rail beneath it. The original (keeper) is never lost.
+
+// Inline "describe a change" box. Enter submits, Esc cancels. Autofocuses.
+function TweakBox({ busy, onSubmit, onCancel }) {
+  const [text, setText] = useState('');
+  const ref = useRef(null);
+  useEffect(() => { ref.current?.focus(); }, []);
+  const submit = () => { const t = text.trim(); if (t) onSubmit(t); };
+  return (
+    <div className="mt-2 flex items-center gap-1.5">
+      <input
+        ref={ref} type="text" value={text} disabled={busy}
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') { e.preventDefault(); submit(); }
+          else if (e.key === 'Escape') { e.preventDefault(); onCancel(); }
+        }}
+        placeholder="more electric blue · calmer background · bigger subject"
+        aria-label="Describe the change you want"
+        className={`min-w-0 flex-1 rounded border border-neutral-700 bg-neutral-950 px-2 py-1 text-[11px] text-neutral-100 placeholder:text-neutral-600 disabled:opacity-50 ${focusRing}`}
+      />
+      <button
+        type="button" onClick={submit} disabled={busy}
+        title="Make this change (Enter)"
+        className={`shrink-0 rounded border border-[#0247FE] bg-[#0247FE] px-2 py-1 text-[11px] font-semibold text-white transition-colors hover:bg-[#0235c9] disabled:opacity-50 ${focusRing}`}
+      >
+        →
+      </button>
+    </div>
+  );
+}
+
+// The kept design, rendered as a highlighted anchor (amber ring + "Kept —
+// exploring" badge). Vary/Tweak spin off variations; the original stays put.
+export function AnchorCard({ artwork, animating, busy, onApprove, onReject, onVary, onTweak, onUnkeep }) {
+  const [tweaking, setTweaking] = useState(false);
+  const btn = `inline-flex items-center gap-1 rounded border px-2 py-1 text-[11px] font-medium transition-colors disabled:opacity-40 ${focusRing}`;
+  const ghost = 'border-neutral-700 bg-transparent text-neutral-400 hover:bg-neutral-800';
+  const approved = artwork.status === 'approved';
+  const rejected = artwork.status === 'rejected';
+  return (
+    <div className="card-in rounded-lg border border-amber-500/50 bg-neutral-900 p-3 ring-1 ring-amber-500/40">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <span className="inline-flex items-center gap-1 rounded-full bg-amber-950 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-300">⭐ Kept — exploring</span>
+        <span className="text-[10px] uppercase tracking-wide text-neutral-500">Original / keeper</span>
+      </div>
+      <div className="relative">
+        <Preview artwork={artwork} />
+        {animating && <GeneratingOverlay />}
+      </div>
+      <div className="mt-2 flex items-center justify-between px-0.5">
+        <span className="text-[11px] text-neutral-500">{artwork.width}×{artwork.height}</span>
+        <StatusBadge status={animating ? 'generating' : artwork.status} stage={artwork.stage} />
+      </div>
+      <div className="px-0.5">
+        <ErrorRibbon artwork={artwork} />
+        {artwork.stage === 'motion' && <SourceStill stillId={artwork.source_still_id} />}
+        {animating ? (
+          <p className="mt-2 flex items-center gap-1.5 text-[11px] text-amber-300"><Spinner className="h-3 w-3" /> Making the video…</p>
+        ) : (
+          <>
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              <button
+                type="button" disabled={busy} onClick={onApprove}
+                title="Approve this design — approved designs get turned into videos"
+                className={`${btn} ${approved ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-emerald-700/60 bg-transparent text-emerald-300 hover:border-emerald-600 hover:bg-emerald-600 hover:text-white'}`}
+              >
+                {approved ? '✓ Approved' : '✓ Use this design'}
+              </button>
+              <button
+                type="button" disabled={busy} onClick={() => setTweaking((v) => !v)}
+                title="Describe a change in plain words — makes a new version ($0.03), original kept"
+                className={`${btn} ${ghost} hover:text-sky-300`}
+              >
+                ✎ Tweak…
+              </button>
+              <button
+                type="button" disabled={busy} onClick={onVary}
+                title="Generate another version of this design ($0.03) — the original is kept"
+                className={`${btn} ${ghost} hover:text-sky-300`}
+              >
+                ↻ Vary
+              </button>
+              <button
+                type="button" disabled={busy} onClick={onReject}
+                title="Pass on this one — nothing else happens with it"
+                className={`${btn} ${rejected ? 'border-rose-700 bg-rose-700 text-white' : `${ghost} hover:text-rose-300`}`}
+              >
+                {rejected ? '✕ Passed' : '✕ Pass'}
+              </button>
+              <button
+                type="button" disabled={busy} onClick={onUnkeep}
+                title="Stop keeping this as your favourite (its versions stay in this batch)"
+                className={`${btn} border-transparent bg-neutral-800 text-neutral-300 hover:bg-neutral-700`}
+              >
+                Un-keep
+              </button>
+            </div>
+            {tweaking && (
+              <TweakBox busy={busy} onCancel={() => setTweaking(false)} onSubmit={(t) => { setTweaking(false); onTweak(t); }} />
+            )}
+          </>
+        )}
+        <Details artwork={artwork} />
+      </div>
+    </div>
+  );
+}
+
+// A single variation in the rail beneath the anchor: compact preview + its
+// one-line change note, and the actions to use / promote / tweak / vary / dismiss.
+export function VariationCard({ artwork, busy, onApprove, onReject, onPromote, onVary, onTweak }) {
+  const [tweaking, setTweaking] = useState(false);
+  const btn = `inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-medium transition-colors disabled:opacity-40 ${focusRing}`;
+  const ghost = 'border-neutral-700 bg-transparent text-neutral-400 hover:bg-neutral-800';
+  const approved = artwork.status === 'approved';
+  return (
+    <div className="card-in rounded-lg border border-neutral-800 bg-neutral-950/50 p-2">
+      <Preview artwork={artwork} />
+      {artwork.change_note && (
+        <p className="mt-1 px-0.5 text-[10px] italic leading-snug text-neutral-400">{artwork.change_note}</p>
+      )}
+      <div className="mt-1 flex items-center justify-between px-0.5">
+        <span className="text-[10px] text-neutral-600">{artwork.width}×{artwork.height}</span>
+        <StatusBadge status={artwork.status} stage={artwork.stage} />
+      </div>
+      <div className="px-0.5">
+        <ErrorRibbon artwork={artwork} />
+        <div className="mt-1.5 flex flex-wrap items-center gap-1">
+          <button
+            type="button" disabled={busy} onClick={onApprove}
+            title="Approve this version — it becomes a video"
+            className={`${btn} ${approved ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-emerald-700/60 bg-transparent text-emerald-300 hover:border-emerald-600 hover:bg-emerald-600 hover:text-white'}`}
+          >
+            {approved ? '✓ Using' : '✓ Use'}
+          </button>
+          <button
+            type="button" disabled={busy} onClick={onPromote}
+            title="Make this the keeper — your anchor design. The current keeper becomes one of the versions."
+            className={`${btn} border-amber-500/60 bg-transparent text-amber-300 hover:border-amber-400 hover:bg-amber-500 hover:text-neutral-950`}
+          >
+            ⭐ Make keeper
+          </button>
+          <button
+            type="button" disabled={busy} onClick={() => setTweaking((v) => !v)}
+            title="Describe a change to this version ($0.03)"
+            className={`${btn} ${ghost} hover:text-sky-300`}
+          >
+            ✎ Tweak
+          </button>
+          <button
+            type="button" disabled={busy} onClick={onVary}
+            title="Another version like this one ($0.03)"
+            className={`${btn} ${ghost} hover:text-sky-300`}
+          >
+            ↻ Vary
+          </button>
+          <button
+            type="button" disabled={busy} onClick={onReject}
+            title="Dismiss this version — removes it from the rail"
+            className={`${btn} ${ghost} hover:text-rose-300`}
+          >
+            ✕ Dismiss
+          </button>
+        </div>
+        {tweaking && (
+          <TweakBox busy={busy} onCancel={() => setTweaking(false)} onSubmit={(t) => { setTweaking(false); onTweak(t); }} />
+        )}
       </div>
     </div>
   );

@@ -14,8 +14,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from './api.js';
 import {
-  Preview, Actions, StatusBadge, Details, Card, ModePill, SpendPill, Stepper,
-  Spinner, SkeletonCard, Toasts, useToasts, focusRing, progressLabel,
+  Preview, Actions, StatusBadge, Details, Card, AnchorCard, VariationCard,
+  ModePill, SpendPill, Stepper, Spinner, SkeletonCard, Toasts, useToasts,
+  focusRing, progressLabel,
 } from './ui.jsx';
 import SendDialog from './SendDialog.jsx';
 import SentHistory from './SentHistory.jsx';
@@ -59,6 +60,42 @@ const restoreStatuses = (prev) => (d) => ({
   artworks: d.artworks.map((a) => (prev.has(a.id) ? { ...a, status: prev.get(a.id) } : a)),
 });
 
+// Group a surface's stills into "Keep & explore" families for rendering.
+// A family = stills sharing a family_id (or a kept still with none). The kept
+// member (its id is in keptSet) is the ANCHOR; its other non-rejected members
+// are its variations rail. Stills with no family and no keeper — and any family
+// that has lost its keeper — fall through as plain cards. Every still lands in
+// exactly ONE place: an anchor, a variation, or a plain card (never double).
+function partitionFamilies(stills, keptSet) {
+  const byFamily = new Map();
+  const loners = [];
+  for (const s of stills) {
+    if (s.family_id != null) {
+      if (!byFamily.has(s.family_id)) byFamily.set(s.family_id, []);
+      byFamily.get(s.family_id).push(s);
+    } else if (keptSet.has(s.id)) {
+      byFamily.set(`solo:${s.id}`, [s]); // kept, no family yet → anchor, empty rail
+    } else {
+      loners.push(s);
+    }
+  }
+  const anchors = [];
+  for (const members of byFamily.values()) {
+    const live = members.filter((m) => m.status !== 'rejected'); // dismissed variations vanish
+    if (!live.length) continue;
+    const keeper = live.find((m) => keptSet.has(m.id));
+    if (keeper) {
+      const variations = live.filter((m) => m.id !== keeper.id).sort((a, b) => a.id - b.id);
+      anchors.push({ keeper, variations });
+    } else {
+      for (const m of live) loners.push(m); // keeper gone → members become plain cards
+    }
+  }
+  anchors.sort((a, b) => a.keeper.id - b.keeper.id);
+  loners.sort((a, b) => a.id - b.id);
+  return { anchors, loners };
+}
+
 export function ReviewDashboard() {
   const [runs, setRuns] = useState([]);
   const [runsLoaded, setRunsLoaded] = useState(false);
@@ -76,6 +113,7 @@ export function ReviewDashboard() {
 
   const runIdRef = useRef(null);
   const pendingIdsRef = useRef(new Set());
+  const detailRef = useRef(null); // latest detail, for snapshot-based optimistic reverts
 
   const markPending = useCallback((ids, on) => {
     setPendingIds((prev) => {
@@ -125,6 +163,10 @@ export function ReviewDashboard() {
 
   const detailReady = !!detail && detail.run?.id === runId;
   const running = detailReady && detail.run.status === 'running';
+
+  // Mirror detail into a ref so optimistic handlers can snapshot the pre-click
+  // state for an exact rollback without re-subscribing to every change.
+  useEffect(() => { detailRef.current = detail; }, [detail]);
 
   // Poll every 2s ONLY while a job runs — and not in a hidden tab. Resuming
   // visibility refetches immediately so the page catches up at a glance.
@@ -238,28 +280,67 @@ export function ReviewDashboard() {
     });
   }, [runOptimistic]);
 
-  // Save toggle: bookmark a design so regeneration skips it — commitment-free
-  // (Scott: keep one he likes while re-rolling the rest, 2026-07-21).
-  const toggleSave = useCallback((art, saved) => runOptimistic({
+  // ---- Keep & explore. keep/unkeep/promote only move the keeper marker, so
+  // they're OPTIMISTIC like the other card actions (the 2s poll / next nav
+  // reconciles). vary/tweak GENERATE a family member — heavy path below. ----
+
+  // Anchor a favourite so regeneration skips it and its variations rail opens.
+  const keepArtwork = useCallback((art) => runOptimistic({
     ids: [art.id],
-    apply: (d) => ({
-      ...d,
-      selections: saved
-        ? (d.selections || []).filter((s) => s.artwork_id !== art.id)
-        : [...(d.selections || []), { artwork_id: art.id }],
-    }),
-    revert: (d) => ({
-      ...d,
-      selections: saved
-        ? ((d.selections || []).some((s) => s.artwork_id === art.id)
-          ? d.selections
-          : [...(d.selections || []), { artwork_id: art.id }])
-        : (d.selections || []).filter((s) => s.artwork_id !== art.id),
-    }),
-    call: () => (saved ? api.unselect(art.id) : api.select(art.id)),
-    success: saved ? 'Save removed' : 'Saved — survives regenerations',
-    tone: saved ? 'neutral' : 'violet',
+    apply: (d) => ((d.selections || []).some((s) => s.artwork_id === art.id)
+      ? d
+      : { ...d, selections: [...(d.selections || []), { artwork_id: art.id }] }),
+    revert: (d) => ({ ...d, selections: (d.selections || []).filter((s) => s.artwork_id !== art.id) }),
+    call: () => api.keep(art.id),
+    success: 'Kept — exploring versions',
+    tone: 'violet',
   }), [runOptimistic]);
+
+  const unkeepArtwork = useCallback((art) => runOptimistic({
+    ids: [art.id],
+    apply: (d) => ({ ...d, selections: (d.selections || []).filter((s) => s.artwork_id !== art.id) }),
+    revert: (d) => ((d.selections || []).some((s) => s.artwork_id === art.id)
+      ? d
+      : { ...d, selections: [...(d.selections || []), { artwork_id: art.id }] }),
+    call: () => api.unkeep(art.id),
+    success: 'No longer keeping that one',
+    tone: 'neutral',
+  }), [runOptimistic]);
+
+  // Promote a variation to keeper: the old keeper in its family steps down.
+  // familyIds carries every member so the previous keeper's marker is cleared.
+  const promoteArtwork = useCallback((art, familyIds) => {
+    const prevSelections = detailRef.current?.selections || [];
+    return runOptimistic({
+      // Whole family pending: a concurrent poll must not resurrect the old
+      // keeper's selection mid-swap (mergeDetail holds pending selections).
+      ids: [...familyIds],
+      apply: (d) => ({
+        ...d,
+        selections: [
+          ...(d.selections || []).filter((s) => !familyIds.has(s.artwork_id)),
+          { artwork_id: art.id },
+        ],
+      }),
+      revert: (d) => ({ ...d, selections: prevSelections }),
+      call: () => api.promote(art.id),
+      success: 'New keeper set',
+      tone: 'violet',
+    });
+  }, [runOptimistic]);
+
+  // vary / tweak spawn a new variation ($0.03): 202 + the run flips to
+  // 'running', so they take the global lock + the existing poll/progress path.
+  const vary = async (artworkId) => {
+    setBusy(true); setError(null);
+    try { await api.vary(artworkId); await loadDetail(runId); }
+    catch (e) { setError(e.message); } finally { setBusy(false); }
+  };
+  const tweak = async (artworkId, instruction) => {
+    setBusy(true); setError(null);
+    try { await api.tweak(artworkId, instruction); await loadDetail(runId); }
+    catch (e) { setError(e.message); } finally { setBusy(false); }
+  };
 
   // Everything below derives from the CURRENT run only — while switching
   // weeks the stale detail shows skeletons, never last week's art.
@@ -321,7 +402,9 @@ export function ReviewDashboard() {
       ) : view ? (
         <RunView
           detail={view} busy={busy} running={running} pendingIds={pendingIds}
-          onApprove={approveArtworks} onReject={rejectArtworks} onToggleSave={toggleSave}
+          onApprove={approveArtworks} onReject={rejectArtworks}
+          onKeep={keepArtwork} onUnkeep={unkeepArtwork}
+          onVary={vary} onTweak={tweak} onPromote={promoteArtwork}
           onRetry={retryAnimate} onRegenerate={regenerate} onRegenerateOne={regenerateOne}
           mode={mode}
         />
@@ -483,7 +566,7 @@ function SkeletonHeading() {
   );
 }
 
-function RunView({ detail, busy, running, pendingIds, onApprove, onReject, onToggleSave, onRetry, onRegenerate, onRegenerateOne, mode }) {
+function RunView({ detail, busy, running, pendingIds, onApprove, onReject, onKeep, onUnkeep, onVary, onTweak, onPromote, onRetry, onRegenerate, onRegenerateOne, mode }) {
   const { artworks } = detail;
   // Saved (bookmarked) design ids — kept while regenerating, without approving.
   const savedSet = useMemo(() => new Set((detail.selections || []).map((s) => s.artwork_id)), [detail.selections]);
@@ -511,10 +594,11 @@ function RunView({ detail, busy, running, pendingIds, onApprove, onReject, onTog
     ...(a.stage === 'still' && a.status === 'approved' && a.error && !a.error.startsWith('qa:')
       ? { onRetry: () => onRetry(a.id) }
       : {}),
-    // Save toggle: bookmark a design so regeneration skips it — commitment-free
-    // (Scott: keep one he likes while re-rolling the rest, 2026-07-21).
-    ...(a.stage === 'still' && a.status !== 'superseded'
-      ? { saved: savedSet.has(a.id), onToggleSave: () => onToggleSave(a, savedSet.has(a.id)) }
+    // Plain stills get "⭐ Keep & explore" — anchor a favourite, then spin off
+    // variations (Scott: keep one he likes while re-rolling the rest, 2026-07-21).
+    // A kept still isn't a plain card anymore — it renders as an anchor instead.
+    ...(a.stage === 'still' && a.status !== 'superseded' && !savedSet.has(a.id)
+      ? { onKeep: () => onKeep(a) }
       : {}),
     // Replace just THIS design (approved and saved ones are protected —
     // Pass / unsave first).
@@ -534,14 +618,17 @@ function RunView({ detail, busy, running, pendingIds, onApprove, onReject, onTog
   const stillsOf = (style) =>
     artworks.filter((a) => a.stage === 'still' && a.style === style && a.status !== 'superseded');
 
-  // "n of 3 reviewed" — reviewed means you've said something about the design:
-  // approved, passed, or saved.
-  const chipFor = (stills) => {
-    if (!stills.length) return null;
-    const reviewed = stills.filter(
-      (s) => s.status === 'approved' || s.status === 'rejected' || savedSet.has(s.id),
-    ).length;
-    return { reviewed, total: stills.length };
+  // "n of N reviewed" — counts each surface's families/plain cards (NOT every
+  // variation, which would inflate the total). A kept anchor counts as
+  // reviewed; a plain card counts once it's approved or passed. `extra` folds
+  // in already-animated designs that live outside the family partition.
+  const chipFromUnits = ({ anchors, loners }, extra = []) => {
+    const items = [...loners, ...extra];
+    const total = anchors.length + items.length;
+    if (!total) return null;
+    const reviewed = anchors.length
+      + items.filter((s) => s.status === 'approved' || s.status === 'rejected').length;
+    return { reviewed, total };
   };
 
   // Per-sign "Redo unsaved designs" button, shown in each section header.
@@ -559,11 +646,45 @@ function RunView({ detail, busy, running, pendingIds, onApprove, onReject, onTog
   const connected = stillsOf('eon_connected');
   const singles = stillsOf('eon_single');
 
+  // Keep & explore grouping. keep/unkeep/promote flow to the whole family; the
+  // per-card approve/pass/vary/tweak are bound inside ExplorationFamily.
+  const familyHandlers = { onApprove, onReject, onUnkeep, onVary, onTweak, onPromote };
+  const spectacularU = partitionFamilies(spectacular, savedSet);
+  const singlesU = partitionFamilies(singles, savedSet);
+  // Connected: a design that's already been animated keeps its 3-pillar
+  // ConnectedSet view (past the exploration stage); only the still-stage
+  // designs go through family grouping so a kept wide design can be explored.
+  const connectedFaces = (still) => motionsByStill.get(still.id)?.slice(-3);
+  const connectedAnimated = connected.filter((s) => connectedFaces(s)?.length);
+  const connectedU = partitionFamilies(connected.filter((s) => !connectedFaces(s)?.length), savedSet);
+  const connectedRest = [...connectedAnimated, ...connectedU.loners].sort((a, b) => a.id - b.id);
+
+  // Anchors (kept designs + their variation rails) render full-width above each
+  // surface's plain-card layout. getMotion swaps in the keeper's video once it's
+  // been animated (connected keepers stay stills — their motion is a face set).
+  const renderAnchors = (anchors, getMotion) => (anchors.length > 0 ? (
+    <div className="mb-6 space-y-6">
+      {anchors.map(({ keeper, variations }) => {
+        const keeperMotion = getMotion(keeper);
+        return (
+          <ExplorationFamily
+            key={keeper.id} keeper={keeper} keeperMotion={keeperMotion} variations={variations}
+            animating={isAnimating(keeper, keeperMotion || null)} busy={busy} running={running}
+            pendingIds={pendingIds} handlers={familyHandlers}
+          />
+        );
+      })}
+    </div>
+  ) : null);
+  const latestMotion = (k) => motionsByStill.get(k.id)?.at(-1);
+  const noMotion = () => undefined;
+
   return (
     <div className="space-y-10">
-      <Section title="Spectacular — big street billboard" subtitle="3 design options · the one(s) you approve become 4K (3840×1062) videos with the black-frame look" chip={chipFor(spectacular)} action={regenFor('spectacular')}>
+      <Section title="Spectacular — big street billboard" subtitle="3 design options · the one(s) you approve become 4K (3840×1062) videos with the black-frame look" chip={chipFromUnits(spectacularU)} action={regenFor('spectacular')}>
+        {renderAnchors(spectacularU.anchors, latestMotion)}
         <div className="space-y-4">
-          {spectacular.map((still) => {
+          {spectacularU.loners.map((still) => {
             // .at(-1): after a re-roll, show the LATEST video.
             const motion = motionsByStill.get(still.id)?.at(-1);
             const a = motion || still;
@@ -572,10 +693,11 @@ function RunView({ detail, busy, running, pendingIds, onApprove, onReject, onTog
         </div>
       </Section>
 
-      <Section title="EON — 3-pillar set" subtitle="one wide design · its video gets split across the three pillars so the artwork travels from pillar to pillar" chip={chipFor(connected)} action={regenFor('eon_connected')}>
+      <Section title="EON — 3-pillar set" subtitle="one wide design · its video gets split across the three pillars so the artwork travels from pillar to pillar" chip={chipFromUnits(connectedU, connectedAnimated)} action={regenFor('eon_connected')}>
+        {renderAnchors(connectedU.anchors, noMotion)}
         <div className="space-y-6">
-          {connected.map((still) => {
-            const faces = motionsByStill.get(still.id)?.slice(-3); // latest set of 3 after re-rolls
+          {connectedRest.map((still) => {
+            const faces = connectedFaces(still); // latest set of 3 after re-rolls
             return faces?.length
               ? <ConnectedSet key={still.id} faces={faces} actions={groupActions(faces)} />
               : <div key={still.id} className="max-w-2xl"><Card artwork={still} actions={actionsFor(still)} animating={isAnimating(still, null)} saved={savedSet.has(still.id)} /></div>;
@@ -583,9 +705,10 @@ function RunView({ detail, busy, running, pendingIds, onApprove, onReject, onTog
         </div>
       </Section>
 
-      <Section title="EON — single pillar" subtitle="3 design options · approved ones become 4K-class (1280×1920) videos" chip={chipFor(singles)} action={regenFor('eon_single')}>
+      <Section title="EON — single pillar" subtitle="3 design options · approved ones become 4K-class (1280×1920) videos" chip={chipFromUnits(singlesU)} action={regenFor('eon_single')}>
+        {renderAnchors(singlesU.anchors, latestMotion)}
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-          {singles.map((still) => {
+          {singlesU.loners.map((still) => {
             const motion = motionsByStill.get(still.id)?.at(-1);
             const a = motion || still;
             return <Card key={still.id} artwork={a} actions={actionsFor(a)} animating={isAnimating(still, motion)} saved={savedSet.has(a.id)} />;
@@ -641,6 +764,59 @@ function ConnectedSet({ faces, actions }) {
       </div>
       <Actions {...actions} />
       {faces[0] && <Details artwork={faces[0]} />}
+    </div>
+  );
+}
+
+// A Keep & explore family: the kept ANCHOR up top, its variations rail beneath.
+// Approve/Pass/Un-keep settle optimistically; Vary/Tweak generate ($0.03) and
+// flip the run to 'running'. Every button is pre-bound to the right artwork id
+// here so AnchorCard/VariationCard stay purely presentational.
+function ExplorationFamily({ keeper, keeperMotion, variations, animating, busy, running, pendingIds, handlers }) {
+  const { onApprove, onReject, onUnkeep, onVary, onTweak, onPromote } = handlers;
+  const preview = keeperMotion || keeper; // show the keeper's video once animated
+  const familyIds = useMemo(
+    () => new Set([keeper.id, ...variations.map((v) => v.id)]),
+    [keeper.id, variations],
+  );
+  const gen = busy || running; // a generation locks the whole family
+  return (
+    <div className="rounded-xl border border-amber-500/30 bg-amber-500/[0.03] p-3">
+      <AnchorCard
+        artwork={preview}
+        animating={animating}
+        busy={gen || pendingIds.has(keeper.id)}
+        onApprove={() => onApprove([preview])}
+        onReject={() => onReject([preview])}
+        onVary={() => onVary(keeper.id)}
+        onTweak={(t) => onTweak(keeper.id, t)}
+        onUnkeep={() => onUnkeep(keeper)}
+      />
+      <div className="mt-3">
+        <p className="mb-2 text-[11px] leading-snug text-neutral-400">
+          Each new version is just $0.03 — your kept design stays safe. Promote one to make it the keeper.
+        </p>
+        {variations.length > 0 ? (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+            {variations.map((v) => (
+              <VariationCard
+                key={v.id}
+                artwork={v}
+                busy={gen || pendingIds.has(v.id)}
+                onApprove={() => onApprove([v])}
+                onReject={() => onReject([v])}
+                onPromote={() => onPromote(v, familyIds)}
+                onVary={() => onVary(v.id)}
+                onTweak={(t) => onTweak(v.id, t)}
+              />
+            ))}
+          </div>
+        ) : (
+          <p className="rounded border border-dashed border-neutral-800 px-3 py-2 text-[11px] text-neutral-500">
+            No other versions yet — use ↻ Vary for a fresh take, or ✎ Tweak to describe a change. Your kept design stays safe.
+          </p>
+        )}
+      </div>
     </div>
   );
 }

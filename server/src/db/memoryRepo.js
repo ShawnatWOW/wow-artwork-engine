@@ -131,6 +131,13 @@ export function createMemoryRepo({ persistPath = null } = {}) {
         motion_prompt: a.motionPrompt ?? null,
         source_still_id: a.sourceStillId ?? null,
         remote_url: a.remoteUrl ?? null,
+        // "Keep & explore" lineage: every design in one exploration family shares
+        // family_id (= the family's ORIGINAL design id); parent_artwork_id points
+        // at the design a variation was spawned from; change_note is a tweak's
+        // one-line summary of what it changed. All null for a plain still.
+        family_id: a.familyId ?? null,
+        parent_artwork_id: a.parentArtworkId ?? null,
+        change_note: a.changeNote ?? null,
         // Immutable cost ledger: the fal request id(s) that produced this row and
         // the USD it cost, computed at generation time from falPricing so spend
         // is never retroactively re-priced. null on old rows / fixtures.
@@ -153,6 +160,7 @@ export function createMemoryRepo({ persistPath = null } = {}) {
         thumbnailKey: 'thumbnail_key', status: 'status', error: 'error',
         stage: 'stage', motionPrompt: 'motion_prompt', remoteUrl: 'remote_url',
         falRequestId: 'fal_request_id', upscaleRequestId: 'upscale_request_id', costUsd: 'cost_usd',
+        familyId: 'family_id', parentArtworkId: 'parent_artwork_id', changeNote: 'change_note',
       };
       for (const [key, col] of Object.entries(map)) {
         if (patch[key] !== undefined) row[col] = patch[key];

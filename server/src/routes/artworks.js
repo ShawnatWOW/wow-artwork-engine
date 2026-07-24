@@ -16,7 +16,8 @@ import logger from '../config/logger.js';
 import { getRepo } from '../db/index.js';
 import { getStore } from '../services/storage/index.js';
 import { contentTypeFor } from '../services/storage/s3.js';
-import { animateRun, regenerateStill } from '../services/orchestrator.js';
+import { animateRun, regenerateStill, varyStill, tweakStill } from '../services/orchestrator.js';
+import { keepArtwork, promoteArtwork } from '../services/keeper.js';
 
 const router = Router();
 
@@ -95,6 +96,91 @@ router.post('/artworks/:id/regenerate', async (req, res, next) => {
         .catch((err) => { logger.error({ err: err.message }, 'Background per-design regenerate failed'); reject(err); });
     });
     res.status(202).json({ runId: run.id, artworkId: artwork.id, status: 'running' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ---- "Keep & explore" ------------------------------------------------------
+// Anchor a liked design, then explore variations of it (re-roll or tweak) while
+// the original is never lost; a variation can be promoted to the new keeper.
+
+// Keep (anchor) a still: bootstrap its family, select it, and demote any other
+// keeper in the family so there is exactly one. Only stills can be kept.
+router.post('/artworks/:id/keep', async (req, res, next) => {
+  try {
+    const artwork = await loadArtwork(req, res);
+    if (!artwork) return;
+    if (artwork.stage !== 'still') return res.status(400).json({ error: 'not_a_still', message: 'Only style designs can be kept.' });
+    const by = (req.body && req.body.selectedBy) || req.get('x-user-email') || null;
+    const updated = await keepArtwork({ artworkId: artwork.id, selectedBy: by, repo: getRepo() });
+    res.json({ artwork: updated });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Un-keep a still (drop its selection). The design itself is untouched.
+router.delete('/artworks/:id/keep', async (req, res, next) => {
+  try {
+    const artwork = await loadArtwork(req, res);
+    if (!artwork) return;
+    await getRepo().removeSelection(artwork.id);
+    res.status(204).end();
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Vary a still: RE-ROLL its stored prompt into one fresh same-family design.
+// 202 + poll GET /runs/:id (run.progress shows designs 0/1 → 1/1).
+router.post('/artworks/:id/vary', async (req, res, next) => {
+  try {
+    const artwork = await loadArtwork(req, res);
+    if (!artwork) return;
+    if (artwork.stage !== 'still') return res.status(400).json({ error: 'not_a_still', message: 'Only style designs can be varied.' });
+    if (artwork.status === 'superseded') return res.status(409).json({ error: 'already_replaced', message: 'This design was already replaced.' });
+
+    const run = await new Promise((resolve, reject) => {
+      varyStill({ artworkId: artwork.id, triggeredBy: req.get('x-user-email') || 'dashboard', onStart: resolve })
+        .catch((err) => { logger.error({ err: err.message }, 'Background vary failed'); reject(err); });
+    });
+    res.status(202).json({ runId: run.id, artworkId: artwork.id, status: 'running' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Tweak a still: an LLM edits ONLY the reviewer's plain-language change into the
+// design's prompt, then generates one fresh same-family design. 202 + poll.
+router.post('/artworks/:id/tweak', async (req, res, next) => {
+  try {
+    const artwork = await loadArtwork(req, res);
+    if (!artwork) return;
+    if (artwork.stage !== 'still') return res.status(400).json({ error: 'not_a_still', message: 'Only style designs can be tweaked.' });
+    if (artwork.status === 'superseded') return res.status(409).json({ error: 'already_replaced', message: 'This design was already replaced.' });
+    const instruction = req.body?.instruction;
+    if (!instruction?.trim()) return res.status(400).json({ error: 'empty_instruction' });
+
+    const run = await new Promise((resolve, reject) => {
+      tweakStill({ artworkId: artwork.id, instruction, triggeredBy: req.get('x-user-email') || 'dashboard', onStart: resolve })
+        .catch((err) => { logger.error({ err: err.message }, 'Background tweak failed'); reject(err); });
+    });
+    res.status(202).json({ runId: run.id, artworkId: artwork.id, status: 'running' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Promote a variation to be the family keeper: clear the family's selections and
+// select this one. The original design is never lost.
+router.post('/artworks/:id/promote', async (req, res, next) => {
+  try {
+    const artwork = await loadArtwork(req, res);
+    if (!artwork) return;
+    const by = (req.body && req.body.selectedBy) || req.get('x-user-email') || null;
+    const updated = await promoteArtwork({ artworkId: artwork.id, selectedBy: by, repo: getRepo() });
+    res.json({ artwork: updated });
   } catch (err) {
     next(err);
   }

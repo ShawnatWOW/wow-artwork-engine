@@ -26,6 +26,7 @@ import * as guardrailsModule from './guardrails.js';
 import * as qaModule from './qa.js';
 import { planJobs, POST, SURFACES, SPECS } from './generation/catalog.js';
 import { buildStillPrompt, buildMotionPrompt } from './generation/prompts.js';
+import { refineTweak } from './generation/tweak.js';
 import falPricing from './generation/falPricing.js';
 import { getProviders } from './generation/index.js';
 import { getStore, artworkKey } from './storage/index.js';
@@ -94,8 +95,18 @@ async function generateStill(job, ctx) {
   // promptSeed defaults to the week — regeneration salts it (see
   // regenerateStills) so fresh options don't repeat the retired designs.
   const seed = ctx.promptSeed || weekOf;
-  const prompt = buildStillPrompt({ style: job.style, specKey: job.specKey, option: job.option, weekOf: seed });
-  const motionPrompt = buildMotionPrompt({ style: job.style, specKey: job.specKey, option: job.option, weekOf: seed });
+  // "Keep & explore" callers (varyStill/tweakStill) pass an explicit prompt to
+  // re-run verbatim or after an LLM edit — use it as-is (skipping the template
+  // rebuild) and still run the guardrail on it below. Lineage threads the family
+  // links through to EVERY insert path (ready, qa-failed, blocked, error) so a
+  // variation stays attached to its family even if it fails.
+  const prompt = ctx.promptOverride ?? buildStillPrompt({ style: job.style, specKey: job.specKey, option: job.option, weekOf: seed });
+  const motionPrompt = ctx.motionPromptOverride ?? buildMotionPrompt({ style: job.style, specKey: job.specKey, option: job.option, weekOf: seed });
+  const lineage = {
+    familyId: ctx.familyId ?? null,
+    parentArtworkId: ctx.parentArtworkId ?? null,
+    changeNote: ctx.changeNote ?? null,
+  };
 
   // Guardrail BEFORE the (cheap) still spend.
   const check = guardrails.checkPrompt(prompt);
@@ -104,7 +115,7 @@ async function generateStill(job, ctx) {
     await repo.insertArtwork({
       runId, surface: job.surface, style: job.style, mediaType: 'still', stage: 'still',
       specKey: job.specKey, width: job.spec.width, height: job.spec.height,
-      prompt, motionPrompt, status: 'failed', error: reason,
+      prompt, motionPrompt, status: 'failed', error: reason, ...lineage,
     });
     logger.warn({ runId, surface: job.key, option: job.option, reason }, 'Still prompt blocked before spend');
     return { ready: 0, failed: 0, blocked: 1 };
@@ -137,7 +148,7 @@ async function generateStill(job, ctx) {
         specKey: job.specKey, width: job.gen.width, height: job.gen.height,
         prompt, motionPrompt, model: gen.model, remoteUrl: gen.url ?? null,
         s3KeyFinal: put.key, thumbnailKey: put.key,
-        status: 'failed', error: `qa: ${gate.reason}`, ...stillLedger,
+        status: 'failed', error: `qa: ${gate.reason}`, ...stillLedger, ...lineage,
       });
       logger.warn({ runId, surface: job.key, option: job.option, yavg: gate.yavg }, 'Still failed luma QA gate');
       return { ready: 0, failed: 1, blocked: 0 };
@@ -153,7 +164,7 @@ async function generateStill(job, ctx) {
       s3KeyFinal: put.key, thumbnailKey: put.key, status: 'ready',
       // Borderline-dark scenes reach review with an amber note (emissive LED
       // signs handle dark backgrounds; the reviewer decides).
-      error: gate.warn ? `qa: ${gate.reason}` : null, ...stillLedger,
+      error: gate.warn ? `qa: ${gate.reason}` : null, ...stillLedger, ...lineage,
     });
     return { ready: 1, failed: 0, blocked: 0 };
   } catch (err) {
@@ -161,7 +172,7 @@ async function generateStill(job, ctx) {
     await repo.insertArtwork({
       runId, surface: job.surface, style: job.style, mediaType: 'still', stage: 'still',
       specKey: job.specKey, width: job.spec.width, height: job.spec.height,
-      prompt, motionPrompt, status: 'failed', error: err.message,
+      prompt, motionPrompt, status: 'failed', error: err.message, ...lineage,
     });
     return { ready: 0, failed: 1, blocked: 0 };
   }
@@ -195,7 +206,10 @@ export async function regenerateStills({ runId, surfaceKey, triggeredBy = 'dashb
   // regeneration exactly like an approved design, but without committing to it.
   const selections = await repo.listSelections(runId);
   const savedIds = new Set(selections.map((s) => s.artwork_id));
-  const toRetire = mine.filter((x) => x.status !== 'approved' && x.status !== 'superseded' && !savedIds.has(x.id));
+  // Skip variations too (a parent_artwork_id): "keep & explore" designs are
+  // managed inside their family (re-roll / tweak / promote), never nuked by a
+  // whole-surface re-roll — same protection as kept/approved/superseded.
+  const toRetire = mine.filter((x) => x.status !== 'approved' && x.status !== 'superseded' && !savedIds.has(x.id) && !x.parent_artwork_id);
   // Refuse BEFORE flipping the run to 'running' (and before onStart resolves
   // the route) — nothing changed, so the run must stay reviewable and the
   // dashboard gets a clean 409 instead of a phantom in-progress state.
@@ -322,6 +336,118 @@ export async function regenerateStill({ artworkId, triggeredBy = 'dashboard', on
   } finally {
     if (!deps.workDir) await rm(workDir, { recursive: true, force: true }).catch(() => {});
   }
+}
+
+// ===========================================================================
+// KEEP & EXPLORE — variations of a liked still (re-roll / plain-language tweak)
+// ===========================================================================
+
+/**
+ * Shared machinery for a "keep & explore" variation: generate ONE new still
+ * into `source`'s family from an explicit prompt. Mirrors regenerateStill's
+ * run-status / workDir / progress / error handling — the only differences are
+ * that the PROMPT is supplied (not template-rebuilt) and the new row carries the
+ * family lineage. `resolvePrompt(source)` returns { promptOverride, changeNote }
+ * and runs AFTER the fast 202 (so a tweak's LLM edit is off the request path).
+ * @returns {Promise<{ runId, phase, status, artworkId, counts }>}
+ */
+async function spawnVariation({ source, resolvePrompt, triggeredBy, onStart, deps, label }) {
+  const { repo, guardrails, qa } = resolveDeps(deps);
+  const store = deps.store || (await getStore());
+  const providers = deps.providers || getProviders();
+
+  const surface = (deps.surfaces || SURFACES).find((s) => s.style === source.style);
+  if (!surface) throw new Error(`No surface for style "${source.style}"`);
+  const run = await repo.getRun(source.run_id);
+  if (!run) throw new Error(`Run ${source.run_id} not found`);
+
+  // Bootstrap the family: the first keep/vary/tweak of a plain still makes it the
+  // anchor of its own family (family_id = its own id) so every variation shares it.
+  let familyId = source.family_id;
+  if (!familyId) {
+    familyId = source.id;
+    await repo.updateArtwork(source.id, { familyId });
+  }
+
+  // The option slot only supplies the surface's gen dims (the PROMPT is an
+  // override); reuse regenerateStill's slot recovery from the storage key.
+  const optMatch = /\/opt(\d+)\//.exec(source.s3_key_final || source.thumbnail_key || '');
+  const option = optMatch ? Number(optMatch[1]) : 1;
+  const jobs = planJobs({ surfaces: [surface], optionsPerSurface: deps.optionsPerSurface });
+  const job = jobs.find((j) => j.option === option) || jobs[0];
+
+  // Mark running BEFORE onStart — same polling-race lesson as animateRun.
+  await repo.setRunStatus(run.id, 'running');
+  await onStart?.(run);
+  // Resolve the prompt after the 202 has been sent (a tweak's LLM call happens
+  // here, in the background, not while the reviewer's request is blocking).
+  const { promptOverride, changeNote = null } = await resolvePrompt(source);
+  logger.info({ runId: run.id, artworkId: source.id, familyId, surface: surface.key, label, triggeredBy, mode: providers.mode || config.generationMode }, `${label} started`);
+
+  const workDir = deps.workDir || (await mkdtemp(path.join(os.tmpdir(), `wae-${label}-${run.id}-`)));
+  try {
+    await repo.setRunProgress?.(run.id, { phase: 'designs', done: 0, total: 1 });
+    const counts = await generateStill(job, {
+      runId: run.id, weekOf: run.week_of, repo, store, providers, guardrails, qa, workDir,
+      promptOverride, motionPromptOverride: source.motion_prompt,
+      familyId, parentArtworkId: source.id, changeNote,
+    });
+    await repo.setRunProgress?.(run.id, { phase: 'designs', done: 1, total: 1 });
+    const status = counts.ready === 0 ? 'failed' : 'complete';
+    await repo.setRunStatus(run.id, status);
+    logger.info({ runId: run.id, artworkId: source.id, status }, `${label} finished`);
+    return { runId: run.id, phase: 'stills', status, artworkId: source.id, counts };
+  } catch (err) {
+    await repo.setRunStatus(run.id, 'failed', err.message);
+    logger.error({ runId: run.id, artworkId: source.id, err: err.message }, `${label} crashed`);
+    throw err;
+  } finally {
+    if (!deps.workDir) await rm(workDir, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
+/**
+ * RE-ROLL a liked still: generate a fresh take by re-running its STORED prompt
+ * verbatim (Seedream is stochastic, so the same prompt yields a new version of
+ * the same piece). The new still joins the source's family; the source is
+ * untouched. @returns {Promise<{ runId, phase, status, artworkId, counts }>}
+ */
+export async function varyStill({ artworkId, triggeredBy = 'dashboard', onStart, deps = {} } = {}) {
+  const { repo } = resolveDeps(deps);
+  const source = await repo.getArtwork(artworkId);
+  if (!source) throw new Error(`Artwork ${artworkId} not found`);
+  if (source.stage !== 'still') throw new Error('Only style designs can be varied');
+  if (source.status === 'superseded') throw new Error('This design was already replaced');
+  return spawnVariation({
+    source, triggeredBy, onStart, deps, label: 'vary',
+    // Re-roll reuses the stored prompt exactly; no change note.
+    resolvePrompt: (s) => ({ promptOverride: s.prompt, changeNote: null }),
+  });
+}
+
+/**
+ * PLAIN-LANGUAGE TWEAK of a liked still: an LLM edits ONLY the reviewer's
+ * requested change into the source's existing prompt (everything else
+ * preserved), then that edited prompt is generated as a new same-family still
+ * carrying the change note. The refiner is injectable (deps.refineTweak) so
+ * tests run offline. @returns {Promise<{ runId, phase, status, artworkId, counts }>}
+ */
+export async function tweakStill({ artworkId, instruction, triggeredBy = 'dashboard', onStart, deps = {} } = {}) {
+  const { repo } = resolveDeps(deps);
+  const source = await repo.getArtwork(artworkId);
+  if (!source) throw new Error(`Artwork ${artworkId} not found`);
+  if (source.stage !== 'still') throw new Error('Only style designs can be tweaked');
+  if (source.status === 'superseded') throw new Error('This design was already replaced');
+  // Injectable so tests never hit the network; refineTweak itself never throws
+  // (falls back to the original prompt + the instruction as the note).
+  const refine = deps.refineTweak || refineTweak;
+  return spawnVariation({
+    source, triggeredBy, onStart, deps, label: 'tweak',
+    resolvePrompt: async (s) => {
+      const { prompt, changeNote } = await refine({ prompt: s.prompt, instruction, style: s.style });
+      return { promptOverride: prompt, changeNote };
+    },
+  });
 }
 
 // ===========================================================================
@@ -556,4 +682,4 @@ async function animateStill(still, ctx) {
   return 1;
 }
 
-export default { runWeek, animateRun, regenerateStills, regenerateStill };
+export default { runWeek, animateRun, regenerateStills, regenerateStill, varyStill, tweakStill };

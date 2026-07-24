@@ -2,6 +2,16 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { createMemoryRepo } from '../src/db/memoryRepo.js';
+import { keepArtwork, promoteArtwork } from '../src/services/keeper.js';
+
+// A still row helper for the "keep & explore" family tests — no generation
+// needed; the keeper logic only reads/writes rows + selections.
+const stillIn = (repo, runId, extra = {}) => repo.insertArtwork({
+  runId, surface: 'eon', style: 'eon_single', mediaType: 'still', stage: 'still',
+  specKey: 'eon_face', width: 1280, height: 1920, status: 'ready', ...extra,
+});
+const pickIds = async (repo, runId) =>
+  (await repo.listSelections(runId)).map((s) => s.artwork_id).sort((x, y) => x - y);
 
 test('selections: add is idempotent per artwork, scoped to a run, and removable', async () => {
   const repo = createMemoryRepo();
@@ -48,6 +58,69 @@ test('listAllDeliveries: cross-run history, newest first, artwork + run attached
   assert.equal(all[0].run.week_of, '2026-08-17');
   assert.equal(all[1].artwork.surface, 'eon');
   assert.equal(all[1].run.week_of, '2026-08-10');
+});
+
+test('lineage columns round-trip on insert + update (family_id, parent_artwork_id, change_note)', async () => {
+  const repo = createMemoryRepo();
+  const run = await repo.createRun({ weekOf: '2026-08-10', triggeredBy: 'test' });
+
+  // Explicit lineage on insert.
+  const v = await stillIn(repo, run.id, { familyId: 7, parentArtworkId: 3, changeNote: 'made the sky teal' });
+  assert.equal(v.family_id, 7);
+  assert.equal(v.parent_artwork_id, 3);
+  assert.equal(v.change_note, 'made the sky teal');
+
+  // Absent → all null (a plain still never kept/varied).
+  const plain = await stillIn(repo, run.id);
+  assert.equal(plain.family_id, null);
+  assert.equal(plain.parent_artwork_id, null);
+  assert.equal(plain.change_note, null);
+
+  // updateArtwork maps the camelCase inputs to the snake_case columns.
+  const updated = await repo.updateArtwork(plain.id, { familyId: plain.id, changeNote: 'x' });
+  assert.equal(updated.family_id, plain.id);
+  assert.equal(updated.change_note, 'x');
+});
+
+test('keep: bootstraps the family and enforces exactly one keeper per family', async () => {
+  const repo = createMemoryRepo();
+  const run = await repo.createRun({ weekOf: '2026-08-10', triggeredBy: 'test' });
+  const A = await stillIn(repo, run.id);
+  const unrelated = await stillIn(repo, run.id); // a different design on the surface
+
+  // Keep A → family_id bootstraps to A.id and A is selected.
+  const keptA = await keepArtwork({ artworkId: A.id, repo });
+  assert.equal(keptA.family_id, A.id);
+  assert.deepEqual(await pickIds(repo, run.id), [A.id]);
+
+  // Two variations of A (as varyStill would insert them).
+  const V1 = await stillIn(repo, run.id, { familyId: A.id, parentArtworkId: A.id });
+  const V2 = await stillIn(repo, run.id, { familyId: A.id, parentArtworkId: A.id });
+
+  // Keep a variation → it becomes the ONLY selected member of the family; A is
+  // demoted. The unrelated design is never touched.
+  await keepArtwork({ artworkId: V1.id, repo });
+  assert.deepEqual(await pickIds(repo, run.id), [V1.id]);
+  assert.equal((await repo.listSelections(run.id)).some((s) => s.artwork_id === unrelated.id), false);
+  void V2;
+
+  // Only stills can be kept.
+  const motion = await repo.insertArtwork({ runId: run.id, surface: 'eon', style: 'eon_single', mediaType: 'video', stage: 'motion', specKey: 'eon_face', status: 'ready' });
+  await assert.rejects(() => keepArtwork({ artworkId: motion.id, repo }), /style designs can be kept/);
+});
+
+test('promote: a variation becomes the keeper; the original is never lost', async () => {
+  const repo = createMemoryRepo();
+  const run = await repo.createRun({ weekOf: '2026-08-10', triggeredBy: 'test' });
+  const A = await stillIn(repo, run.id);
+  await keepArtwork({ artworkId: A.id, repo }); // A is the keeper
+  const B = await stillIn(repo, run.id, { familyId: A.id, parentArtworkId: A.id });
+
+  await promoteArtwork({ artworkId: B.id, repo });
+  assert.deepEqual(await pickIds(repo, run.id), [B.id], 'B is the sole keeper');
+  // A still exists (the original is never deleted), just no longer selected.
+  assert.ok(await repo.getArtwork(A.id));
+  assert.equal((await repo.getArtwork(A.id)).status, 'ready');
 });
 
 test('approve/reject flips artwork status via updateArtwork', async () => {

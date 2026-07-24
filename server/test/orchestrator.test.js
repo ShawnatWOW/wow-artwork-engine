@@ -6,7 +6,8 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
-import { runWeek, animateRun } from '../src/services/orchestrator.js';
+import { runWeek, animateRun, varyStill, tweakStill } from '../src/services/orchestrator.js';
+import { keepArtwork, promoteArtwork } from '../src/services/keeper.js';
 import { createMemoryRepo } from '../src/db/memoryRepo.js';
 import { createLocalStore } from '../src/services/storage/local.js';
 import { SURFACES } from '../src/services/generation/catalog.js';
@@ -271,6 +272,141 @@ test('regenerateStill: replaces ONE design only — siblings, other signs, appro
     // Guards: non-stills and already-replaced cards are refused.
     await assert.rejects(() => regenerateStill({ artworkId: target.id, deps: { repo, store, providers } }), /already replaced/);
     assert.equal((await repo.getRun(runId)).status, 'complete');
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
+});
+
+test('varyStill: re-rolls the stored prompt into a new same-family still; source untouched', async (t) => {
+  if (!(await hasFfmpeg())) return t.skip('ffmpeg not installed');
+  const { base, repo, store } = await harness();
+  try {
+    const { runId } = await runWeek({
+      weekOf: '2026-08-10', triggeredBy: 'test',
+      deps: { repo, store, providers, optionsPerSurface: 1, duration: 1 },
+    });
+    const source = (await repo.listArtworks(runId)).find((a) => a.style === 'eon_single');
+    const srcBefore = { ...source };
+
+    const summary = await varyStill({ artworkId: source.id, deps: { repo, store, providers, duration: 1 } });
+    assert.equal(summary.status, 'complete');
+    assert.equal(summary.counts.ready, 1);
+
+    const variation = (await repo.listArtworks(runId)).find((a) => a.parent_artwork_id === source.id);
+    assert.ok(variation, 'a variation row was created');
+    assert.equal(variation.stage, 'still');
+    assert.equal(variation.status, 'ready');
+    assert.equal(variation.style, source.style, 'same style as the source');
+    assert.equal(variation.family_id, source.id, 'joins the (bootstrapped) family');
+    assert.equal(variation.parent_artwork_id, source.id);
+    assert.equal(variation.prompt, srcBefore.prompt, 're-roll reuses the stored prompt verbatim');
+    assert.equal(variation.motion_prompt, srcBefore.motion_prompt, 'motion prompt preserved');
+    assert.equal(variation.change_note, null, 'a re-roll writes no change note');
+
+    // Source untouched except the family bootstrap (family_id = its own id).
+    const srcAfter = await repo.getArtwork(source.id);
+    assert.equal(srcAfter.status, 'ready');
+    assert.equal(srcAfter.prompt, srcBefore.prompt);
+    assert.equal(srcAfter.family_id, source.id);
+    assert.equal((await repo.getRun(runId)).status, 'complete');
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
+});
+
+test('tweakStill: LLM-edited prompt + change note, refiner injected (offline)', async (t) => {
+  if (!(await hasFfmpeg())) return t.skip('ffmpeg not installed');
+  const { base, repo, store } = await harness();
+  try {
+    const { runId } = await runWeek({
+      weekOf: '2026-08-10', triggeredBy: 'test',
+      deps: { repo, store, providers, optionsPerSurface: 1, duration: 1 },
+    });
+    const source = (await repo.listArtworks(runId)).find((a) => a.style === 'eon_single');
+
+    // Injected refiner — proves the tweak path runs with NO network.
+    const refineTweak = async ({ prompt, instruction }) => ({ prompt: `${prompt} EDIT:${instruction}`, changeNote: `did ${instruction}` });
+    const summary = await tweakStill({
+      artworkId: source.id, instruction: 'make it teal',
+      deps: { repo, store, providers, duration: 1, refineTweak },
+    });
+    assert.equal(summary.status, 'complete');
+    assert.equal(summary.counts.ready, 1);
+
+    const variation = (await repo.listArtworks(runId)).find((a) => a.parent_artwork_id === source.id);
+    assert.ok(variation.prompt.includes('EDIT:make it teal'), 'the LLM-edited prompt was used');
+    assert.notEqual(variation.prompt, source.prompt, 'a tweak changes the prompt');
+    assert.equal(variation.change_note, 'did make it teal', 'change note stored');
+    assert.equal(variation.family_id, source.id);
+    assert.equal(variation.parent_artwork_id, source.id);
+    assert.equal(variation.style, source.style);
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
+});
+
+test('keep + vary: a family of three has exactly one keeper; promote moves it', async (t) => {
+  if (!(await hasFfmpeg())) return t.skip('ffmpeg not installed');
+  const { base, repo, store } = await harness();
+  try {
+    const { runId } = await runWeek({
+      weekOf: '2026-08-10', triggeredBy: 'test',
+      deps: { repo, store, providers, optionsPerSurface: 1, duration: 1 },
+    });
+    const A = (await repo.listArtworks(runId)).find((a) => a.style === 'eon_single');
+
+    // Keep A, then vary it twice → a family of 3 (A + two variations).
+    await keepArtwork({ artworkId: A.id, repo });
+    await varyStill({ artworkId: A.id, deps: { repo, store, providers, duration: 1 } });
+    await varyStill({ artworkId: A.id, deps: { repo, store, providers, duration: 1 } });
+    const family = (await repo.listArtworks(runId)).filter((x) => x.family_id === A.id && x.status !== 'superseded');
+    assert.equal(family.length, 3, 'anchor + two variations share the family');
+
+    // Keep one variation → it is the sole keeper; A (and the sibling) are demoted.
+    const variation = family.find((x) => x.parent_artwork_id === A.id);
+    await keepArtwork({ artworkId: variation.id, repo });
+    let picks = (await repo.listSelections(runId)).filter((s) => family.some((f) => f.id === s.artwork_id));
+    assert.deepEqual(picks.map((s) => s.artwork_id), [variation.id], 'exactly one keeper in the family');
+
+    // Promote the original back → keeper moves to A; both still exist.
+    await promoteArtwork({ artworkId: A.id, repo });
+    picks = (await repo.listSelections(runId)).filter((s) => family.some((f) => f.id === s.artwork_id));
+    assert.deepEqual(picks.map((s) => s.artwork_id), [A.id]);
+    assert.ok(await repo.getArtwork(variation.id), 'the variation is never lost');
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
+});
+
+test('regenerateStills skips variations: a surface re-roll retires unsaved siblings but never the family', async (t) => {
+  if (!(await hasFfmpeg())) return t.skip('ffmpeg not installed');
+  const { base, repo, store } = await harness();
+  try {
+    // Two eon_single stills: A (kept + varied) and S (an unsaved sibling).
+    const { runId } = await runWeek({
+      weekOf: '2026-08-10', triggeredBy: 'test',
+      deps: { repo, store, providers, optionsPerSurface: 2, duration: 1 },
+    });
+    const eon = (await repo.listArtworks(runId)).filter((a) => a.style === 'eon_single');
+    const A = eon[0];
+    const S = eon[1];
+    await keepArtwork({ artworkId: A.id, repo });
+    await varyStill({ artworkId: A.id, deps: { repo, store, providers, duration: 1 } });
+    const B = (await repo.listArtworks(runId)).find((a) => a.parent_artwork_id === A.id);
+    const bBefore = await repo.getArtwork(B.id);
+
+    const { regenerateStills } = await import('../src/services/orchestrator.js');
+    const summary = await regenerateStills({
+      runId, surfaceKey: 'eon_single',
+      deps: { repo, store, providers, optionsPerSurface: 2, duration: 1 },
+    });
+    assert.equal(summary.status, 'complete');
+
+    // Only the unsaved sibling S is retired; the kept anchor A and the variation
+    // B both survive (B byte-for-byte untouched).
+    assert.equal((await repo.getArtwork(S.id)).status, 'superseded');
+    assert.equal((await repo.getArtwork(A.id)).status, 'ready', 'kept anchor untouched');
+    assert.deepEqual(await repo.getArtwork(B.id), bBefore, 'variation untouched by the surface re-roll');
   } finally {
     await rm(base, { recursive: true, force: true });
   }

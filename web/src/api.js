@@ -44,6 +44,14 @@ export const api = {
   unselect: (id) => req('DELETE', `/artworks/${id}/select`),
   approve: (id) => req('POST', `/artworks/${id}/approve`),
   reject: (id) => req('POST', `/artworks/${id}/reject`),
+  // Keep & explore: anchor a favourite design, then explore variations of it.
+  // keep/unkeep/promote settle instantly (they only move the keeper marker);
+  // vary/tweak are 202 + poll — they generate a new family member ($0.03).
+  keep: (id) => req('POST', `/artworks/${id}/keep`),
+  unkeep: (id) => req('DELETE', `/artworks/${id}/keep`),
+  vary: (id) => req('POST', `/artworks/${id}/vary`),
+  tweak: (id, instruction) => req('POST', `/artworks/${id}/tweak`, { instruction }),
+  promote: (id) => req('POST', `/artworks/${id}/promote`),
   handoffPreview: (runId) => req('GET', `/runs/${runId}/handoff`),
   sendHandoff: (runId, payload) => req('POST', `/runs/${runId}/handoff`, payload),
   // Cross-run history of everything ever sent to Jeff.

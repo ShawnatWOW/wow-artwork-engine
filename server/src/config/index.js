@@ -87,6 +87,16 @@ const config = {
     apiKey: process.env.GEMINI_API_KEY,
   },
 
+  // OpenAI powers the plain-language "tweak" — an LLM edits ONLY the reviewer's
+  // requested change into a design's existing prompt. Accepts either env name
+  // (the shared prod .env already provides OPEN_AI_API_KEY for wow-contract-query).
+  // Empty key is fine: refineTweak falls back to a labeled re-roll, never errors.
+  openai: {
+    apiKey: process.env.OPENAI_API_KEY || process.env.OPEN_AI_API_KEY || '',
+    model: process.env.ARTWORK_TWEAK_MODEL || 'gpt-4o-mini',
+    baseUrl: process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1',
+  },
+
   // Brand guardrails (locked: loose — block nudity only). Config-driven so
   // more rules can be added later without code changes.
   guardrails: {

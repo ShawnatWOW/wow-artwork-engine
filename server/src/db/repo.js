@@ -24,6 +24,10 @@ const ARTWORK_COLUMNS = {
   stage: 'stage',
   motionPrompt: 'motion_prompt',
   remoteUrl: 'remote_url',
+  // "Keep & explore" lineage (see migration 006_keep_and_explore.sql).
+  familyId: 'family_id',
+  parentArtworkId: 'parent_artwork_id',
+  changeNote: 'change_note',
 };
 
 export const pgRepo = {
@@ -62,8 +66,9 @@ export const pgRepo = {
       `INSERT INTO artworks
          (run_id, surface, style, media_type, spec_key, width, height,
           duration_s, prompt, model, s3_key_raw, s3_key_final, thumbnail_key, status, error,
-          stage, motion_prompt, source_still_id, remote_url)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+          stage, motion_prompt, source_still_id, remote_url,
+          family_id, parent_artwork_id, change_note)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
        RETURNING *`,
       [
         a.runId, a.surface, a.style, a.mediaType, a.specKey,
@@ -73,6 +78,7 @@ export const pgRepo = {
         a.status ?? 'generating', a.error ?? null,
         a.stage ?? 'motion', a.motionPrompt ?? null, a.sourceStillId ?? null,
         a.remoteUrl ?? null,
+        a.familyId ?? null, a.parentArtworkId ?? null, a.changeNote ?? null,
       ],
     );
     return rows[0];
