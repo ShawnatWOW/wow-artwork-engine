@@ -1,7 +1,17 @@
 {
   "_meta": {
     "purpose": "Fast-load context for the WOW Artwork Engine. Read this first each session to know where we are without re-deriving from code. Keep updated as the project moves.",
-    "lastUpdated": "2026-07-18",
+    "lastUpdated": "2026-07-25",
+    "humanReadableStatus": "STATUS.md (this file's plain-English companion — full changelog + current state)",
+    "recentWork": [
+      "2026-07-24: Keep & explore — anchor a liked design; variations rail (re-roll + plain-language LLM tweak); original never lost; promote. First LLM in the engine (services/generation/tweak.js, OpenAI, graceful fallback to re-roll). Lineage: family_id/parent_artwork_id/change_note; keeper = selections row. LIVE (PR #234).",
+      "2026-07-22: Perf + UX overhaul — LazyVideo (in-view only; was 9+ 4K streams on load), optimistic per-card actions, skeletons, guided 1-2-3 stepper, 'N reviewed' chips. LIVE (PR #233).",
+      "2026-07-22: Save-through-regen + cross-run Sent-to-Jeff history (GET /api/deliveries). LIVE (PR #232).",
+      "2026-07-21: Real 3D pop-out — black frame painted INTO the art (subject bursts through), composite letterbox removed. Per-design regen + live progress + failure banners. LIVE.",
+      "2026-07-19..21: Accurate itemized cost model (fal token formula) + immutable per-generation ledger + cross-project reconciliation (GET /api/cost/reconciliation; FAL_ADMIN_KEY set). LIVE (PR #230).",
+      "2026-07-14..15: 4K pipeline (Seedance 1080p + Topaz 2x upscale) + scene-wide motion overhaul + per-sign regeneration + 15s clips. LIVE."
+    ],
+    "testCount": "engine 83/83 (server/), offline; frontends build clean",
     "maintainer": "shawn@wowmedia.com",
     "repo": "github.com/ShawnatWOW/wow-artwork-engine",
     "productionRepo": "wow-contract-query (the Artwork Engine tab lives inside WOW's existing dashboard)"

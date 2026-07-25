@@ -1,107 +1,137 @@
 # WOW Artwork Engine — Status Update
 
-**Last updated:** 2026-07-11 · **Delivery target:** 2026-08-14 · **Spent so far:** ~$2 (live validation)
+**Last updated:** 2026-07-25 · **State:** ✅ Live in production, fully featured · **Maintainer:** shawn@wowmedia.com
 
-> **🚀 LIVE IN PRODUCTION (2026-07-11).** The Artwork Engine tab is on
-> **wowautomation.ai** — Scott can use it now. LIVE mode: real art on button-press
-> (~$0.30 per batch of 9 style stills); the weekly auto-run stays OFF until launch
-> sign-off. Open wowautomation.ai → **Artwork Engine** → "Generate styles".
-
----
-
-## 🔒 MUST-DO BEFORE LAUNCH (blocking)
-
-- [ ] **Rotate the leaked Google service-account key.** The file
-  `google-drive-server-account.json` is committed in the `wow-contract-query` repo — a live
-  credential in source control. **Shawn:** find which Google Cloud project owns that service
-  account (needs digging), create a new key + delete the old one, then scrub it from git
-  history. Full steps in [KEYS.md](KEYS.md) → "Rotate the compromised key." Tracked in Linear.
-  *The project must not go live until this is done.*
+> **🚀 LIVE.** The **Artwork Engine** tab is in WOW's dashboard (wow-contract-query,
+> **wowautomation.ai**). Scott can generate, review, keep/explore, tweak, approve, and
+> ship artwork to Jeff today. Runs in **LIVE mode** (real AI spend on button-press).
+> The weekly auto-scheduler stays **OFF** until you flip it on.
 
 ---
 
-## What this project is (in one line)
+## What this is (one line)
 
-A weekly "art studio" for WOW's billboards: every week it **makes** fresh artwork →
-someone **picks** the good ones on a screen → it **sends** the picks to Jeff, already
-sized and ready to run.
-
-The work is split into four stages (M1–M4).
+A weekly "art studio" for WOW's billboards: it **makes** fresh AI artwork → Scott
+**reviews and picks** on a screen → it **ships** the picks to Jeff, already sized and
+ready to run. Two-phase and human-gated: cheap **style stills** first ($0.03 each),
+then expensive **4K videos** only on the designs Scott approves.
 
 ---
 
-## Progress
+## The signs it makes each week
 
-| Stage | What it means (plain terms) | Status |
+| Sign | Final output | Look |
 |---|---|---|
-| **M1 — The art machine** | Makes a full week of artwork automatically. Two-phase: cheap **style stills** first, animate only the ones Scott approves. **Validated with real AI art** (Seedream + Seedance, fal key live). | ✅ **Done, live-validated** |
-| **M2 — The review screen** | The "Artwork Engine" tab in your WOW dashboard: watch options, Approve / Reject / Retry, honest LIVE-vs-$0 indicator, step-by-step flow. Art-director + UX reviews applied. | ✅ **Done, deployed to staging** |
-| **M3 — Send to Jeff** | One-click ship of approved art to Google Drive + an email to Jeff (as a real @wowmedia.com person), with a Review & send dialog. | ✅ **Done & tested** (offline; goes live with Drive/Gmail keys) |
-| **M4 — Final testing + go live** | Scott reviews on staging → promote to production. Includes the 🔒 key rotation above, a database on the server, and remaining polish (tweak/re-roll, undo, lightbox). | 🟡 **In progress — staging live** |
+| **Spectacular** (street billboard) | 4K 3840×1062 | 3D "pop-out" — subject bursts out of a black frame painted into the art |
+| **EON — 3-pillar set** | one wide master → split across 3× 1280×1920 pillars | the artwork travels pillar-to-pillar |
+| **EON — single pillar** | 4K-class 1280×1920 | standalone vertical piece |
+
+3 options per sign each week. Psychedelic, high-saturation, characterful creatures
+(koi, octopus, peacock, jellyfish…), full-scene motion with real 3D depth.
 
 ---
 
-## What's working right now
+## What Scott can do on the dashboard
 
-- The art machine produces a complete week: **3 Spectacular options, 3 connected EON
-  options, 3 single EON options** — 15 finished pieces — all sized to spec.
-- **Right now it uses free stand-in "placeholder" art**, so the whole pipeline runs and
-  can be tested **without spending anything**. When the real AI keys are added, the same
-  machine makes real art — nothing else changes.
-- The review screen was tested end-to-end: it generated the week, played every piece,
-  and correctly saved picks and approvals.
-- A safety rule is built in: **the system checks each idea before it ever spends money**,
-  so a blocked request can't run up a bill.
+1. **Generate** a week of designs (or redo one sign, or one design).
+2. **Review** each option — approve, pass, or explore.
+3. **⭐ Keep & explore** a design he likes → it's locked safe, with a **variations rail**:
+   - **↻ Vary** — another version of the same piece
+   - **✎ Tweak…** — type a plain-language change ("more electric blue, calmer background");
+     an LLM edits *only that* into the prompt and regenerates, with a note on what changed
+   - **⭐ Make keeper** — promote a variation; the original is never lost
+4. **Make videos** from approved designs (4K, ~$11.40 each) — with a live progress counter.
+5. **Approve videos**, then **✉ Send to Jeff** (Google Drive + Gmail).
+6. **📤 Sent history** — every delivery ever made to Jeff, with Drive links.
 
-## How it fits WOW's existing setup (per your instruction)
-
-- Built to plug into **your existing WOW system** (the same setup as the Broken News
-  project, at **wowautomation.ai**) — **not** a separate new system.
-- The review screen is built to appear as a **new tab** in your existing WOW dashboard.
-- It reuses your existing servers and database rather than standing up new ones.
-- Everything is **tracked in Linear**: one project ("WOW Artwork Engine") with a task for
-  each stage (M0–M4).
+Guided **1 Pick designs → 2 Make videos → 3 Send to Jeff** flow, one clear next action
+at a time, "N of 3 reviewed" progress per sign.
 
 ---
 
-## Done ✅
+## Build stages
 
-1. **Saved & backed up.** Both stages are pushed to GitHub and opened as a pull request
-   for review: **https://github.com/ShawnatWOW/wow-artwork-engine/pull/1**.
-2. **Access confirmed.** GitHub and AWS are already connected on this machine — including
-   the live dashboard repo (`wow-contract-query`). So I can do the dashboard tab myself;
-   no access step needed from you.
+| Stage | Plain terms | Status |
+|---|---|---|
+| **M1 — The art machine** | Makes a full week automatically; two-phase (stills → approved-only videos). | ✅ Done, live |
+| **M2 — The review screen** | The Artwork Engine tab: review, approve, keep/explore, tweak. | ✅ Done, live |
+| **M3 — Send to Jeff** | One-click ship to Google Drive + Gmail; sent-history log. | ✅ Done, live |
+| **M4 — Go live + polish** | 4K pop-out, accurate costs, per-design regen, keep & explore, perf/UX overhaul. | ✅ Shipped |
 
-## What I need from you
+---
 
-1. **A "go" to add the review screen into your live dashboard** (`wow-contract-query`,
-   the `dev` branch). I can do it now — just confirm you want it and I'll open a PR there.
-2. **The keys — but only when we start delivery + going live.** Full plain-language list
-   with where to get each: see [KEYS.md](KEYS.md). Nothing is needed today; the system
-   runs at $0 until then.
+## Changelog (this delivery arc)
+
+- **2026-07-24 — Keep & explore.** Anchor a liked design; generate variations (re-roll
+  *or* plain-language LLM tweak) in a rail beneath it; original never lost; promote a
+  variation to keeper. First LLM in the engine (OpenAI, graceful fallback to a re-roll).
+- **2026-07-22 — Perf + UX overhaul.** Lazy in-view video (was 9+ 4K streams on load →
+  thumbnails first), optimistic per-card actions (no more whole-page freeze on a click),
+  skeletons, guided 1→2→3 stepper, "N reviewed" chips.
+- **2026-07-22 — Save + Sent history.** Keep a design through regenerations; cross-run
+  "Sent to Jeff" history.
+- **2026-07-21 — Real 3D pop-out.** The black frame is now painted into the artwork (subject
+  bursts through it), replacing the post-composited letterbox that clipped the art behind it.
+- **2026-07-21 — Per-design regen, live progress, loud failures.** Regenerate one card;
+  "Creating designs… 3/9" counters; failed batches say why instead of showing nothing.
+- **2026-07-19–21 — Accurate cost model + cross-project reconciliation.** fal's exact
+  token-formula pricing; immutable per-generation cost ledger; a reconciliation view that
+  splits the shared fal bill across Artwork + Content Automation (Broken News is separate).
+- **2026-07-14–15 — 4K pipeline + motion overhaul.** Seedance 1080p → Topaz 2× upscale to
+  4K; 15s clips; aggressive 3D choreography and dynamic backgrounds. Per-sign regeneration.
+- **2026-07-11–12 — Live in production.** Tab shipped to wowautomation.ai; state persists
+  across restarts; plain-English UX; media-URL + polling-race fixes.
 
 ---
 
 ## Money & safety
 
-- **$0 spent.** Nothing has touched a paid AI service; everything runs on free placeholder
-  media by default.
-- No real art gets generated — and no bill is possible — until the keys are added **and**
-  live mode is explicitly turned on.
+- **Real cost model (verified against fal, 2026-07-19).** Still = **$0.03**;
+  full-4K video = **~$11.40** (Seedance 1080p ~$10.20 + Topaz 4K ~$1.20). A batch where
+  Scott animates one option per sign ≈ **~$35**; every option ≈ **~$100+**.
+- **The gate that protects the budget:** stills are cheap and reviewed first; only
+  approved designs ever become $11 videos. Exploring variations/tweaks is $0.03 each.
+- **Shared fal account.** One fal account bills **Artwork + Content Automation + Broken
+  News** together, so fal's own dashboard shows all three combined. Our per-generation
+  **ledger** (recorded on each row) is the only artwork-specific figure; the reconciliation
+  view (needs the fal admin key, now set) shows the split + any unattributed remainder.
+- **Safety guardrail runs before every spend** — including on LLM-tweaked prompts — so a
+  blocked idea (people/text/nudity) can't run up a bill.
+
+---
+
+## Open items
+
+- **🔒 Rotate the leaked Google service-account key** (`google-drive-server-account.json`,
+  historically committed in `wow-contract-query`). Standing security task — confirm it's
+  rotated + scrubbed from git history if not already done. Tracked in Linear (DEL-143).
+- **Weekly auto-run** (`SCHEDULER_ENABLED`) stays OFF until you want hands-off Mondays.
+- **Housekeeping:** `wow-contract-query` `dev` branch is behind `master` — sync when convenient.
 
 ---
 
 <details>
 <summary>Under the hood (for the technically curious)</summary>
 
-- Backend: Node + Express, generation worker + weekly scheduler in-process, PostgreSQL,
-  local/S3 asset store. Review API under `/api` (`/runs`, `/artworks/...`).
-- Dashboard: React + Vite + Tailwind in `web/`, built to embed as a tab in
-  `unstuckllc/wow-contract-query`.
-- Runs with no database (in-memory fallback) so it demos at $0. 37/37 tests pass; M1 + M2
-  committed on branch `m1-generation-engine` (not yet pushed).
-- Deploy model matches WOW Content Automation: EC2 + PM2, GitHub `dev`→staging /
-  `master`→production. Handoff email will use the Gmail API service account.
-- See `WOW_Artwork_Engine_Build_Plan.md` and `server/README.md` for detail.
+- **Two repos.** `wow-artwork-engine` = the engine (Node + Express, generation worker,
+  scheduler, local/S3 store) running as its own PM2 app on :4000. The **Artwork Engine tab**
+  lives inside `wow-contract-query` (React + Vite + Tailwind), which proxies to the engine.
+- **Generation.** Stills = Seedream v4; motion = Seedance 2.0 (1080p) → Topaz 2× upscale to
+  4K; all on fal.ai. Prompts are deterministic templates; the **tweak** feature adds an
+  OpenAI prompt-editor (`services/generation/tweak.js`) that never throws (falls back to a
+  re-roll with no key).
+- **Data.** File-backed in-memory repo persisted to JSON (survives PM2 restarts); Postgres
+  path kept in parity (migrations for new columns). Lineage for keep & explore: `family_id`,
+  `parent_artwork_id`, `change_note`; keeper = a `selections` row.
+- **Cost.** Canonical price book (`services/generation/falPricing.js`, fal's exact token
+  formula) mirrored into `wow-contract-query`; immutable `cost_usd` + `fal_request_id` per
+  row; reconciliation endpoint `GET /api/cost/reconciliation`.
+- **Deploy.** EC2 + PM2; GitHub `dev`→staging / `master`→production. Prod `.env` +
+  service-account JSON pulled from S3 (`wow-server--use2-az1--x-s3`, a directory bucket in
+  us-east-2) at deploy time. A `master` merge deploys **both** repos.
+- **Tests.** 83/83 in the engine (`server/`), fully offline (LLM injectable). Frontends
+  build clean (tsc + vite).
+- See `WOW_Artwork_Engine_Build_Plan.md`, `KEYS.md`, `DEPLOY.md`, `server/README.md`,
+  and the fast-load `PROJECT_STATUS.json` for detail.
 
 </details>
