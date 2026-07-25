@@ -33,6 +33,11 @@ import { getStore, artworkKey } from './storage/index.js';
 import { getRepo } from '../db/index.js';
 import { weekOfFor } from './dates.js';
 
+// Ceiling on one "Add another design" click. Each still is a real (small)
+// spend, so the button can't be turned into an unbounded batch by a stray
+// payload — the reviewer clicks again if they want more.
+const MAX_ADD_AT_ONCE = 3;
+
 const even = (n) => Math.max(2, Math.floor(n / 2) * 2);
 const thumbDims = (spec) => ({ width: even(spec.width / 2), height: even(spec.height / 2) });
 
@@ -146,7 +151,16 @@ async function generateStill(job, ctx) {
     const gen = await providers.still.generate({
       width: job.gen.width, height: job.gen.height, ratio: job.gen.ratio, output: stillPath, prompt,
     });
-    const key = artworkKey({ runId, surfaceKey: job.key, option: job.option, name: 'still.png' });
+    // Every generation gets its own file. Keying on (run, surface, option slot)
+    // alone meant a variation, a re-roll or a per-design regenerate silently
+    // overwrote the design it was spawned from — the kept "original" was still
+    // a row, but its pixels had been replaced. The sequence is the count of
+    // stills the run has already produced, so it is unique and monotonic
+    // (generation is sequential) without needing the not-yet-assigned row id.
+    const priorStills = (await repo.listArtworks(runId)).filter((a) => a.stage === 'still').length;
+    const key = artworkKey({
+      runId, surfaceKey: job.key, option: job.option, variant: `g${priorStills + 1}`, name: 'still.png',
+    });
     const put = await store.put({ key, sourcePath: stillPath });
 
     // The Seedream image was billed the moment it generated ($0.03 flat), even
@@ -292,6 +306,77 @@ export async function regenerateStills({ runId, surfaceKey, triggeredBy = 'dashb
   } catch (err) {
     await repo.setRunStatus(runId, 'failed', err.message);
     logger.error({ runId, surface: surfaceKey, err: err.message }, 'Per-surface regenerate crashed');
+    throw err;
+  } finally {
+    if (!deps.workDir) await rm(workDir, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
+/**
+ * ADD more design options to ONE surface inside an existing run — the per-sign
+ * "Add another design" button. Nothing is retired: every existing design (liked
+ * or not, saved or not, approved or not) stays exactly where it is and the new
+ * options land beside them in fresh slots.
+ *
+ * This is the counterpart to regenerateStills, which REPLACES. Scott's case
+ * (2026-07-26): "I may like all 3 Spectacular pieces but want to see a 4th" —
+ * regenerate refuses outright once everything is saved or approved, because
+ * replacing is exactly what he doesn't want.
+ *
+ * The new option's slot number also drives its theme + choreography (prompts
+ * are seeded on the option), so a 4th design is a genuinely different piece
+ * rather than another roll of the same three.
+ * @returns {Promise<{ runId, phase, status, surface, added, counts, artworks }>}
+ */
+export async function addStills({ runId, surfaceKey, count = 1, triggeredBy = 'dashboard', onStart, deps = {} } = {}) {
+  const { repo, guardrails, qa } = resolveDeps(deps);
+  const store = deps.store || (await getStore());
+  const providers = deps.providers || getProviders();
+
+  const surface = (deps.surfaces || SURFACES).find((s) => s.key === surfaceKey);
+  if (!surface) throw new Error(`Unknown surface "${surfaceKey}"`);
+  const run = await repo.getRun(runId);
+  if (!run) throw new Error(`Run ${runId} not found`);
+
+  const wanted = Math.max(1, Math.min(Number(count) || 1, MAX_ADD_AT_ONCE));
+  const existing = await repo.listArtworks(runId);
+  // Next free slot = one past the highest this surface has EVER used, including
+  // superseded designs — reusing a retired design's slot would hand the new
+  // piece that design's theme, which is the opposite of "show me another one".
+  const mine = existing.filter((a) => a.stage === 'still' && a.style === surface.style);
+  const highest = mine.reduce((max, a) => {
+    const m = /\/opt(\d+)\//.exec(a.s3_key_final || a.thumbnail_key || '');
+    return Math.max(max, m ? Number(m[1]) : 0);
+  }, 0);
+  const firstSlot = Math.max(highest, mine.length) + 1;
+
+  // Mark running BEFORE onStart — same polling-race lesson as animateRun.
+  await repo.setRunStatus(runId, 'running');
+  await onStart?.(run);
+
+  // planJobs is 1..N; we take only the tail slots we're adding.
+  const allJobs = planJobs({ surfaces: [surface], optionsPerSurface: firstSlot + wanted - 1 });
+  const jobs = allJobs.filter((j) => j.option >= firstSlot);
+  logger.info({ runId, surface: surfaceKey, firstSlot, adding: jobs.length, triggeredBy, mode: providers.mode || config.generationMode }, 'Add designs started');
+
+  const workDir = deps.workDir || (await mkdtemp(path.join(os.tmpdir(), `wae-add-${runId}-`)));
+  const counts = { ready: 0, failed: 0, blocked: 0 };
+  try {
+    let done = 0;
+    await repo.setRunProgress?.(runId, { phase: 'designs', done, total: jobs.length });
+    for (const job of jobs) {
+      const r = await generateStill(job, { runId, weekOf: run.week_of, repo, store, providers, guardrails, qa, workDir });
+      counts.ready += r.ready; counts.failed += r.failed; counts.blocked += r.blocked;
+      done += 1;
+      await repo.setRunProgress?.(runId, { phase: 'designs', done, total: jobs.length });
+    }
+    const status = counts.ready === 0 && counts.failed + counts.blocked > 0 ? 'failed' : 'complete';
+    await repo.setRunStatus(runId, status);
+    logger.info({ runId, surface: surfaceKey, status, counts }, 'Add designs finished');
+    return { runId, phase: 'stills', status, surface: surfaceKey, added: counts.ready, counts, artworks: await repo.listArtworks(runId) };
+  } catch (err) {
+    await repo.setRunStatus(runId, 'failed', err.message);
+    logger.error({ runId, surface: surfaceKey, err: err.message }, 'Add designs crashed');
     throw err;
   } finally {
     if (!deps.workDir) await rm(workDir, { recursive: true, force: true }).catch(() => {});
@@ -713,4 +798,4 @@ async function animateStill(still, ctx) {
   return 1;
 }
 
-export default { runWeek, animateRun, regenerateStills, regenerateStill, varyStill, tweakStill, allocateCost };
+export default { runWeek, animateRun, regenerateStills, addStills, regenerateStill, varyStill, tweakStill, allocateCost };

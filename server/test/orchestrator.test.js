@@ -6,7 +6,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
-import { runWeek, animateRun, varyStill, tweakStill, allocateCost } from '../src/services/orchestrator.js';
+import { runWeek, animateRun, varyStill, tweakStill, allocateCost, addStills } from '../src/services/orchestrator.js';
 import { keepArtwork, promoteArtwork } from '../src/services/keeper.js';
 import { createMemoryRepo } from '../src/db/memoryRepo.js';
 import { createLocalStore } from '../src/services/storage/local.js';
@@ -191,6 +191,91 @@ test('Phase 1 guardrail blocks a still prompt before the still spend', async (t)
     assert.equal(a.status, 'failed');
     assert.match(a.error, /guardrail/);
     assert.doesNotMatch(a.error, /should not spend/);
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
+});
+
+// Scott's case (2026-07-26): he likes all 3 Spectacular designs and wants to
+// see a 4th. regenerateStills is the wrong tool — it REPLACES, and refuses
+// outright once everything is saved or approved.
+test('addStills: appends a 4th design to one surface, retiring nothing', async (t) => {
+  if (!(await hasFfmpeg())) return t.skip('ffmpeg not installed');
+  const { base, repo, store } = await harness();
+  try {
+    const { runId } = await runWeek({
+      weekOf: '2026-08-10', triggeredBy: 'test',
+      deps: { repo, store, providers, optionsPerSurface: 3, duration: 1 },
+    });
+    const before = await repo.listArtworks(runId);
+    const specBefore = before.filter((a) => a.style === 'frame_break');
+    assert.equal(specBefore.length, 3);
+    // Everything is spoken for — approved, saved, or both. regenerate would
+    // refuse here; adding must not care.
+    await repo.updateArtwork(specBefore[0].id, { status: 'approved' });
+    await repo.addSelection(specBefore[1].id, 'scott@wow');
+    // Baseline AFTER that setup — this is the state the add must not disturb.
+    const untouched = (await repo.listArtworks(runId)).filter((a) => a.style === 'frame_break');
+
+    const summary = await addStills({
+      runId, surfaceKey: 'spectacular',
+      deps: { repo, store, providers, optionsPerSurface: 3, duration: 1 },
+    });
+    assert.equal(summary.status, 'complete');
+    assert.equal(summary.added, 1);
+
+    const after = await repo.listArtworks(runId);
+    const specAfter = after.filter((a) => a.style === 'frame_break');
+    assert.equal(specAfter.length, 4, 'the surface should now hold four designs');
+    // NOTHING was retired — every original row is byte-for-byte untouched.
+    for (const a of untouched) {
+      assert.deepEqual(await repo.getArtwork(a.id), a, `design ${a.id} must be untouched`);
+    }
+    // The 4th is a genuinely different piece, not a re-roll of one of the three.
+    const fresh = specAfter.find((a) => !specBefore.some((b) => b.id === a.id));
+    assert.equal(fresh.status, 'ready');
+    for (const a of specBefore) assert.notEqual(fresh.prompt, a.prompt);
+    // It took the next free slot, so its theme is seeded off option 4.
+    assert.match(fresh.s3_key_final, /\/opt4\//);
+    // Other surfaces never moved.
+    for (const a of before.filter((x) => x.style !== 'frame_break')) {
+      assert.deepEqual(await repo.getArtwork(a.id), a, `surface ${a.style} must be untouched`);
+    }
+    assert.equal((await repo.getRun(runId)).status, 'complete');
+
+    // Clicking again keeps climbing rather than colliding with slot 4.
+    await addStills({ runId, surfaceKey: 'spectacular', deps: { repo, store, providers, optionsPerSurface: 3, duration: 1 } });
+    const five = (await repo.listArtworks(runId)).filter((a) => a.style === 'frame_break');
+    assert.equal(five.length, 5);
+    assert.equal(new Set(five.map((a) => a.s3_key_final)).size, 5, 'every design needs its own file');
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
+});
+
+// Regression (2026-07-26): a variation used to be stored under its SOURCE's
+// key, so exploring silently overwrote the picture of the design you kept —
+// "the original is never lost" was true of the row and false of the pixels.
+test('a variation never overwrites the design it came from', async (t) => {
+  if (!(await hasFfmpeg())) return t.skip('ffmpeg not installed');
+  const { base, repo, store } = await harness();
+  try {
+    const only = SURFACES.filter((s) => s.key === 'spectacular');
+    const deps = { repo, store, providers, surfaces: only, optionsPerSurface: 2, duration: 1 };
+    const { runId } = await runWeek({ weekOf: '2026-08-10', triggeredBy: 'test', deps });
+    const source = (await repo.listArtworks(runId))[0];
+    const beforeBytes = await store.getBuffer(source.s3_key_final);
+
+    await keepArtwork({ artworkId: source.id, repo });
+    await varyStill({ artworkId: source.id, deps });
+
+    const after = await repo.listArtworks(runId);
+    const variation = after.find((a) => a.parent_artwork_id === source.id);
+    const sourceNow = after.find((a) => a.id === source.id);
+    assert.notEqual(sourceNow.s3_key_final, variation.s3_key_final, 'each design needs its own file');
+    assert.deepEqual(await store.getBuffer(sourceNow.s3_key_final), beforeBytes, 'the kept design must be byte-identical');
+    // The slot is still recoverable from the key (regen parses it back out).
+    assert.match(variation.s3_key_final, /\/opt\d+\//);
   } finally {
     await rm(base, { recursive: true, force: true });
   }

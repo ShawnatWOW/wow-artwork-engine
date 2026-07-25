@@ -339,7 +339,7 @@ export function PodSet({ panels, actions, caption }) {
 // Hierarchy (CEO pass, 2026-07-22): Approve is the decision — solid once
 // taken, outlined invitation until then. Keep is the amber-star invitation.
 // Pass and New design are quiet ghosts that fill on hover.
-export function Actions({ status, busy, stage, onApprove, onReject, onRetry, onRegen, onKeep }) {
+export function Actions({ status, busy, stage, saved, onApprove, onReject, onRetry, onRegen, onKeep, onToggleSave }) {
   const btn = `inline-flex items-center gap-1 rounded border px-2 py-1 text-[11px] font-medium transition-colors disabled:opacity-40 ${focusRing}`;
   const ghost = 'border-neutral-700 bg-transparent text-neutral-400 hover:bg-neutral-800';
   const approveLabel = status === 'approved' ? '✓ Approved' : stage === 'still' ? '✓ Use this design' : '✓ Approve video';
@@ -354,6 +354,22 @@ export function Actions({ status, busy, stage, onApprove, onReject, onRetry, onR
       >
         {approveLabel}
       </button>
+      {/* Save is the light commitment: set it aside WITHOUT approving it, and
+          a "Redo unsaved designs" can't replace it. Keep & explore is the
+          heavier one — it also opens a variations rail. */}
+      {onToggleSave && (
+        <button
+          type="button" disabled={busy} onClick={onToggleSave}
+          title={saved
+            ? 'Unsave this design — a redo will be free to replace it again'
+            : 'Save this design for later — you don’t have to approve it, and a redo won’t replace it'}
+          className={`${btn} ${saved
+            ? 'border-violet-500 bg-violet-600 text-white'
+            : 'border-violet-500/50 bg-transparent text-violet-300 hover:border-violet-400 hover:bg-violet-600 hover:text-white'}`}
+        >
+          {saved ? '🔖 Saved' : '🔖 Save'}
+        </button>
+      )}
       {onKeep && (
         <button
           type="button" disabled={busy} onClick={onKeep}

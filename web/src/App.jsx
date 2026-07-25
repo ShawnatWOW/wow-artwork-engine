@@ -66,6 +66,11 @@ const restoreStatuses = (prev) => (d) => ({
 // are its variations rail. Stills with no family and no keeper — and any family
 // that has lost its keeper — fall through as plain cards. Every still lands in
 // exactly ONE place: an anchor, a variation, or a plain card (never double).
+// Note the family_id test is what separates SAVE from KEEP: both write a
+// selections row (so both are protected from a redo), but only Keep bootstraps
+// a family_id. A merely-saved design therefore stays a plain card in its
+// original position with a Saved badge, instead of being promoted into a
+// full-width exploration anchor the reviewer never asked for.
 function partitionFamilies(stills, keptSet) {
   const byFamily = new Map();
   const loners = [];
@@ -73,8 +78,6 @@ function partitionFamilies(stills, keptSet) {
     if (s.family_id != null) {
       if (!byFamily.has(s.family_id)) byFamily.set(s.family_id, []);
       byFamily.get(s.family_id).push(s);
-    } else if (keptSet.has(s.id)) {
-      byFamily.set(`solo:${s.id}`, [s]); // kept, no family yet → anchor, empty rail
     } else {
       loners.push(s);
     }
@@ -220,6 +223,15 @@ export function ReviewDashboard() {
     catch (e) { setError(e.message); } finally { setBusy(false); }
   };
 
+  // Per-sign ADD: one more option for ONE surface. Nothing is retired — this is
+  // the "I like all three but want to see a fourth" path, which regenerate
+  // can't serve because it replaces (and refuses once everything is spoken for).
+  const addDesign = async (surfaceKey) => {
+    setBusy(true); setError(null);
+    try { await api.addDesign(runId, surfaceKey); await loadDetail(runId); }
+    catch (e) { setError(e.message); } finally { setBusy(false); }
+  };
+
   // Per-design regenerate: replace ONE card only — its siblings stay.
   const regenerateOne = async (artworkId) => {
     setBusy(true); setError(null);
@@ -279,6 +291,33 @@ export function ReviewDashboard() {
       tone: 'neutral',
     });
   }, [runOptimistic]);
+
+  // ---- Save. The lightweight one: set a design aside so a redo can't replace
+  // it, WITHOUT approving it and without opening a variations rail. Backed by
+  // the same selections row as Keep, so it gets the same protection; the
+  // difference is that Save leaves family_id null, which is what keeps the card
+  // in place instead of promoting it to an exploration anchor. ----
+  const saveArtwork = useCallback((art) => runOptimistic({
+    ids: [art.id],
+    apply: (d) => ((d.selections || []).some((s) => s.artwork_id === art.id)
+      ? d
+      : { ...d, selections: [...(d.selections || []), { artwork_id: art.id }] }),
+    revert: (d) => ({ ...d, selections: (d.selections || []).filter((s) => s.artwork_id !== art.id) }),
+    call: () => api.select(art.id),
+    success: 'Saved — a redo won’t replace it',
+    tone: 'violet',
+  }), [runOptimistic]);
+
+  const unsaveArtwork = useCallback((art) => runOptimistic({
+    ids: [art.id],
+    apply: (d) => ({ ...d, selections: (d.selections || []).filter((s) => s.artwork_id !== art.id) }),
+    revert: (d) => ((d.selections || []).some((s) => s.artwork_id === art.id)
+      ? d
+      : { ...d, selections: [...(d.selections || []), { artwork_id: art.id }] }),
+    call: () => api.unselect(art.id),
+    success: 'No longer saved',
+    tone: 'neutral',
+  }), [runOptimistic]);
 
   // ---- Keep & explore. keep/unkeep/promote only move the keeper marker, so
   // they're OPTIMISTIC like the other card actions (the 2s poll / next nav
@@ -403,9 +442,10 @@ export function ReviewDashboard() {
         <RunView
           detail={view} busy={busy} running={running} pendingIds={pendingIds}
           onApprove={approveArtworks} onReject={rejectArtworks}
+          onSave={saveArtwork} onUnsave={unsaveArtwork}
           onKeep={keepArtwork} onUnkeep={unkeepArtwork}
           onVary={vary} onTweak={tweak} onPromote={promoteArtwork}
-          onRetry={retryAnimate} onRegenerate={regenerate} onRegenerateOne={regenerateOne}
+          onRetry={retryAnimate} onRegenerate={regenerate} onAdd={addDesign} onRegenerateOne={regenerateOne}
           mode={mode}
         />
       ) : (
@@ -571,7 +611,7 @@ function SkeletonHeading() {
   );
 }
 
-function RunView({ detail, busy, running, pendingIds, onApprove, onReject, onKeep, onUnkeep, onVary, onTweak, onPromote, onRetry, onRegenerate, onRegenerateOne, mode }) {
+function RunView({ detail, busy, running, pendingIds, onApprove, onReject, onSave, onUnsave, onKeep, onUnkeep, onVary, onTweak, onPromote, onRetry, onRegenerate, onAdd, onRegenerateOne, mode }) {
   const { artworks } = detail;
   // Saved (bookmarked) design ids — kept while regenerating, without approving.
   const savedSet = useMemo(() => new Set((detail.selections || []).map((s) => s.artwork_id)), [detail.selections]);
@@ -602,6 +642,15 @@ function RunView({ detail, busy, running, pendingIds, onApprove, onReject, onKee
     // Plain stills get "⭐ Keep & explore" — anchor a favourite, then spin off
     // variations (Scott: keep one he likes while re-rolling the rest, 2026-07-21).
     // A kept still isn't a plain card anymore — it renders as an anchor instead.
+    // Save = set aside without approving; a redo can't replace it. Toggling
+    // off is offered on the same button so a saved card isn't a dead end.
+    ...(a.stage === 'still' && a.status !== 'superseded'
+      ? {
+        saved: savedSet.has(a.id),
+        onToggleSave: () => (savedSet.has(a.id) ? onUnsave(a) : onSave(a)),
+      }
+      : {}),
+    // Keep & explore is the heavier commitment: it also opens a variations rail.
     ...(a.stage === 'still' && a.status !== 'superseded' && !savedSet.has(a.id)
       ? { onKeep: () => onKeep(a) }
       : {}),
@@ -636,15 +685,30 @@ function RunView({ detail, busy, running, pendingIds, onApprove, onReject, onKee
     return { reviewed, total };
   };
 
-  // Per-sign "Redo unsaved designs" button, shown in each section header.
-  const regenFor = (surfaceKey) => (
-    <button
-      type="button" disabled={busy || running} onClick={() => onRegenerate(surfaceKey)}
-      title="Replaces only the designs you haven't saved or approved — saved ones stay."
-      className={`rounded border border-neutral-700 bg-neutral-900 px-2.5 py-1 text-[11px] font-medium text-neutral-300 transition-colors hover:border-[#0247FE] hover:text-white disabled:opacity-40 ${focusRing}`}
-    >
-      ↻ Redo unsaved designs{mode === 'live' ? ' (~$0.03 each)' : ' (free)'}
-    </button>
+  // Per-sign header buttons. Two deliberately different verbs:
+  //   Add another  — one MORE option; nothing you already have is touched.
+  //   Redo unsaved — REPLACES the ones you haven't saved or approved.
+  // The pair matters: with all three designs liked, Redo refuses outright, and
+  // "I want to see a fourth" had no button at all before (Scott, 2026-07-26).
+  const cost = mode === 'live' ? ' (~$0.03)' : ' (free)';
+  const headerBtn = `rounded border px-2.5 py-1 text-[11px] font-medium transition-colors disabled:opacity-40 ${focusRing}`;
+  const sectionActions = (surfaceKey) => (
+    <span className="flex flex-wrap items-center gap-1.5">
+      <button
+        type="button" disabled={busy || running} onClick={() => onAdd(surfaceKey)}
+        title="Generate one more option for this sign — everything you already have stays exactly as it is."
+        className={`${headerBtn} border-[#0247FE]/60 bg-transparent text-[#7FA3FF] hover:border-[#0247FE] hover:bg-[#0247FE] hover:text-white`}
+      >
+        + Add another design{cost}
+      </button>
+      <button
+        type="button" disabled={busy || running} onClick={() => onRegenerate(surfaceKey)}
+        title="Replaces only the designs you haven't saved or approved — saved ones stay."
+        className={`${headerBtn} border-neutral-700 bg-neutral-900 text-neutral-300 hover:border-[#0247FE] hover:text-white`}
+      >
+        ↻ Redo unsaved designs{mode === 'live' ? ' (~$0.03 each)' : ' (free)'}
+      </button>
+    </span>
   );
 
   const spectacular = stillsOf('frame_break');
@@ -692,9 +756,17 @@ function RunView({ detail, busy, running, pendingIds, onApprove, onReject, onKee
   const latestMotion = (k) => motionsByStill.get(k.id)?.at(-1);
   const noMotion = () => undefined;
 
+  // Option counts are computed, never hardcoded: "Add another design" means a
+  // sign can hold any number now, and a header still claiming "3 design
+  // options" above four cards is the kind of small lie that erodes trust.
+  const specChip = chipFromUnits(spectacularU);
+  const connChip = chipFromUnits(connectedU, conn.animated);
+  const singChip = chipFromUnits(singlesU, sing.animated);
+  const options = (chip) => `${chip?.total ?? 0} design option${chip?.total === 1 ? '' : 's'}`;
+
   return (
     <div className="space-y-10">
-      <Section title="Spectacular — big street billboard" subtitle="3 design options · the one(s) you approve become 4K (3840×1062) videos with the black-frame look" chip={chipFromUnits(spectacularU)} action={regenFor('spectacular')}>
+      <Section title="Spectacular — big street billboard" subtitle={`${options(specChip)} · the one(s) you approve become 4K (3840×1062) videos with the black-frame look`} chip={specChip} action={sectionActions('spectacular')}>
         {renderAnchors(spectacularU.anchors, latestMotion)}
         <div className="space-y-4">
           {spectacularU.loners.map((still) => {
@@ -708,8 +780,8 @@ function RunView({ detail, busy, running, pendingIds, onApprove, onReject, onKee
 
       <Section
         title="EON — 3-pillar set"
-        subtitle="one wide design · split across the three pillars so the artwork travels from pillar to pillar — each pillar gets its face plus the narrow LED spine down its left side"
-        chip={chipFromUnits(connectedU, conn.animated)} action={regenFor('eon_connected')}
+        subtitle={`${options(connChip)} · each is one wide design split across the three pillars so the artwork travels from pillar to pillar — every pillar gets its face plus the narrow LED spine down its left side`}
+        chip={connChip} action={sectionActions('eon_connected')}
       >
         {renderAnchors(connectedU.anchors, noMotion)}
         <WrapLegend pods={3} />
@@ -725,8 +797,8 @@ function RunView({ detail, busy, running, pendingIds, onApprove, onReject, onKee
 
       <Section
         title="EON — single pillar"
-        subtitle="3 design options · each approved one becomes a 4K-class pillar video — its face (1280×1920) plus its side spine (320×1920)"
-        chip={chipFromUnits(singlesU, sing.animated)} action={regenFor('eon_single')}
+        subtitle={`${options(singChip)} · each approved one becomes a 4K-class pillar video — its face (1280×1920) plus its side spine (320×1920)`}
+        chip={singChip} action={sectionActions('eon_single')}
       >
         {renderAnchors(singlesU.anchors, noMotion)}
         <WrapLegend pods={1} />

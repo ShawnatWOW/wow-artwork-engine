@@ -31,8 +31,14 @@ async function buildStore(driver) {
 }
 
 // Key layout, kept in one place so routes/handoff can reconstruct paths.
-export function artworkKey({ runId, surfaceKey, option, name }) {
-  return `runs/${runId}/${surfaceKey}/opt${option}/${name}`;
+export function artworkKey({ runId, surfaceKey, option, variant, name }) {
+  // `variant` keeps every generation in its OWN file. Without it a re-roll, a
+  // per-design regenerate or a keep-&-explore variation writes over the design
+  // it came from — same run, same surface, same option slot, same key — so the
+  // row survived but the picture didn't (found 2026-07-26). The `opt<n>/`
+  // segment stays put either way: regen slot recovery parses it back out.
+  const slot = variant ? `opt${option}/${variant}` : `opt${option}`;
+  return `runs/${runId}/${surfaceKey}/${slot}/${name}`;
 }
 
 export default { getStore, artworkKey };

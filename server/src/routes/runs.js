@@ -10,7 +10,7 @@
 import { Router } from 'express';
 import config from '../config/index.js';
 import logger from '../config/logger.js';
-import { runWeek, animateRun, regenerateStills } from '../services/orchestrator.js';
+import { runWeek, animateRun, regenerateStills, addStills } from '../services/orchestrator.js';
 import { SURFACES } from '../services/generation/catalog.js';
 import { computeSpend } from '../services/spend.js';
 import { getRepo } from '../db/index.js';
@@ -60,6 +60,31 @@ router.post('/runs/:id/regenerate', async (req, res, next) => {
     if (err.code === 'nothing_to_regenerate') {
       return res.status(409).json({ error: 'nothing_to_regenerate', message: err.message });
     }
+    next(err);
+  }
+});
+
+// ADD design options to ONE surface (the per-sign "Add another design" button).
+// Unlike /regenerate this retires nothing — every existing design stays and the
+// new one lands beside it, which is the case regenerate refuses outright once
+// everything is saved or approved. 202 + poll.
+router.post('/runs/:id/add', async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'invalid_run_id' });
+    const surfaceKey = req.body?.surface;
+    if (!SURFACES.some((s) => s.key === surfaceKey)) {
+      return res.status(400).json({ error: 'invalid_surface', valid: SURFACES.map((s) => s.key) });
+    }
+
+    const run = await new Promise((resolve, reject) => {
+      addStills({
+        runId: id, surfaceKey, count: req.body?.count,
+        triggeredBy: req.get('x-user-email') || 'dashboard', onStart: resolve,
+      }).catch((err) => { logger.error({ err: err.message }, 'Background add failed'); reject(err); });
+    });
+    res.status(202).json({ runId: run.id, surface: surfaceKey, status: 'running' });
+  } catch (err) {
     next(err);
   }
 });
