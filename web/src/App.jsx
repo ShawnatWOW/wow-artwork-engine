@@ -434,10 +434,15 @@ function Header({ runs, runId, onSelectRun, onGenerate, onAnimate, pendingAnimat
   return (
     <header className="mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-neutral-800 pb-4">
       <div className="space-y-1">
-        <h1 className="flex items-center gap-2 text-xl font-semibold">
-          WOW Artwork Engine
-          <ModePill mode={effectiveMode} />
-          <SpendPill spend={spend} />
+        {/* flex-wrap: the mode + spend pills are long enough to overflow the h1
+            on a phone and land on top of the title. Below `sm` they wrap to
+            their own line beneath it. */}
+        <h1 className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xl font-semibold">
+          <span>WOW Artwork Engine</span>
+          <span className="flex w-full flex-wrap items-center gap-x-2 gap-y-1 sm:w-auto">
+            <ModePill mode={effectiveMode} />
+            <SpendPill spend={spend} />
+          </span>
         </h1>
         <p className="text-xs text-neutral-500">
           Weekly AI artwork for the WOW signs — you approve everything before anything is made or sent
@@ -725,6 +730,8 @@ function RunView({ detail, busy, running, pendingIds, onApprove, onReject, onKee
       >
         {renderAnchors(singlesU.anchors, noMotion)}
         <WrapLegend pods={1} />
+        {/* One column on a phone: each card carries four action buttons under
+            it, which are unusable squeezed into a half-width column. */}
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3">
           {sing.rest.map((still) => {
             const panels = panelsFor(still);

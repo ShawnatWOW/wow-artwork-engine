@@ -271,11 +271,15 @@ export function Preview({ artwork }) {
 export function WrapLegend({ pods }) {
   if (!pods) return null;
   return (
-    <p className="mb-3 flex items-center gap-1.5 text-[11px] text-neutral-500">
-      <span className="inline-block h-3 w-2 rounded-sm border-r border-[#0247FE]/60 bg-[#0247FE]/25" />
-      {pods === 1
-        ? 'The blue band is the pillar’s side spine — that strip of the design wraps around the corner onto the narrow LED down its left edge.'
-        : 'Blue bands are the pillars’ side spines — those strips wrap around each corner onto the narrow LED down its left edge. White lines are where one pillar ends and the next begins.'}
+    // items-start + shrink-0: on a narrow screen the sentence wraps to several
+    // lines and the swatch must stay square beside the first one, not squash.
+    <p className="mb-3 flex items-start gap-1.5 text-[11px] leading-snug text-neutral-500">
+      <span className="mt-0.5 inline-block h-3 w-2 shrink-0 rounded-sm border-r border-[#0247FE]/60 bg-[#0247FE]/25" />
+      <span>
+        {pods === 1
+          ? 'The blue band is the pillar’s side spine — that strip of the design wraps around the corner onto the narrow LED down its left edge.'
+          : 'Blue bands are the pillars’ side spines — those strips wrap around each corner onto the narrow LED down its left edge. White lines are where one pillar ends and the next begins.'}
+      </span>
     </p>
   );
 }
@@ -283,6 +287,12 @@ export function WrapLegend({ pods }) {
 // One finished EON piece, laid out the way the hardware actually stands: each
 // pillar is its narrow spine hard against its face (the corner), pillars spaced
 // apart. This is what Scott approves — the full set, not a lone face.
+//
+// The pillars are sized FLUIDLY (a grid of equal fractions, spine 1/5 of its
+// pillar) rather than at fixed pixel widths. On a phone fixed widths pushed the
+// third pillar onto its own line, which breaks the one thing this view exists
+// to show — the artwork travelling from pillar to pillar. Now the row holds its
+// shape at any width and just gets smaller.
 export function PodSet({ panels, actions, caption }) {
   const pods = [];
   for (const p of panels) {
@@ -293,21 +303,25 @@ export function PodSet({ panels, actions, caption }) {
   }
   return (
     <div className="card-in rounded-lg border border-neutral-800 bg-neutral-900 p-3">
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <span className="text-xs text-neutral-400">{caption}</span>
-        <StatusBadge status={panels[0]?.status} stage="motion" />
+      <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
+        <span className="min-w-0 flex-1 text-xs leading-snug text-neutral-400">{caption}</span>
+        <span className="shrink-0"><StatusBadge status={panels[0]?.status} stage="motion" /></span>
       </div>
-      <div className="flex flex-wrap items-end gap-5">
+      <div
+        className={`grid items-end gap-2 sm:gap-4 ${pods.length > 1 ? 'max-w-2xl' : 'max-w-[220px]'}`}
+        style={{ gridTemplateColumns: `repeat(${pods.length}, minmax(0, 1fr))` }}
+      >
         {pods.map((pod) => (
-          <div key={pod.n}>
-            {/* gap-px = the corner: spine and face are one continuous piece. */}
+          <div key={pod.n} className="min-w-0">
+            {/* gap-px = the corner; basis-1/5 = the spine's true share of a
+                pillar (320 of 1600 delivery pixels). */}
             <div className="flex items-end gap-px">
-              {pod.spine && <div className="w-7"><Preview artwork={pod.spine} /></div>}
-              {pod.face && <div className="w-28"><Preview artwork={pod.face} /></div>}
+              {pod.spine && <div className="basis-1/5 shrink-0"><Preview artwork={pod.spine} /></div>}
+              {pod.face && <div className="min-w-0 flex-1"><Preview artwork={pod.face} /></div>}
             </div>
-            <p className="mt-1 text-center text-[10px] text-neutral-600">
+            <p className="mt-1 truncate text-center text-[10px] text-neutral-600">
               pillar {pod.n}
-              <span className="text-neutral-700"> · spine + face</span>
+              <span className="hidden text-neutral-700 sm:inline"> · spine + face</span>
             </p>
           </div>
         ))}
