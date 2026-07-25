@@ -23,8 +23,12 @@ then expensive **4K videos** only on the designs Scott approves.
 | Sign | Final output | Look |
 |---|---|---|
 | **Spectacular** (street billboard) | 4K 3840×1062 | 3D "pop-out" — subject bursts out of a black frame painted into the art |
-| **EON — 3-pillar set** | one wide master → split across 3× 1280×1920 pillars | the artwork travels pillar-to-pillar |
-| **EON — single pillar** | 4K-class 1280×1920 | standalone vertical piece |
+| **EON — 3-pillar set** | one wide master → 3 pillars, each a **face 1280×1920 + spine 320×1920** | the artwork travels pillar-to-pillar and wraps around each corner |
+| **EON — single pillar** | one pillar — **face 1280×1920 + spine 320×1920** | standalone vertical piece, wrapping its own corner |
+
+Every EON pillar has a narrow LED **spine** down its left side facing oncoming
+drivers. Both the spine and the face are cut from **one** design, so the artwork
+carries around the corner instead of the spine being a separate afterthought.
 
 3 options per sign each week. Psychedelic, high-saturation, characterful creatures
 (koi, octopus, peacock, jellyfish…), full-scene motion with real 3D depth.
@@ -62,6 +66,13 @@ at a time, "N of 3 reviewed" progress per sign.
 
 ## Changelog (this delivery arc)
 
+- **2026-07-25 — EON spines.** The signs were being built face-only; every EON
+  pillar also has a narrow LED spine down its left side. The EON output was
+  re-cut around the real geometry: designs now generate as one wrapped panorama
+  (3-pillar 2.5:1, single pillar 5:6) and get cut into **each pillar's spine +
+  face**, so the art wraps the corner. Single pillars get a spine too. The
+  dashboard shows each pillar the way it physically stands (spine hard against
+  its face) and marks on the un-cut design which strips wrap around the side.
 - **2026-07-24 — Keep & explore.** Anchor a liked design; generate variations (re-roll
   *or* plain-language LLM tweak) in a rail beneath it; original never lost; promote a
   variation to keeper. First LLM in the engine (OpenAI, graceful fallback to a re-roll).
@@ -120,6 +131,12 @@ at a time, "N of 3 reviewed" progress per sign.
   4K; all on fal.ai. Prompts are deterministic templates; the **tweak** feature adds an
   OpenAI prompt-editor (`services/generation/tweak.js`) that never throws (falls back to a
   re-roll with no key).
+- **EON geometry.** A pillar slab is spine (320) + face (1280) = 1600 wide, so the 3-pillar
+  master is 4800×1920 and a single pillar is its own 1600×1920 master. Because a slab is
+  exactly one third of the wide master, the 3-act "one act per third" choreography still
+  lines up with the hardware. `eonSlicer.js` is layout-driven; each row records which panel
+  it is (`pod2_spine`), which drives the ledger split, the dashboard grouping and Jeff's
+  filenames. One fal call is still one bill, divided across the panels by width.
 - **Data.** File-backed in-memory repo persisted to JSON (survives PM2 restarts); Postgres
   path kept in parity (migrations for new columns). Lineage for keep & explore: `family_id`,
   `parent_artwork_id`, `change_note`; keeper = a `selections` row.

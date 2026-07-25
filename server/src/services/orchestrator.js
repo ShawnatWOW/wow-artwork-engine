@@ -36,6 +36,24 @@ import { weekOfFor } from './dates.js';
 const even = (n) => Math.max(2, Math.floor(n / 2) * 2);
 const thumbDims = (spec) => ({ width: even(spec.width / 2), height: even(spec.height / 2) });
 
+/**
+ * Divide ONE fal bill across the rows it produced, weighted (EON panels are
+ * weighted by width — a face is 4x a spine). The last row absorbs the rounding
+ * remainder so the per-row ledger sums to exactly `total`, which is what
+ * spend.js re-adds when it prices a call from its rows. Pure.
+ * @returns {number[]} one USD amount per weight, in order
+ */
+export function allocateCost(total, weights) {
+  const sum = weights.reduce((a, b) => a + b, 0);
+  const round = (n) => Math.round(n * 1e4) / 1e4;
+  let spent = 0;
+  return weights.map((w, i) => {
+    const usd = i === weights.length - 1 ? round(total - spent) : round((total * w) / sum);
+    spent += usd;
+    return usd;
+  });
+}
+
 function resolveDeps(deps) {
   return {
     repo: deps.repo || getRepo(),
@@ -613,12 +631,13 @@ async function animateStill(still, ctx) {
     ? falPricing.topazCostUsd({ width: finalSpec.width, height: finalSpec.height, durationS: duration, fps })
     : 0;
   const callCostUsd = Math.round((seedanceUsd + topazUsd) * 1e4) / 1e4;
-  // One fal call = one bill. EON_SLICE stores 3 face rows from that single call,
-  // so split the cost across them; every other surface is one row = full cost.
-  const ledger = (share = 1) => ({
+  // One fal call = one bill. EON_SLICE stores a row per panel cut from that
+  // single call, so the bill is divided across them; every other surface is one
+  // row = full cost. `usd` is an absolute amount (see allocateCost).
+  const ledger = (usd = callCostUsd) => ({
     falRequestId: live ? gen.jobId ?? null : null,
     upscaleRequestId: live ? gen.upscaleJobId ?? null : null,
-    costUsd: live ? Math.round((callCostUsd * share) * 1e4) / 1e4 : 0,
+    costUsd: live ? Math.round(usd * 1e4) / 1e4 : 0,
   });
 
   const insertMotion = (extra) => repo.insertArtwork({
@@ -628,35 +647,47 @@ async function animateStill(still, ctx) {
   });
 
   if (surface.post === POST.EON_SLICE) {
+    // The wrapped master covers every pod slab side by side (spine + face per
+    // pod). Conform it, then cut each panel out so the art carries around the
+    // corner onto the spine instead of the spine being a separate afterthought.
+    const pods = surface.pods ?? 3;
     const master = path.join(dir, 'master.mp4');
     await ffmpeg.conform({ input: srcVideo, output: master, width: finalSpec.width, height: finalSpec.height, duration: effDuration, fps });
     const masterPut = await store.put({ key: key('master.mp4'), sourcePath: master });
-    const faces = await sliceMaster({ masterPath: master, outDir: dir, duration: effDuration });
+    const panels = await sliceMaster({ masterPath: master, outDir: dir, pods, duration: effDuration });
 
-    const faceIds = [];
-    for (const face of faces) {
-      const td = thumbDims(SPECS.eon_face);
-      const thumb = path.join(dir, `pod${face.pod}_thumb.jpg`);
-      await ffmpeg.thumbnail({ input: face.path, output: thumb, width: td.width, height: td.height, atSeconds: Math.min(2, effDuration / 2) });
-      const facePut = await store.put({ key: key(`pod${face.pod}.mp4`), sourcePath: face.path });
-      const thumbPut = await store.put({ key: key(`pod${face.pod}_thumb.jpg`), sourcePath: thumb });
-      const probed = await ffmpeg.probe(face.path);
+    // One fal bill, divided across the panels by how much of the master each
+    // one is (a face is 4x a spine), remainder on the last so the ledger rows
+    // sum to EXACTLY what the call cost.
+    const shares = allocateCost(callCostUsd, panels.map((p) => p.width));
+
+    const ids = {};
+    for (const [i, panel] of panels.entries()) {
+      const td = thumbDims(SPECS[panel.specKey]);
+      const thumb = path.join(dir, `${panel.label}_thumb.jpg`);
+      await ffmpeg.thumbnail({ input: panel.path, output: thumb, width: td.width, height: td.height, atSeconds: Math.min(2, effDuration / 2) });
+      const panelPut = await store.put({ key: key(`${panel.label}.mp4`), sourcePath: panel.path });
+      const thumbPut = await store.put({ key: key(`${panel.label}_thumb.jpg`), sourcePath: thumb });
+      const probed = await ffmpeg.probe(panel.path);
       const a = await insertMotion({
-        specKey: 'eon_face', width: face.width, height: face.height,
+        specKey: panel.specKey, panel: panel.label,
+        width: panel.width, height: panel.height,
         durationS: Math.round(probed.duration ?? effDuration),
-        s3KeyFinal: facePut.key, thumbnailKey: thumbPut.key, status: 'ready',
-        ...ledger(1 / 3), // one Seedance call, split across the 3 faces
+        s3KeyFinal: panelPut.key, thumbnailKey: thumbPut.key, status: 'ready',
+        ...ledger(shares[i]),
       });
-      faceIds.push(a.id);
+      ids[panel.label] = a.id;
     }
     await repo.insertEonSequence({
       runId, masterS3Key: masterPut.key,
-      face1ArtworkId: faceIds[0], face2ArtworkId: faceIds[1], face3ArtworkId: faceIds[2],
+      face1ArtworkId: ids.pod1_face, face2ArtworkId: ids.pod2_face, face3ArtworkId: ids.pod3_face,
+      spine1ArtworkId: ids.pod1_spine, spine2ArtworkId: ids.pod2_spine, spine3ArtworkId: ids.pod3_spine,
     });
-    return 3;
+    return panels.length;
   }
 
-  // Spectacular (frame-break) and EON single: one motion artwork.
+  // Spectacular (frame-break): one motion artwork. Both EON surfaces cut into
+  // panels above — a single pillar has a spine too, so it is never a lone face.
   //
   // FRAME_BREAK no longer composites a border in post (Shawn, 2026-07-21: a
   // post-drawn letterbox clips the art BEHIND the frame — nothing can ever pop
@@ -677,9 +708,9 @@ async function animateStill(still, ctx) {
     specKey: surface.specKey, width: finalSpec.width, height: finalSpec.height,
     durationS: Math.round(probed.duration ?? effDuration),
     s3KeyFinal: finalPut.key, thumbnailKey: thumbPut.key, status: 'ready',
-    ...ledger(1),
+    ...ledger(),
   });
   return 1;
 }
 
-export default { runWeek, animateRun, regenerateStills, regenerateStill, varyStill, tweakStill };
+export default { runWeek, animateRun, regenerateStills, regenerateStill, varyStill, tweakStill, allocateCost };

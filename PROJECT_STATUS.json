@@ -4,6 +4,7 @@
     "lastUpdated": "2026-07-25",
     "humanReadableStatus": "STATUS.md (this file's plain-English companion — full changelog + current state)",
     "recentWork": [
+      "2026-07-25: EON SPINES — the signs were being built face-only. Every EON pod has a narrow LED spine down its LEFT side (WOW template sheet: 3 spines + 3 faces per pod, face 256x384, spine 64x384). Aspect + cutting strategy rebuilt around the real wrapped geometry: a pod slab = spine+face = 320 native (1600 at 4K), 3-pod master 4800x1920 (gen 4096x1638, 5:2), single pillar now its OWN 1600x1920 master (gen 3200x3840, 5:6) instead of a bare face. eonSlicer is layout-driven (computePanelCrops) and cuts spine+face per pod; artworks.panel records which panel ('pod2_spine'); one fal call is split across panels by width via orchestrator.allocateCost (exact, remainder on last). Prompts gained wrap-band language (color flows through the fold, focal detail stays out). Dashboard renders true pod geometry (1:4 spine:face, corner tight, pods spaced) + a WrapGuide overlay on un-cut designs. Migration 007. Key: a pod slab is EXACTLY one third of the 3-pod master, so the 3-act choreography still maps one act per pod.",
       "2026-07-24: Keep & explore — anchor a liked design; variations rail (re-roll + plain-language LLM tweak); original never lost; promote. First LLM in the engine (services/generation/tweak.js, OpenAI, graceful fallback to re-roll). Lineage: family_id/parent_artwork_id/change_note; keeper = selections row. LIVE (PR #234).",
       "2026-07-22: Perf + UX overhaul — LazyVideo (in-view only; was 9+ 4K streams on load), optimistic per-card actions, skeletons, guided 1-2-3 stepper, 'N reviewed' chips. LIVE (PR #233).",
       "2026-07-22: Save-through-regen + cross-run Sent-to-Jeff history (GET /api/deliveries). LIVE (PR #232).",
@@ -11,7 +12,7 @@
       "2026-07-19..21: Accurate itemized cost model (fal token formula) + immutable per-generation ledger + cross-project reconciliation (GET /api/cost/reconciliation; FAL_ADMIN_KEY set). LIVE (PR #230).",
       "2026-07-14..15: 4K pipeline (Seedance 1080p + Topaz 2x upscale) + scene-wide motion overhaul + per-sign regeneration + 15s clips. LIVE."
     ],
-    "testCount": "engine 83/83 (server/), offline; frontends build clean",
+    "testCount": "engine 88/88 (server/), offline; frontends build clean",
     "maintainer": "shawn@wowmedia.com",
     "repo": "github.com/ShawnatWOW/wow-artwork-engine",
     "productionRepo": "wow-contract-query (the Artwork Engine tab lives inside WOW's existing dashboard)"
@@ -33,19 +34,19 @@
   },
 
   "status": {
-    "overall": "LIVE IN PRODUCTION. Core pipeline shipped and working. Currently iterating on art direction (motion/3D) and validating the Google delivery handoff.",
+    "overall": "LIVE IN PRODUCTION, fully featured. Generate → review (keep/explore/tweak) → animate → send to Jeff all shipped. Iterating on art direction and sign geometry.",
     "liveSince": "2026-07-11 (Artwork Engine tab on wowautomation.ai / wow-contract-query dashboard)",
     "generationMode": "live in production (spends real fal.ai money); fixture ($0) locally",
-    "tests": "59/59 passing as of 2026-07-18",
-    "currentFocus": "Motion realism — user wants full-scene active motion on every artwork + real 3D depth baked into the creative prompt (not post-processed letterbox).",
+    "tests": "88/88 passing as of 2026-07-25 (offline; LLM + providers injectable)",
+    "currentFocus": "EON spines shipped 2026-07-25 — needs visual confirmation on a fresh LIVE batch that the wrapped composition reads (art continues across the corner; nothing important lands on a spine band).",
     "milestones": {
       "M0_foundations": "done",
       "M1_generation": "done",
       "M2_review_dashboard": "done",
       "M2.5_two_phase_stills_then_video": "done",
-      "M3_delivery_google_drive_gmail": "credentials configured 2026-07-16; test send NOT yet verified end-to-end",
-      "M4_first_live_run": "in progress — art direction being tuned before a real weekly send",
-      "M5_scheduler": "built but SCHEDULER_ENABLED=false; turn on once art + delivery are signed off"
+      "M3_delivery_google_drive_gmail": "done — shipped + live, with cross-run sent history (GET /api/deliveries)",
+      "M4_first_live_run": "done — live since 2026-07-11; 4K pop-out, accurate costs, per-design regen, keep & explore all shipped",
+      "M5_scheduler": "built but SCHEDULER_ENABLED=false; turn on once you want hands-off Mondays"
     }
   },
 
@@ -64,24 +65,25 @@
     "phase2_video": "Seedance 2.0 image-to-video runs ONLY on approved stills. Standard tier @1080p, then Topaz 2x upscale to 4K-class. Graceful fallback to 1080p if upscale fails.",
     "qaGate": "Luma readability check on stills for outdoor visibility (blocks <25 or >200 luma; warns 25-55 with 'qa:' prefix, non-blocking).",
     "delivery": "Approved videos -> Google Drive folder + Gmail notification to Jeff. Offline fallback writes .eml + local files and reports NOT sent.",
+    "eonGeometry": "CRITICAL (2026-07-25): an EON pod is a WRAPPED surface — a narrow LED spine down its LEFT side plus its face, both visible to drivers. Panel-native: face 256x384, spine 64x384, so a pod slab is 320x384 (1600x1920 at our 5x 4K scale). Art is generated as ONE continuous panorama across the slabs and CUT into the panels, so it wraps the corner. A slab is exactly 1/3 of the 3-pod master, which is why the 3-act 'one act per third' choreography still maps to one act per pod. Panel order L->R within a pod is spine, then face.",
     "surfaces": {
       "spectacular": {
         "style": "frame_break",
         "spec4k": "3840x1062",
         "gen": "4096x1132 (21:9)",
-        "note": "WOW signature 3D frame-break look. Currently composites a black canvas + border in ffmpeg (frameBreakComposite). USER FEEDBACK: 3D must be baked into the creative prompt, not a post-processed letterbox the subject can't break through."
+        "note": "WOW signature 3D frame-break look. The black border is now PAINTED INTO the art by the prompt (subject bursts through it); the ffmpeg composite letterbox was removed 2026-07-21."
       },
       "eon_connected": {
         "style": "eon_connected",
-        "spec4k": "eon_master_3pod 3840x1920 -> sliced into three 1280x1920 faces",
-        "gen": "4096x2048 (2:1)",
-        "note": "ONE wide master, subject choreographed to travel across the 3 pods (pod-to-pod illusion). 3-act journey rotates weekly. Billed as ONE Seedance call despite 3 face rows."
+        "spec4k": "eon_master_3pod 4800x1920 -> cut into 6 panels: pod{1,2,3}_spine 320x1920 + pod{1,2,3}_face 1280x1920",
+        "gen": "4096x1638 (5:2)",
+        "note": "ONE wide master, subject choreographed to travel across the 3 pods (pod-to-pod illusion). 3-act journey rotates weekly. Billed as ONE Seedance call despite 6 panel rows — the bill is split across them by panel width (orchestrator.allocateCost)."
       },
       "eon_single": {
         "style": "eon_single",
-        "spec4k": "eon_face 1280x1920",
-        "gen": "2560x3840 (2:3)",
-        "note": "Standalone single-pillar piece."
+        "spec4k": "eon_master_pod 1600x1920 -> cut into pod1_spine 320x1920 + pod1_face 1280x1920",
+        "gen": "3200x3840 (5:6)",
+        "note": "Standalone single pillar. Gained its own spine 2026-07-25 — a lone pillar still has one on the real structure, so it is composed to wrap and cut exactly like a connected pod (was: a bare 2:3 face)."
       }
     }
   },
@@ -114,7 +116,7 @@
     "perFullBatchApprox": "9 stills ($0.27) + videos at ~$11.40 each. One option per surface animated (3 videos) = ~$35. Every option animated = ~$100+.",
     "history": "The earlier dashboard pill under-reported ~7.6x because it used a blended $0.10/sec. Fixed 2026-07-19 to itemized real rates.",
     "canonicalPriceBook": "server/src/services/generation/falPricing.js is now the single source of truth, encoding fal's EXACT token formula (tokens = w*h*dur*24/1024, cost = tokens/1k * rate1k; standard $0.014/1k, fast $0.0112/1k). Pixel-accurate for any aspect (our billboards are 21:9 / 2:3, never 16:9, so flat per-second rates were always wrong). Mirrored verbatim into wow-contract-query/server/modules/pricing/falPricing.js — KEEP IN SYNC.",
-    "immutableLedger": "Each artwork row now stores fal_request_id, upscale_request_id, and cost_usd computed at generation time (where both the 1080p Seedance render dims and the 4K final dims are known). EON's one Seedance call is split across its 3 face rows so the ledger sums exactly. spend.js prefers cost_usd; falls back to the canonical estimate for pre-ledger rows. No more retroactive re-pricing.",
+    "immutableLedger": "Each artwork row now stores fal_request_id, upscale_request_id, and cost_usd computed at generation time (where both the 1080p Seedance render dims and the 4K final dims are known). EON's one Seedance call is split across the PANEL rows it produced (6 for a connected set, 2 for a single pillar), weighted by panel width with the remainder on the last, so the ledger sums EXACTLY to the call — spend.js prices a call by summing its rows (grouped by s3_key_raw), so that exactness matters. spend.js prefers cost_usd; falls back to the canonical estimate for pre-ledger rows. No more retroactive re-pricing.",
     "crossProjectReconciliation": "The fal account is billed by TWO projects: WOW Artwork + WOW Content Automation (NOT Broken News — it's OpenAI/Gemini). Both now use the identical canonical price book. Content Automation's falai.js estimateCost had the Seedance /fast tier at $0.022/s vs the real $0.2419/s (~11x under-report) — FIXED, which auto-corrects its billed_usd. Reconciliation lives in wow-contract-query: GET /api/cost/reconciliation?month= federates the artwork ledger (proxied /api/spend) + content-automation billed_usd + fal FOCUS account total (needs FAL_ADMIN_KEY), and reports attributed vs unattributed. Modules: server/modules/pricing/{falPricing,falAccount,reconcile}.js. Dashboard visual (artifact): https://claude.ai/code/artifact/7fbd1551-702d-44c1-9a60-8e3f4e19c31c",
     "estimateSource": "server/src/services/spend.js — sums the immutable per-generation cost_usd ledger (falls back to the canonical falPricing estimate for old rows). Reconciled against fal's account total (all fal projects) as a ceiling.",
     "billingRules": [
@@ -164,15 +166,16 @@
     {"issue": "Videos too short", "cause": "6s default", "fix": "GEN_DURATION_S 6 -> 15", "status": "fixed"},
     {"issue": "Not 4K for billboards", "cause": "specs + Seedance tier too low", "fix": "SPECS bumped to 4K; Seedance 1080p standard + Topaz 2x upscale; frame/inset scale with canvas width", "status": "fixed"},
     {"issue": "Motion extended to 30s + minimal actual motion", "cause": "ping-pong doubling; prompts described subject-only motion which Seedance under-renders", "fix": "removed ping-pong (back to 15s); rewrote prompts to describe whole-SCENE motion (backgrounds churn, every pixel active)", "status": "shipped 2026-07-16, awaiting visual confirmation"},
-    {"issue": "3D frame-break not convincing", "cause": "relied on ffmpeg-drawn black border/letterbox; subject can't truly break through a post-processed frame", "fix": "moved 3D into the still + motion PROMPTS (foreground/subject/background planes, dark vignette as natural framing); ffmpeg composite still present and may need to be reduced/removed", "status": "in progress"},
+    {"issue": "3D frame-break not convincing", "cause": "relied on ffmpeg-drawn black border/letterbox; subject can't truly break through a post-processed frame", "fix": "moved 3D into the still + motion PROMPTS (the black border is painted INTO the scene, subject overlaps it); ffmpeg frameBreakComposite removed", "status": "fixed 2026-07-21"},
+    {"issue": "EON artwork was built face-only — the LED spine on each pod's left side was never generated", "cause": "the original catalog modelled a pod as a flat face (master = 3 x face); the spec sheet's spine panel was seeded in the specs table but never produced", "fix": "re-cut the EON geometry around the real wrapped surface: pod slab = spine + face, masters widened (3-pod 4800x1920, single pillar its own 1600x1920), layout-driven slicer emits spine + face per pod, prompts gained wrap-band language, dashboard renders true pod geometry", "status": "shipped 2026-07-25, awaiting live visual confirmation"},
     {"issue": "System could not send artwork to team; spend not visible", "cause": "Google creds missing; spend strip not wired", "fix": "spend strip shipped; Google Drive + service-account JSON configured in S3/.env 2026-07-16", "status": "creds in place; end-to-end test send NOT yet verified"},
     {"issue": "Total spend shows 'over $3K' (2026-07-18)", "cause": "under investigation — see openQuestions", "fix": "TBD", "status": "open"}
   ],
 
   "openItems": [
-    "Verify motion/3D visually on a fresh live batch after the 2026-07-16 prompt overhaul.",
-    "Decide whether to reduce/remove the ffmpeg frameBreakComposite black border now that 3D is prompt-driven.",
-    "Verify Google delivery end-to-end: create batch -> approve -> Send to Jeff (live) -> confirm Drive folder populated + email arrives.",
+    "NEXT: verify the EON wrap on a fresh LIVE batch — does the art read as continuous across the corner, and does anything important land in a spine band? The prompt keeps focal detail out of those bands, but only a real Seedream/Seedance render proves it.",
+    "RESOLVED 2026-07-21: 3D frame-break is now prompt-painted; the ffmpeg frameBreakComposite letterbox was removed.",
+    "Verify Google delivery end-to-end with the new panel filenames (WOW_<week>_eon_<style>_pod2_spine_320x1920_<id>.mp4) — confirm Jeff can tell spine files from face files.",
     "RESOLVED 2026-07-19: the 'over $3K' figure is the shared fal ACCOUNT total (all 3 WOW projects), not artwork. Our spend formula rebuilt to itemized real rates; artwork-only is a fraction. See costModel.",
     "DEL-143 (user-owned): rotate leaked google-drive-server-account.json.",
     "Turn on SCHEDULER_ENABLED once art + delivery are signed off."
@@ -200,7 +203,7 @@
     "server/src/services/generation/fal.js": "fal.ai queue logic: Seedream, Seedance 1080p, Topaz upscale with graceful fallback.",
     "server/src/services/ffmpeg.js": "frameBreakComposite, pingpong, conform, thumbnail, cropdetect. The black-frame border is drawn here.",
     "server/src/services/spend.js": "computeSpend — the MTD estimate behind the $ figure in question.",
-    "server/src/services/eonSlicer.js": "slices the wide master into 3 faces (derives dims from catalog).",
+    "server/src/services/eonSlicer.js": "layout-driven panel cutter: a wrapped master -> each pod's spine + face (computePanelCrops / sliceMaster, dims derived from catalog SPECS). Serves both the 3-pod set and a single pillar.",
     "server/src/db/memoryRepo.js": "in-memory repo + JSON snapshot persistence (production data store).",
     "server/src/routes/runs.js": "REST: generate, animate, approve/reject, regenerate, /spend.",
     "server/src/config/index.js": "all env-driven config + cost rates.",

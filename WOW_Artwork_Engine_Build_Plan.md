@@ -81,10 +81,24 @@ WOW covers the AI generation costs directly. The build is one upfront, $450/mo t
 | `spectacular_wow1_8` | spectacular | 1692 | 468 | 3.6:1 | MP4 / JPEG / PNG | 60s |
 | `eon_face` | eon | 256 | 384 | 2:3 | MP4 / JPEG / PNG | 60s |
 | `eon_spine` | eon | 64 | 384 | 1:6 | MP4 / JPEG / PNG | 60s |
-| `eon_master_3pod` | eon | 768 | 384 | 2:1 | MP4 | 60s |
+| `eon_master_pod` | eon | 320 | 384 | 5:6 | MP4 | 60s |
+| `eon_master_3pod` | eon | 960 | 384 | 5:2 | MP4 | 60s |
 
-All media: H.264 for video, 72 dpi, spot length 15 / 30 / 60s. The 3-pod master
-slices into three `eon_face` columns (256 wide each).
+All media: H.264 for video, 72 dpi, spot length 15 / 30 / 60s.
+
+**EON pods are wrapped surfaces.** A pod carries a narrow LED **spine** down its
+left side as well as its **face** — per WOW's template sheet, a pod has 3 spines
+and 3 faces, and clients may deliver up to 3 of each. A pod slab is therefore
+`spine 64 + face 256 = 320` wide, the 3-pod master is `3 × 320 = 960`, and a
+standalone pod is its own `320` master. Artwork is generated as one continuous
+panorama across the slabs and cut into the individual panels, so it wraps around
+each corner rather than the spine being generated separately.
+
+Because a slab is exactly one third of the 3-pod master, the 3-act choreography
+(one act per third of the frame) still maps onto one act per pod.
+
+Delivery is 4K-class: every spec above is generated at 5× these panel-native
+dimensions (face 1280×1920, spine 320×1920, 3-pod master 4800×1920).
 
 ---
 
@@ -97,9 +111,10 @@ then FFmpeg conforms to the exact pixel spec.
 - **Frame-break Spectacular:** generate the subject scene, then FFmpeg
   composites it onto the 1692 x 468 black canvas with the subject crossing the
   inner border. The black border is the style.
-- **EON connected piece:** generate one wide 2:1 piece, then FFmpeg slices it
-  into three 256-wide columns.
-- **EON single-face:** generate 2:3 portrait, conform to 256 x 384.
+- **EON connected piece:** generate one wide 5:2 piece covering all three pod
+  slabs, then FFmpeg cuts it into each pod's spine (64) and face (256).
+- **EON single pod:** generate one 5:6 piece covering a single slab, cut into
+  that pod's spine (64) and face (256) the same way.
 
 ---
 

@@ -131,6 +131,9 @@ export function createMemoryRepo({ persistPath = null } = {}) {
         motion_prompt: a.motionPrompt ?? null,
         source_still_id: a.sourceStillId ?? null,
         remote_url: a.remoteUrl ?? null,
+        // Which panel of which EON pod this row is ('pod1_spine', 'pod2_face'…).
+        // null for stills, spectacular, and pre-spine EON rows.
+        panel: a.panel ?? null,
         // "Keep & explore" lineage: every design in one exploration family shares
         // family_id (= the family's ORIGINAL design id); parent_artwork_id points
         // at the design a variation was spawned from; change_note is a tweak's
@@ -178,7 +181,11 @@ export function createMemoryRepo({ persistPath = null } = {}) {
       return artworks.filter((r) => r.run_id === runId).map(clone);
     },
 
-    async insertEonSequence({ runId, masterS3Key, face1ArtworkId, face2ArtworkId, face3ArtworkId }) {
+    async insertEonSequence({
+      runId, masterS3Key,
+      face1ArtworkId, face2ArtworkId, face3ArtworkId,
+      spine1ArtworkId, spine2ArtworkId, spine3ArtworkId,
+    }) {
       const row = {
         id: (seqSeq += 1),
         run_id: runId,
@@ -186,6 +193,10 @@ export function createMemoryRepo({ persistPath = null } = {}) {
         face1_artwork_id: face1ArtworkId ?? null,
         face2_artwork_id: face2ArtworkId ?? null,
         face3_artwork_id: face3ArtworkId ?? null,
+        // Each pod's left-side LED spine, cut from the same wrapped master.
+        spine1_artwork_id: spine1ArtworkId ?? null,
+        spine2_artwork_id: spine2ArtworkId ?? null,
+        spine3_artwork_id: spine3ArtworkId ?? null,
         created_at: null,
       };
       eonSequences.push(row);

@@ -186,16 +186,134 @@ function FadeImg({ src, alt = '', className = '' }) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// EON pods. Every EON pillar carries a narrow LED spine down its left side as
+// well as its face, and both are cut from ONE design so the artwork wraps
+// around the corner (WOW template spec sheet). A pod is 1 part spine to 4 parts
+// face, which is the ratio these components render at.
+
+const PODS_FOR_STYLE = { eon_connected: 3, eon_single: 1 };
+const SPINE_SHARE = 0.2; // a spine is 320 of a pod's 1600 delivery pixels
+
+/** How many pods an un-cut design covers (0 = not an EON design). Pure. */
+export const podsForStyle = (style) => PODS_FOR_STYLE[style] || 0;
+
+/** Sort key for a panel row — pod 1→N, spine before face. Pure. */
+export function panelOrder(artwork) {
+  const m = /^pod(\d+)_(spine|face)$/.exec(artwork.panel || '');
+  return m ? [Number(m[1]), m[2] === 'spine' ? 0 : 1] : [99, 9];
+}
+
+/**
+ * The latest complete set of panels for one design. Re-animating appends a
+ * fresh set, so the newest row for each panel id wins (rows arrive id-ascending).
+ *
+ * Rows generated before pods had spines (pre-2026-07-25) carry no panel id —
+ * they are faces only. They're labelled by position so those runs still play
+ * their videos instead of falling back to the un-cut design.
+ */
+export function latestPanels(motions, style) {
+  const list = motions || [];
+  const tagged = list.filter((m) => m.panel);
+  if (tagged.length) {
+    const byPanel = new Map();
+    for (const m of tagged) byPanel.set(m.panel, m);
+    return [...byPanel.values()].sort((a, b) => {
+      const [pa, ka] = panelOrder(a);
+      const [pb, kb] = panelOrder(b);
+      return pa - pb || ka - kb;
+    });
+  }
+  const pods = podsForStyle(style);
+  if (!pods || !list.length) return [];
+  return list.slice(-pods).map((m, i) => ({ ...m, panel: `pod${i + 1}_face` }));
+}
+
+// Where an un-cut EON design gets cut, drawn over its preview: a faint tint on
+// each pillar's spine band plus a rule at each pillar boundary. It answers the
+// question the flat design can't — "which bit of this wraps onto the side?"
+export function WrapGuide({ pods }) {
+  if (!pods) return null;
+  const slab = 100 / pods;
+  return (
+    <div className="pointer-events-none absolute inset-0" aria-hidden="true">
+      {Array.from({ length: pods }, (_, i) => (
+        <div key={i}>
+          <div
+            className="absolute inset-y-0 border-r border-[#0247FE]/60 bg-[#0247FE]/25"
+            style={{ left: `${i * slab}%`, width: `${slab * SPINE_SHARE}%` }}
+          />
+          {i > 0 && <div className="absolute inset-y-0 w-px bg-white/40" style={{ left: `${i * slab}%` }} />}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // Preview an artwork at its true aspect ratio: design → image, video → video.
+// An un-cut EON design also gets its wrap guide.
 export function Preview({ artwork }) {
   const aspect = artwork.width && artwork.height ? `${artwork.width} / ${artwork.height}` : '16 / 9';
+  const guidePods = artwork.stage === 'still' ? podsForStyle(artwork.style) : 0;
   return (
-    <div className="overflow-hidden rounded bg-black" style={{ aspectRatio: aspect }}>
+    <div className="relative overflow-hidden rounded bg-black" style={{ aspectRatio: aspect }}>
       {artwork.media_type === 'still' ? (
         <FadeImg className="h-full w-full object-cover" src={api.mediaUrl(artwork.id)} alt="" />
       ) : (
         <LazyVideo artworkId={artwork.id} />
       )}
+      <WrapGuide pods={guidePods} />
+    </div>
+  );
+}
+
+// The blue-band legend, shown once under an EON section rather than on every card.
+export function WrapLegend({ pods }) {
+  if (!pods) return null;
+  return (
+    <p className="mb-3 flex items-center gap-1.5 text-[11px] text-neutral-500">
+      <span className="inline-block h-3 w-2 rounded-sm border-r border-[#0247FE]/60 bg-[#0247FE]/25" />
+      {pods === 1
+        ? 'The blue band is the pillar’s side spine — that strip of the design wraps around the corner onto the narrow LED down its left edge.'
+        : 'Blue bands are the pillars’ side spines — those strips wrap around each corner onto the narrow LED down its left edge. White lines are where one pillar ends and the next begins.'}
+    </p>
+  );
+}
+
+// One finished EON piece, laid out the way the hardware actually stands: each
+// pillar is its narrow spine hard against its face (the corner), pillars spaced
+// apart. This is what Scott approves — the full set, not a lone face.
+export function PodSet({ panels, actions, caption }) {
+  const pods = [];
+  for (const p of panels) {
+    const n = panelOrder(p)[0];
+    let pod = pods.find((x) => x.n === n);
+    if (!pod) { pod = { n, spine: null, face: null }; pods.push(pod); }
+    pod[p.panel?.endsWith('spine') ? 'spine' : 'face'] = p;
+  }
+  return (
+    <div className="card-in rounded-lg border border-neutral-800 bg-neutral-900 p-3">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <span className="text-xs text-neutral-400">{caption}</span>
+        <StatusBadge status={panels[0]?.status} stage="motion" />
+      </div>
+      <div className="flex flex-wrap items-end gap-5">
+        {pods.map((pod) => (
+          <div key={pod.n}>
+            {/* gap-px = the corner: spine and face are one continuous piece. */}
+            <div className="flex items-end gap-px">
+              {pod.spine && <div className="w-7"><Preview artwork={pod.spine} /></div>}
+              {pod.face && <div className="w-28"><Preview artwork={pod.face} /></div>}
+            </div>
+            <p className="mt-1 text-center text-[10px] text-neutral-600">
+              pillar {pod.n}
+              <span className="text-neutral-700"> · spine + face</span>
+            </p>
+          </div>
+        ))}
+      </div>
+      <Actions {...actions} stage="motion" />
+      {panels[0] && <Details artwork={panels[0]} />}
     </div>
   );
 }

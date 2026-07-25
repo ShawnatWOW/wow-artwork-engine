@@ -68,8 +68,11 @@ Implemented in the M0 scaffold:
 - **FFmpeg post-processing** (`src/services/ffmpeg.js`) — conform to exact
   spec, H.264 encode, duration trim, thumbnails, frame-break composite.
   Pure arg-builders are unit-tested; conform/slice are tested end-to-end.
-- **EON slicer** (`src/services/eonSlicer.js`) — 768×384 master → three
-  aligned 256×384 faces.
+- **EON slicer** (`src/services/eonSlicer.js`) — a wrapped master → each pod's
+  spine (64×384) + face (256×384). A pod slab is spine + face = 320 wide, so the
+  3-pod master is 960×384 and a standalone pod is its own 320×384 master
+  (4K-class in production: 5× those figures). Layout-driven, so the same cut
+  serves the connected set and a single pillar.
 - **Generation interface** (`src/services/generation/`) — Seedance 2.0 via
   **fal.ai** (motion) and Nano Banana Pro (stills) behind one interface. A
   **fixture** provider synthesizes media locally so the whole pipeline runs

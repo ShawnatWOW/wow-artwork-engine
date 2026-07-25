@@ -12,19 +12,39 @@ import config from '../../config/index.js';
 
 // key → exact output pixels. 4K-class per Shawn (2026-07-14): "output needs
 // to be 4K … keep the same aspect ratios". Each spec keeps the physical sign's
-// aspect with the long edge at 3840; Jeff's players downscale to panel native.
-// (Former panel-native sizes for reference: 1692×468, 256×384, 64×384, 768×384.)
+// aspect at 5x panel-native; Jeff's players downscale to panel native.
+// (Panel-native for reference: 1692×468, face 256×384, spine 64×384.)
 export const SPECS = {
   spectacular_wow1_8: { surface: 'spectacular', width: 3840, height: 1062 },
   eon_face: { surface: 'eon', width: 1280, height: 1920 },
   eon_spine: { surface: 'eon', width: 320, height: 1920 },
-  eon_master_3pod: { surface: 'eon', width: 3840, height: 1920 },
+  // Wrapped masters — see EON_POD below. 3 pods = 4800 wide, 1 pod = 1600.
+  eon_master_3pod: { surface: 'eon', width: 4800, height: 1920 },
+  eon_master_pod: { surface: 'eon', width: 1600, height: 1920 },
 };
+
+// An EON pod is NOT a flat face: it carries a narrow LED **spine** down its
+// LEFT side, angled away from the face and aimed at approaching drivers
+// (WOW template spec sheet — "each EON POD has 3 spines & 3 faces", face
+// 256×384, spine 64×384). Both are part of one 3D piece, so the engine
+// generates a single continuous panorama and cuts BOTH panels out of it: the
+// art wraps around the corner instead of the spine being an afterthought.
+//
+// Panel order within a pod is left → right as a driver sees it: spine, then
+// face. A pod slab is therefore spine + face wide.
+export const EON_POD = [
+  { kind: 'spine', specKey: 'eon_spine' },
+  { kind: 'face', specKey: 'eon_face' },
+];
+
+/** Width of one pod slab (spine + face) in delivery pixels. Pure. */
+export const POD_WIDTH = EON_POD.reduce((w, p) => w + SPECS[p.specKey].width, 0);
 
 // Post-processing kinds the orchestrator knows how to run:
 //   frame_break → composite subject onto the black canvas (the 3D style)
 //   conform     → scale/crop straight to the target spec
-//   eon_slice   → conform to the 768x384 master, then slice into 3 faces
+//   eon_slice   → conform to the wrapped master, then cut each pod's spine +
+//                 face out of it (`pods` on the surface says how many)
 export const POST = { FRAME_BREAK: 'frame_break', CONFORM: 'conform', EON_SLICE: 'eon_slice' };
 
 // The surfaces generated every week. `gen` is the ratio/size handed to the
@@ -54,18 +74,26 @@ export const SURFACES = [
     specKey: 'eon_master_3pod',
     style: 'eon_connected', // one wide master that travels across the 3 pods
     mediaType: 'video',
-    gen: { kind: 'motion', width: 4096, height: 2048, ratio: '2:1' },
+    pods: 3,
+    // 2.5:1 — the true wrapped geometry of three pods (3 x 320 x 384 native).
+    // Each pod slab is exactly one THIRD of this master, which is why the
+    // 3-act "one act per third" choreography in prompts.js still lines up.
+    gen: { kind: 'motion', width: 4096, height: 1638, ratio: '5:2' },
     post: POST.EON_SLICE,
     // Directional travel: no ping-pong. Loop policy = enter/exit clip.
   },
   {
     key: 'eon_single',
     surface: 'eon',
-    specKey: 'eon_face',
-    style: 'eon_single', // a standalone single-face piece
+    specKey: 'eon_master_pod',
+    style: 'eon_single', // a standalone single pod — its spine + its face
     mediaType: 'video',
-    gen: { kind: 'motion', width: 2560, height: 3840, ratio: '2:3' },
-    post: POST.CONFORM,
+    pods: 1,
+    // 5:6 — one pod slab. A lone pillar still has a spine on the real
+    // structure, so the piece is composed to wrap the corner (Shawn,
+    // 2026-07-25); it is cut into a spine + a face exactly like a connected pod.
+    gen: { kind: 'motion', width: 3200, height: 3840, ratio: '5:6' },
+    post: POST.EON_SLICE,
     // No ping-pong: continuous kinetic motion throughout (user: "whole scene active")
     // makes seamless looping less critical than full-frame activity.
   },
@@ -87,4 +115,4 @@ export function planJobs({ surfaces = SURFACES, optionsPerSurface = config.optio
   return jobs;
 }
 
-export default { SPECS, SURFACES, POST, planJobs };
+export default { SPECS, SURFACES, POST, EON_POD, POD_WIDTH, planJobs };

@@ -22,7 +22,28 @@
 //   line. Subjects are characterful creatures caught mid-motion; the connected
 //   wide master gets a choreographed 3-act journey (loop on the right screen,
 //   a unique trick in the middle, land on the left) that rotates every week.
+// - WRAP BANDS (Shawn, 2026-07-25): every EON pod has a narrow LED spine down
+//   its left side, cut from the same master as its face (see eonSlicer.js), so
+//   parts of the frame bend 90 degrees away from the viewer. Those strips are
+//   described as narrow vertical BANDS at frame positions — never as spines or
+//   hardware — with two art rules: color and light must flow through them
+//   unbroken (they're one continuous piece), and the subject's finest detail
+//   must stay out of them (detail landing on a fold is lost around the corner).
 // Pure + deterministic (seeded by week + option) so runs are reproducible.
+
+// Where the wrap bands fall, as plain-language frame positions. A pod slab is
+// exactly one third of the connected master, and its band leads that third —
+// so the bands sit at the far-left edge and just past the one-third and
+// two-thirds lines. A single pod is one slab, so its band is the left fifth.
+const WRAP_BANDS_CONNECTED =
+  'Three narrow vertical bands — one at the very left edge of the frame, one immediately to the right of ' +
+  'the one-third line, one immediately to the right of the two-thirds line, each about one fifteenth of the ' +
+  'frame width — must read as continuous parts of the scene: color, light and flowing texture carry straight ' +
+  'through them unbroken. Keep the hero subject\'s head and finest detail out of these three bands.';
+const WRAP_BAND_SINGLE =
+  'The left-most fifth of the frame is a narrow vertical band that must read as a continuous part of the scene: ' +
+  'color, light and flowing texture carry straight through it unbroken, with glowing vertical streaks running ' +
+  'its full height. Keep the hero subject\'s head and finest detail out of that band.';
 
 // (style, subject) pairs — the subject is a concrete, characterful, non-human
 // creature or object with personality. Rotated deterministically by week + option.
@@ -144,7 +165,7 @@ export function buildStillPrompt({ style, specKey, option, weekOf }) {
       `swirling patterns, flowing textures, and dynamic layers that suggest movement and depth as the subject travels. ` +
       `Lighting shifts and evolves as the subject journeys; no secondary focal objects; ` +
       `keep the subject clear of the vertical lines at one-third and two-thirds of the frame width. ` +
-      `${CONTRAST} ${SAFE}`;
+      `${WRAP_BANDS_CONNECTED} ${CONTRAST} ${SAFE}`;
   }
   if (style === 'frame_break') {
     // The WOW signature 3D pop-out. The black border is PAINTED INTO the scene
@@ -161,10 +182,12 @@ export function buildStillPrompt({ style, specKey, option, weekOf }) {
       `shadows onto it — unmistakably closer to the viewer than the border plane, while the deep scene stays ` +
       `behind the opening. ${ENERGY} ${CONTRAST} ${SAFE}`;
   }
-  // eon_single: tall portrait composition.
+  // eon_single: tall portrait composition, composed to wrap (the left band is
+  // cut away onto the pod's spine — see WRAP_BAND_SINGLE).
   return `A tall vertical scene. Style: ${t.style}. ` +
     `The single hero subject is ${t.subject}, filling most of the frame height with a strong central focal point ` +
-    `and bold silhouette. ${ENERGY} ${CONTRAST} ${SAFE}`;
+    `and bold silhouette, centred in the right four-fifths of the frame. ` +
+    `${WRAP_BAND_SINGLE} ${ENERGY} ${CONTRAST} ${SAFE}`;
 }
 
 /**
@@ -185,7 +208,10 @@ export function buildMotionPrompt({ style, specKey, option, weekOf }) {
       `fluid, continuous motion the whole time — it never stops or hovers in place. ` +
       `Critically: the entire background is in constant motion at all times — not calm or steady. ` +
       `The background environment swirls, ripples, flows, shifts, and evolves continuously in sync with the subject's journey; ` +
-      `every pixel of the composition is active. The entire scene is kinetic and alive, never static or passive. ${CONSTANCY}`;
+      `every pixel of the composition is active. The entire scene is kinetic and alive, never static or passive. ` +
+      `Motion runs continuously through the narrow vertical bands at the left edge and just past the one-third and ` +
+      `two-thirds lines — streaks of colour flow through them without pausing — but the subject never parks its head ` +
+      `or finest detail inside one of those bands. ${CONSTANCY}`;
   }
   const solo = soloMotionFor({ specKey, option, weekOf })(t.subject);
   if (style === 'frame_break') {
@@ -199,7 +225,10 @@ export function buildMotionPrompt({ style, specKey, option, weekOf }) {
       `lighting pulses across the scene; every pixel is alive. ` +
       `Smooth, premium, explosive high-energy movement — never static, never jittery. ${CONSTANCY}`;
   }
-  return `Vivid ambient motion: ${solo}. Smooth and hypnotic, never chaotic or jittery. ${CONSTANCY}`;
+  return `Vivid ambient motion: ${solo}. ` +
+    `Colour and light stream continuously down the narrow vertical band at the very left edge of the frame, ` +
+    `while the subject keeps its head and finest detail out of that band. ` +
+    `Smooth and hypnotic, never chaotic or jittery. ${CONSTANCY}`;
 }
 
 export { THEMES, CHOREOGRAPHIES, SOLO_MOTIONS };

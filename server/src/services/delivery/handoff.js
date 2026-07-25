@@ -37,6 +37,17 @@ export function deliveryPreflight(cfg = config) {
   };
 }
 
+/**
+ * Plain-English panel name for a delivered piece. EON rows carry a panel id
+ * ('pod2_spine') because one wrapped master is cut into each pod's spine and
+ * face — Jeff needs to know which panel a file drives. Pure.
+ */
+export function panelName(a) {
+  if (!a.panel) return null;
+  const [pod, kind] = String(a.panel).split('_');
+  return `pillar ${pod.replace('pod', '')} ${kind}`;
+}
+
 /** The default editable email draft. Pure. */
 export function defaultDraft({ recipient, weekOf, items }) {
   const first = String(recipient).split('@')[0].split(/[.\-_]/)[0];
@@ -47,7 +58,10 @@ export function defaultDraft({ recipient, weekOf, items }) {
     '',
     `${items.length} approved piece(s) for the week of ${weekOf} are in the Drive folder, sized to spec and ready to run:`,
     '',
-    ...items.map((i) => `- ${i.surface} / ${i.style} (${i.width}x${i.height})`),
+    ...items.map((i) => {
+      const panel = panelName(i);
+      return `- ${i.surface} / ${i.style}${panel ? ` — ${panel}` : ''} (${i.width}x${i.height})`;
+    }),
     '',
     'Please switch these into rotation. Thanks!',
     '',
@@ -71,7 +85,7 @@ export async function previewHandoff({ runId, deps = {} }) {
     run,
     preflight,
     draft: defaultDraft({ recipient: preflight.gmail.to, weekOf: run.week_of, items }),
-    items: items.map((a) => ({ id: a.id, surface: a.surface, style: a.style, width: a.width, height: a.height })),
+    items: items.map((a) => ({ id: a.id, surface: a.surface, style: a.style, panel: a.panel ?? null, width: a.width, height: a.height })),
   };
 }
 
@@ -108,7 +122,10 @@ export async function sendRun({ runId, sender, recipient, subject, body, test = 
     for (const a of items) {
       const localFinal = path.join(workDir, `artwork_${a.id}.mp4`);
       await writeFile(localFinal, await store.getBuffer(a.s3_key_final));
-      const fileName = `WOW_${run.week_of}_${a.surface}_${a.style}_${a.id}.mp4`;
+      // The panel segment (pod1_spine / pod1_face …) is what tells Jeff which
+      // EON panel a file drives — without it the spine and face files for one
+      // pod are indistinguishable in the Drive folder.
+      const fileName = `WOW_${run.week_of}_${a.surface}_${a.style}${a.panel ? `_${a.panel}` : ''}_${a.width}x${a.height}_${a.id}.mp4`;
 
       let method; let destination; let link = null; let status;
       if (useDrive) {
@@ -136,7 +153,10 @@ export async function sendRun({ runId, sender, recipient, subject, body, test = 
     }
 
     // 2. Email Jeff — Drive links + thumbnails.
-    const linkLines = links.map((l) => `- ${l.a.surface}/${l.a.style}: ${l.link || l.destination}`);
+    const linkLines = links.map((l) => {
+      const panel = panelName(l.a);
+      return `- ${l.a.surface}/${l.a.style}${panel ? ` — ${panel}` : ''}: ${l.link || l.destination}`;
+    });
     const text = `${body || draft.body}\n\nFiles:\n${linkLines.join('\n')}`;
 
     let email;

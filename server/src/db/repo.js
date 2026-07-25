@@ -67,8 +67,9 @@ export const pgRepo = {
          (run_id, surface, style, media_type, spec_key, width, height,
           duration_s, prompt, model, s3_key_raw, s3_key_final, thumbnail_key, status, error,
           stage, motion_prompt, source_still_id, remote_url,
-          family_id, parent_artwork_id, change_note)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
+          family_id, parent_artwork_id, change_note,
+          panel, fal_request_id, upscale_request_id, cost_usd)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26)
        RETURNING *`,
       [
         a.runId, a.surface, a.style, a.mediaType, a.specKey,
@@ -79,6 +80,11 @@ export const pgRepo = {
         a.stage ?? 'motion', a.motionPrompt ?? null, a.sourceStillId ?? null,
         a.remoteUrl ?? null,
         a.familyId ?? null, a.parentArtworkId ?? null, a.changeNote ?? null,
+        // Which EON panel this row is, plus the immutable cost ledger — both
+        // were only being written by memoryRepo (production's store); keeping
+        // the pg path at parity so a DATABASE_URL deploy records them too.
+        a.panel ?? null,
+        a.falRequestId ?? null, a.upscaleRequestId ?? null, a.costUsd ?? null,
       ],
     );
     return rows[0];
@@ -114,12 +120,20 @@ export const pgRepo = {
     return rows;
   },
 
-  async insertEonSequence({ runId, masterS3Key, face1ArtworkId, face2ArtworkId, face3ArtworkId }) {
+  async insertEonSequence({
+    runId, masterS3Key,
+    face1ArtworkId, face2ArtworkId, face3ArtworkId,
+    spine1ArtworkId, spine2ArtworkId, spine3ArtworkId,
+  }) {
     const { rows } = await query(
       `INSERT INTO eon_sequences
-         (run_id, master_s3_key, face1_artwork_id, face2_artwork_id, face3_artwork_id)
-       VALUES ($1,$2,$3,$4,$5) RETURNING *`,
-      [runId, masterS3Key, face1ArtworkId, face2ArtworkId, face3ArtworkId],
+         (run_id, master_s3_key, face1_artwork_id, face2_artwork_id, face3_artwork_id,
+          spine1_artwork_id, spine2_artwork_id, spine3_artwork_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+      [
+        runId, masterS3Key, face1ArtworkId, face2ArtworkId, face3ArtworkId,
+        spine1ArtworkId ?? null, spine2ArtworkId ?? null, spine3ArtworkId ?? null,
+      ],
     );
     return rows[0];
   },

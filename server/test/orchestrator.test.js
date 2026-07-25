@@ -6,7 +6,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
-import { runWeek, animateRun, varyStill, tweakStill } from '../src/services/orchestrator.js';
+import { runWeek, animateRun, varyStill, tweakStill, allocateCost } from '../src/services/orchestrator.js';
 import { keepArtwork, promoteArtwork } from '../src/services/keeper.js';
 import { createMemoryRepo } from '../src/db/memoryRepo.js';
 import { createLocalStore } from '../src/services/storage/local.js';
@@ -24,6 +24,33 @@ async function harness() {
   const base = await mkdtemp(path.join(os.tmpdir(), 'wae-orch-'));
   return { base, repo: createMemoryRepo(), store: createLocalStore({ baseDir: base }) };
 }
+
+// One fal call is billed once but recorded across the panel rows it produced.
+// spend.js prices that call by SUMMING those rows, so the split must be exact —
+// a rounding leak here silently mis-reports what the month cost.
+test('allocateCost splits one fal bill across panels exactly, weighted by width', () => {
+  const face = 1280;
+  const spine = 320;
+  // Compared at the ledger's own precision (4dp): re-summing floats carries a
+  // ~1e-15 representation error that is not a real accounting difference.
+  const sum = (parts) => Math.round(parts.reduce((a, b) => a + b, 0) * 1e4) / 1e4;
+
+  const connected = allocateCost(11.4021, [spine, face, spine, face, spine, face]);
+  assert.equal(connected.length, 6);
+  assert.equal(sum(connected), 11.4021);
+  // A face is 4x a spine, so it carries 4x the cost.
+  assert.ok(Math.abs(connected[1] / connected[0] - 4) < 0.01);
+
+  const single = allocateCost(11.4021, [spine, face]);
+  assert.equal(sum(single), 11.4021);
+
+  // An awkward total still lands exactly — the last panel absorbs the remainder.
+  assert.equal(sum(allocateCost(10, [1, 1, 1])), 10);
+
+  // Degenerate cases stay sane.
+  assert.deepEqual(allocateCost(0, [320, 1280]), [0, 0]);
+  assert.deepEqual(allocateCost(5, [1]), [5]);
+});
 
 test('Phase 1: runWeek generates one still per surface/option (nothing animated)', async (t) => {
   if (!(await hasFfmpeg())) return t.skip('ffmpeg not installed');
@@ -62,23 +89,47 @@ test('Phase 2: animateRun animates ONLY approved stills, conformed to spec, link
     for (const s of stills) await repo.updateArtwork(s.id, { status: 'approved' }); // approve all 3
 
     const summary = await animateRun({ runId, deps: { repo, store, providers, duration: 1 } });
-    // spectacular 1 + eon_single 1 + eon_connected 3 faces = 5 motion artworks.
-    assert.equal(summary.counts.ready, 5);
+    // spectacular 1 + eon_single (spine + face) 2 + eon_connected (3 pods x
+    // spine + face) 6 = 9 motion artworks.
+    assert.equal(summary.counts.ready, 9);
 
     const all = await repo.listArtworks(runId);
     const motions = all.filter((a) => a.stage === 'motion');
-    assert.equal(motions.length, 5);
+    assert.equal(motions.length, 9);
     assert.ok(motions.every((m) => m.media_type === 'video' && m.status === 'ready' && m.source_still_id));
 
     // Motions are conformed to the exact sign specs.
     const spec = motions.find((m) => m.style === 'frame_break');
     let p = await ffmpeg.probe(store.localPath(spec.s3_key_final));
     assert.equal(p.width, 3840); assert.equal(p.height, 1062);
-    for (const face of motions.filter((m) => m.style === 'eon_connected')) {
-      p = await ffmpeg.probe(store.localPath(face.s3_key_final));
-      assert.equal(p.width, 1280); assert.equal(p.height, 1920);
+    // Every EON row is cut to its panel's spec and labelled with which panel
+    // of which pod it drives — that label is what routes the file to Jeff.
+    const eon = motions.filter((m) => m.surface === 'eon');
+    assert.deepEqual(
+      eon.filter((m) => m.style === 'eon_connected').map((m) => m.panel),
+      ['pod1_spine', 'pod1_face', 'pod2_spine', 'pod2_face', 'pod3_spine', 'pod3_face'],
+    );
+    assert.deepEqual(
+      eon.filter((m) => m.style === 'eon_single').map((m) => m.panel),
+      ['pod1_spine', 'pod1_face'],
+    );
+    for (const panel of eon) {
+      p = await ffmpeg.probe(store.localPath(panel.s3_key_final));
+      const want = panel.panel.endsWith('spine') ? 320 : 1280;
+      assert.equal(p.width, want, `${panel.style}/${panel.panel} width`);
+      assert.equal(p.height, 1920);
+      assert.equal(panel.spec_key, panel.panel.endsWith('spine') ? 'eon_spine' : 'eon_face');
     }
-    assert.equal((await repo.listEonSequences(runId)).length, 1);
+    // One sequence per wrapped master (connected + single). The connected one
+    // records all six panels it produced; the single records its one pod.
+    const sequences = await repo.listEonSequences(runId);
+    assert.equal(sequences.length, 2);
+    const connectedSeq = sequences.find((s) => s.face3_artwork_id);
+    for (const col of ['face1', 'face2', 'face3', 'spine1', 'spine2', 'spine3']) {
+      assert.ok(connectedSeq[`${col}_artwork_id`], `sequence is missing ${col}`);
+    }
+    const singleSeq = sequences.find((s) => !s.face3_artwork_id);
+    assert.ok(singleSeq.face1_artwork_id && singleSeq.spine1_artwork_id);
 
     // Idempotent: re-animating produces nothing new.
     const again = await animateRun({ runId, deps: { repo, store, providers, duration: 1 } });

@@ -14,9 +14,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from './api.js';
 import {
-  Preview, Actions, StatusBadge, Details, Card, AnchorCard, VariationCard,
+  StatusBadge, Card, AnchorCard, VariationCard, PodSet, WrapLegend,
   ModePill, SpendPill, Stepper, Spinner, SkeletonCard, Toasts, useToasts,
-  focusRing, progressLabel,
+  focusRing, progressLabel, latestPanels,
 } from './ui.jsx';
 import SendDialog from './SendDialog.jsx';
 import SentHistory from './SentHistory.jsx';
@@ -650,18 +650,26 @@ function RunView({ detail, busy, running, pendingIds, onApprove, onReject, onKee
   // per-card approve/pass/vary/tweak are bound inside ExplorationFamily.
   const familyHandlers = { onApprove, onReject, onUnkeep, onVary, onTweak, onPromote };
   const spectacularU = partitionFamilies(spectacular, savedSet);
-  const singlesU = partitionFamilies(singles, savedSet);
-  // Connected: a design that's already been animated keeps its 3-pillar
-  // ConnectedSet view (past the exploration stage); only the still-stage
-  // designs go through family grouping so a kept wide design can be explored.
-  const connectedFaces = (still) => motionsByStill.get(still.id)?.slice(-3);
-  const connectedAnimated = connected.filter((s) => connectedFaces(s)?.length);
-  const connectedU = partitionFamilies(connected.filter((s) => !connectedFaces(s)?.length), savedSet);
-  const connectedRest = [...connectedAnimated, ...connectedU.loners].sort((a, b) => a.id - b.id);
+  // Both EON surfaces animate into a SET of panels (each pillar's spine + its
+  // face, cut from one design), so both use the same grouping: once a design
+  // has panels it leaves the exploration stage and renders as a pod set.
+  // `latestPanels` picks the newest row per panel, so a re-roll replaces the
+  // set rather than stacking a stale one alongside it.
+  const panelsFor = (still) => latestPanels(motionsByStill.get(still.id), still.style);
+  const splitAnimated = (stills) => {
+    const animated = stills.filter((s) => panelsFor(s).length);
+    const units = partitionFamilies(stills.filter((s) => !panelsFor(s).length), savedSet);
+    return { animated, units, rest: [...animated, ...units.loners].sort((a, b) => a.id - b.id) };
+  };
+  const conn = splitAnimated(connected);
+  const connectedU = conn.units;
+  const sing = splitAnimated(singles);
+  const singlesU = sing.units;
 
   // Anchors (kept designs + their variation rails) render full-width above each
   // surface's plain-card layout. getMotion swaps in the keeper's video once it's
-  // been animated (connected keepers stay stills — their motion is a face set).
+  // been animated (EON keepers stay stills — their motion is a set of panels,
+  // shown as a pod set below rather than as one card).
   const renderAnchors = (anchors, getMotion) => (anchors.length > 0 ? (
     <div className="mb-6 space-y-6">
       {anchors.map(({ keeper, variations }) => {
@@ -693,25 +701,36 @@ function RunView({ detail, busy, running, pendingIds, onApprove, onReject, onKee
         </div>
       </Section>
 
-      <Section title="EON — 3-pillar set" subtitle="one wide design · its video gets split across the three pillars so the artwork travels from pillar to pillar" chip={chipFromUnits(connectedU, connectedAnimated)} action={regenFor('eon_connected')}>
+      <Section
+        title="EON — 3-pillar set"
+        subtitle="one wide design · split across the three pillars so the artwork travels from pillar to pillar — each pillar gets its face plus the narrow LED spine down its left side"
+        chip={chipFromUnits(connectedU, conn.animated)} action={regenFor('eon_connected')}
+      >
         {renderAnchors(connectedU.anchors, noMotion)}
+        <WrapLegend pods={3} />
         <div className="space-y-6">
-          {connectedRest.map((still) => {
-            const faces = connectedFaces(still); // latest set of 3 after re-rolls
-            return faces?.length
-              ? <ConnectedSet key={still.id} faces={faces} actions={groupActions(faces)} />
+          {conn.rest.map((still) => {
+            const panels = panelsFor(still); // latest spine+face set per pillar
+            return panels.length
+              ? <PodSet key={still.id} panels={panels} actions={groupActions(panels)} caption="The finished 3-pillar set — watch the artwork cross from one pillar to the next, and wrap onto each spine" />
               : <div key={still.id} className="max-w-2xl"><Card artwork={still} actions={actionsFor(still)} animating={isAnimating(still, null)} saved={savedSet.has(still.id)} /></div>;
           })}
         </div>
       </Section>
 
-      <Section title="EON — single pillar" subtitle="3 design options · approved ones become 4K-class (1280×1920) videos" chip={chipFromUnits(singlesU)} action={regenFor('eon_single')}>
-        {renderAnchors(singlesU.anchors, latestMotion)}
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-          {singlesU.loners.map((still) => {
-            const motion = motionsByStill.get(still.id)?.at(-1);
-            const a = motion || still;
-            return <Card key={still.id} artwork={a} actions={actionsFor(a)} animating={isAnimating(still, motion)} saved={savedSet.has(a.id)} />;
+      <Section
+        title="EON — single pillar"
+        subtitle="3 design options · each approved one becomes a 4K-class pillar video — its face (1280×1920) plus its side spine (320×1920)"
+        chip={chipFromUnits(singlesU, sing.animated)} action={regenFor('eon_single')}
+      >
+        {renderAnchors(singlesU.anchors, noMotion)}
+        <WrapLegend pods={1} />
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3">
+          {sing.rest.map((still) => {
+            const panels = panelsFor(still);
+            return panels.length
+              ? <PodSet key={still.id} panels={panels} actions={groupActions(panels)} caption="The finished pillar — its face plus the spine that wraps around its left edge" />
+              : <Card key={still.id} artwork={still} actions={actionsFor(still)} animating={isAnimating(still, null)} saved={savedSet.has(still.id)} />;
           })}
         </div>
       </Section>
@@ -743,28 +762,6 @@ function Section({ title, subtitle, chip, action, children }) {
       </div>
       {children}
     </section>
-  );
-}
-
-// An animated connected EON option: the three pod faces side by side.
-function ConnectedSet({ faces, actions }) {
-  return (
-    <div className="card-in rounded-lg border border-neutral-800 bg-neutral-900 p-3">
-      <div className="mb-2 flex items-center justify-between">
-        <span className="text-xs text-neutral-400">The 3-pillar video — watch the artwork cross from one pillar to the next</span>
-        <StatusBadge status={faces[0]?.status} stage="motion" />
-      </div>
-      <div className="flex items-end gap-1">
-        {faces.map((f, i) => (
-          <div key={f.id} className="w-28">
-            <Preview artwork={f} />
-            <p className="mt-1 text-center text-[10px] text-neutral-600">pillar {i + 1}</p>
-          </div>
-        ))}
-      </div>
-      <Actions {...actions} />
-      {faces[0] && <Details artwork={faces[0]} />}
-    </div>
   );
 }
 
