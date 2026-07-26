@@ -104,9 +104,22 @@ test('keep: bootstraps the family and enforces exactly one keeper per family', a
   assert.equal((await repo.listSelections(run.id)).some((s) => s.artwork_id === unrelated.id), false);
   void V2;
 
-  // Only stills can be kept.
-  const motion = await repo.insertArtwork({ runId: run.id, surface: 'eon', style: 'eon_single', mediaType: 'video', stage: 'motion', specKey: 'eon_face', status: 'ready' });
-  await assert.rejects(() => keepArtwork({ artworkId: motion.id, repo }), /style designs can be kept/);
+  // Keeping a VIDEO keeps the design behind it (Shawn, 2026-07-26): a video is
+  // a render OF a design, so exploring from it means exploring that design.
+  const video = await repo.insertArtwork({
+    runId: run.id, surface: 'eon', style: 'eon_single', mediaType: 'video', stage: 'motion',
+    specKey: 'eon_face', status: 'ready', sourceStillId: unrelated.id,
+  });
+  const keptFromVideo = await keepArtwork({ artworkId: video.id, repo });
+  assert.equal(keptFromVideo.id, unrelated.id, 'the DESIGN is kept, not the video row');
+  // The video row itself is never selected — only the design behind it. V1 stays
+  // selected too: it anchors a DIFFERENT family, and each family has its own keeper.
+  assert.deepEqual(await pickIds(repo, run.id), [V1.id, unrelated.id].sort((a, b) => a - b));
+  assert.equal((await repo.listSelections(run.id)).some((s) => s.artwork_id === video.id), false);
+
+  // A video with no design behind it has nothing to explore — say so plainly.
+  const orphan = await repo.insertArtwork({ runId: run.id, surface: 'eon', style: 'eon_single', mediaType: 'video', stage: 'motion', specKey: 'eon_face', status: 'ready' });
+  await assert.rejects(() => keepArtwork({ artworkId: orphan.id, repo }), /no design behind it/);
 });
 
 test('promote: a variation becomes the keeper; the original is never lost', async () => {

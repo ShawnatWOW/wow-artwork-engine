@@ -17,7 +17,7 @@ import { getRepo } from '../db/index.js';
 import { getStore } from '../services/storage/index.js';
 import { contentTypeFor } from '../services/storage/s3.js';
 import { animateRun, regenerateStill, varyStill, tweakStill } from '../services/orchestrator.js';
-import { keepArtwork, promoteArtwork } from '../services/keeper.js';
+import { keepArtwork, promoteArtwork, resolveDesign } from '../services/keeper.js';
 
 const router = Router();
 
@@ -37,12 +37,15 @@ async function loadArtwork(req, res) {
   return artwork;
 }
 
+// Save/unsave. A selection protects a DESIGN from being replaced by a redo, so
+// saving from a video card saves the design behind it (resolveDesign).
 router.post('/artworks/:id/select', async (req, res, next) => {
   try {
     const artwork = await loadArtwork(req, res);
     if (!artwork) return;
+    const design = await resolveDesign({ artwork, repo: getRepo() });
     const by = (req.body && req.body.selectedBy) || req.get('x-user-email') || null;
-    const selection = await getRepo().addSelection(artwork.id, by);
+    const selection = await getRepo().addSelection(design.id, by);
     res.status(201).json({ selection });
   } catch (err) {
     next(err);
@@ -53,7 +56,8 @@ router.delete('/artworks/:id/select', async (req, res, next) => {
   try {
     const artwork = await loadArtwork(req, res);
     if (!artwork) return;
-    await getRepo().removeSelection(artwork.id);
+    const design = await resolveDesign({ artwork, repo: getRepo() });
+    await getRepo().removeSelection(design.id);
     res.status(204).end();
   } catch (err) {
     next(err);
@@ -111,7 +115,6 @@ router.post('/artworks/:id/keep', async (req, res, next) => {
   try {
     const artwork = await loadArtwork(req, res);
     if (!artwork) return;
-    if (artwork.stage !== 'still') return res.status(400).json({ error: 'not_a_still', message: 'Only style designs can be kept.' });
     const by = (req.body && req.body.selectedBy) || req.get('x-user-email') || null;
     const updated = await keepArtwork({ artworkId: artwork.id, selectedBy: by, repo: getRepo() });
     res.json({ artwork: updated });
@@ -120,12 +123,14 @@ router.post('/artworks/:id/keep', async (req, res, next) => {
   }
 });
 
-// Un-keep a still (drop its selection). The design itself is untouched.
+// Un-keep (drop the selection). The design itself is untouched. From a video
+// card this un-keeps the design behind it.
 router.delete('/artworks/:id/keep', async (req, res, next) => {
   try {
     const artwork = await loadArtwork(req, res);
     if (!artwork) return;
-    await getRepo().removeSelection(artwork.id);
+    const design = await resolveDesign({ artwork, repo: getRepo() });
+    await getRepo().removeSelection(design.id);
     res.status(204).end();
   } catch (err) {
     next(err);
@@ -138,7 +143,6 @@ router.post('/artworks/:id/vary', async (req, res, next) => {
   try {
     const artwork = await loadArtwork(req, res);
     if (!artwork) return;
-    if (artwork.stage !== 'still') return res.status(400).json({ error: 'not_a_still', message: 'Only style designs can be varied.' });
     if (artwork.status === 'superseded') return res.status(409).json({ error: 'already_replaced', message: 'This design was already replaced.' });
 
     const run = await new Promise((resolve, reject) => {
@@ -157,7 +161,6 @@ router.post('/artworks/:id/tweak', async (req, res, next) => {
   try {
     const artwork = await loadArtwork(req, res);
     if (!artwork) return;
-    if (artwork.stage !== 'still') return res.status(400).json({ error: 'not_a_still', message: 'Only style designs can be tweaked.' });
     if (artwork.status === 'superseded') return res.status(409).json({ error: 'already_replaced', message: 'This design was already replaced.' });
     const instruction = req.body?.instruction;
     if (!instruction?.trim()) return res.status(400).json({ error: 'empty_instruction' });
@@ -224,6 +227,12 @@ async function streamKey(key, res) {
   if (!key) return res.status(404).json({ error: 'no_media' });
   const store = await getStore();
   const type = contentTypeFor(key);
+  // Artwork files are immutable: every generation writes its own key (see the
+  // `variant` segment in storage/artworkKey), and a re-roll inserts a NEW row
+  // rather than overwriting. So the browser can keep them forever. Previously
+  // the proxy sent max-age=300 with no validator, which meant scrolling back
+  // after five minutes re-downloaded whole 4K files (perf audit, 2026-07-26).
+  res.setHeader('Cache-Control', 'private, max-age=31536000, immutable');
 
   // Local disk: stream with range support so video scrubbing works.
   if (store.localPath) {

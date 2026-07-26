@@ -9,6 +9,26 @@
 
 import { getRepo } from '../db/index.js';
 
+/**
+ * The DESIGN behind a card. A video is a render OF a design, so keeping or
+ * exploring a video means keeping/exploring the design it came from: a new
+ * "version" of a video is a new DESIGN, which Scott then approves and animates
+ * himself (Shawn, 2026-07-26 — exploring straight into a $11.40 render would
+ * spend before he's seen anything). A still resolves to itself.
+ * @throws {Error & {code}} no_source_design
+ */
+export async function resolveDesign({ artwork, repo = getRepo() }) {
+  if (artwork.stage === 'still') return artwork;
+  if (artwork.source_still_id) {
+    const design = await repo.getArtwork(artwork.source_still_id);
+    if (design) return design;
+  }
+  throw Object.assign(
+    new Error('This video has no design behind it to explore.'),
+    { code: 'no_source_design' },
+  );
+}
+
 // Remove the selection from every member of `artwork`'s family — optionally
 // keeping one. Scoped to the run (family_id is unique within a run). A still
 // that has never been kept/varied (family_id null) is a family of one: itself.
@@ -30,15 +50,17 @@ async function clearFamilySelections(repo, artwork, { exceptId = null } = {}) {
 export async function keepArtwork({ artworkId, selectedBy = null, repo = getRepo() }) {
   const artwork = await repo.getArtwork(artworkId);
   if (!artwork) throw Object.assign(new Error('artwork_not_found'), { code: 'artwork_not_found' });
-  if (artwork.stage !== 'still') throw Object.assign(new Error('Only style designs can be kept.'), { code: 'not_a_still' });
+  // Keeping a VIDEO keeps the design behind it — that design is what future
+  // versions are explored from.
+  const design = await resolveDesign({ artwork, repo });
 
   // Bootstrap the family: a plain still becomes the anchor of its own family the
   // first time it is kept, so future variations can share the family_id.
-  const familyId = artwork.family_id || artwork.id;
-  const updated = await repo.updateArtwork(artworkId, { familyId });
-  await repo.addSelection(artworkId, selectedBy);
+  const familyId = design.family_id || design.id;
+  const updated = await repo.updateArtwork(design.id, { familyId });
+  await repo.addSelection(design.id, selectedBy);
   // Single keeper per family: drop the selection on every OTHER member.
-  await clearFamilySelections(repo, updated, { exceptId: artworkId });
+  await clearFamilySelections(repo, updated, { exceptId: design.id });
   return updated;
 }
 
@@ -57,4 +79,4 @@ export async function promoteArtwork({ artworkId, selectedBy = null, repo = getR
   return repo.getArtwork(artworkId);
 }
 
-export default { keepArtwork, promoteArtwork };
+export default { keepArtwork, promoteArtwork, resolveDesign };

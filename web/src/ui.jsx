@@ -258,7 +258,11 @@ export function Preview({ artwork }) {
   return (
     <div className="relative overflow-hidden rounded bg-black" style={{ aspectRatio: aspect }}>
       {artwork.media_type === 'still' ? (
-        <FadeImg className="h-full w-full object-cover" src={api.mediaUrl(artwork.id)} alt="" />
+        // The THUMBNAIL, not the master. A design master is a 2-5 MB 4K PNG and
+        // nothing here renders wider than ~1400px, so pointing the grid at the
+        // master downloaded ~30 MB to show nine cards (perf audit 2026-07-26).
+        // The thumbnail is the same picture at ~45 KB.
+        <FadeImg className="h-full w-full object-cover" src={api.thumbUrl(artwork.id)} alt="" />
       ) : (
         <LazyVideo artworkId={artwork.id} />
       )}
@@ -273,12 +277,12 @@ export function WrapLegend({ pods }) {
   return (
     // items-start + shrink-0: on a narrow screen the sentence wraps to several
     // lines and the swatch must stay square beside the first one, not squash.
-    <p className="mb-3 flex items-start gap-1.5 text-[11px] leading-snug text-neutral-500">
+    <p className="mb-3 flex items-start gap-1.5 text-[11px] leading-snug text-neutral-400">
       <span className="mt-0.5 inline-block h-3 w-2 shrink-0 rounded-sm border-r border-[#0247FE]/60 bg-[#0247FE]/25" />
       <span>
         {pods === 1
-          ? 'The blue band is the pillar’s side spine — that strip of the design wraps around the corner onto the narrow LED down its left edge.'
-          : 'Blue bands are the pillars’ side spines — those strips wrap around each corner onto the narrow LED down its left edge. White lines are where one pillar ends and the next begins.'}
+          ? 'Blue = the strip that wraps onto the pillar’s side.'
+          : 'Blue = the strip that wraps onto each pillar’s side. White lines = where one pillar ends.'}
       </span>
     </p>
   );
@@ -319,9 +323,8 @@ export function PodSet({ panels, actions, caption }) {
               {pod.spine && <div className="basis-1/5 shrink-0"><Preview artwork={pod.spine} /></div>}
               {pod.face && <div className="min-w-0 flex-1"><Preview artwork={pod.face} /></div>}
             </div>
-            <p className="mt-1 truncate text-center text-[10px] text-neutral-600">
-              pillar {pod.n}
-              <span className="hidden text-neutral-700 sm:inline"> · spine + face</span>
+            <p className="mt-1 truncate text-center text-[10px] text-neutral-400">
+              Pillar {pod.n}
             </p>
           </div>
         ))}
@@ -338,11 +341,21 @@ export function PodSet({ panels, actions, caption }) {
 // variations of it (the original is never lost).
 // Hierarchy (CEO pass, 2026-07-22): Approve is the decision — solid once
 // taken, outlined invitation until then. Keep is the amber-star invitation.
-// Pass and New design are quiet ghosts that fill on hover.
+// Pass and Replace this design are quiet ghosts that fill on hover.
 export function Actions({ status, busy, stage, saved, onApprove, onReject, onRetry, onRegen, onKeep, onToggleSave }) {
-  const btn = `inline-flex items-center gap-1 rounded border px-2 py-1 text-[11px] font-medium transition-colors disabled:opacity-40 ${focusRing}`;
+  const btn = `inline-flex h-10 items-center gap-1 rounded border px-2 text-xs font-medium transition-colors disabled:opacity-40 ${focusRing}`;
   const ghost = 'border-neutral-700 bg-transparent text-neutral-400 hover:bg-neutral-800';
   const approveLabel = status === 'approved' ? '✓ Approved' : stage === 'still' ? '✓ Use this design' : '✓ Approve video';
+  // Already delivered — the decision is history, not a live choice.
+  if (status === 'sent') {
+    return (
+      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+        <span className="inline-flex h-10 items-center gap-1 rounded border border-sky-700/60 bg-sky-950 px-2 text-xs font-medium text-sky-300">
+          ✓ Sent to Jeff
+        </span>
+      </div>
+    );
+  }
   return (
     <div className="mt-2 flex flex-wrap items-center gap-1.5">
       <button
@@ -355,7 +368,7 @@ export function Actions({ status, busy, stage, saved, onApprove, onReject, onRet
         {approveLabel}
       </button>
       {/* Save is the light commitment: set it aside WITHOUT approving it, and
-          a "Redo unsaved designs" can't replace it. Keep & explore is the
+          a "Replace unsaved designs" can't replace it. Keep & explore is the
           heavier one — it also opens a variations rail. */}
       {onToggleSave && (
         <button
@@ -394,10 +407,10 @@ export function Actions({ status, busy, stage, saved, onApprove, onReject, onRet
       {onRegen && (
         <button
           type="button" disabled={busy} onClick={onRegen}
-          title="Replace just this design with a brand-new one — the other options stay"
+          title="Replaces this design only. The others stay."
           className={`${btn} ${ghost} hover:text-sky-300`}
         >
-          ↻ New design
+          ↻ Replace this design
         </button>
       )}
     </div>
@@ -416,9 +429,8 @@ export function progressLabel(run) {
 export function SourceStill({ stillId }) {
   if (!stillId) return null;
   return (
-    <div className="mt-1.5 flex items-center gap-1.5 text-[10px] text-neutral-500">
+    <div className="mt-1.5 flex items-center gap-1.5 text-[10px] text-neutral-400">
       <img src={api.thumbUrl(stillId)} alt="" className="h-8 w-12 rounded object-cover" loading="lazy" decoding="async" />
-      <span>made from this approved design</span>
     </div>
   );
 }
@@ -430,27 +442,23 @@ export function Details({ artwork }) {
     <div className="mt-1.5">
       <button
         type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open}
-        className={`flex items-center gap-1 rounded text-[11px] text-neutral-400 transition-colors hover:text-neutral-200 ${focusRing}`}
+        className={`-mx-1 flex min-h-[40px] items-center gap-1 rounded px-1 py-2 text-xs text-neutral-400 transition-colors hover:text-neutral-200 ${focusRing}`}
       >
         <span className={`transition-transform ${open ? 'rotate-90' : ''}`}>›</span> How the AI was instructed
       </button>
       {open && (
         <div className="mt-1 space-y-1.5 rounded bg-neutral-950/60 p-2 text-[11px] leading-snug text-neutral-300">
           <div>
-            <p className="mb-0.5 text-neutral-500">Design instructions</p>
+            <p className="mb-0.5 text-neutral-400">Design instructions</p>
             <p className="whitespace-pre-wrap break-words">{artwork.prompt || '—'}</p>
           </div>
           {artwork.motion_prompt && (
             <div>
-              <p className="mb-0.5 text-neutral-500">Video motion instructions</p>
+              <p className="mb-0.5 text-neutral-400">Video motion instructions</p>
               <p className="whitespace-pre-wrap break-words">{artwork.motion_prompt}</p>
             </div>
           )}
-          <p className="text-neutral-500">
-            {artwork.model || 'model n/a'}
-            {artwork.duration_s ? ` · ${artwork.duration_s}s` : ''}
-            {artwork.spec_key ? ` · ${artwork.spec_key}` : ''}
-          </p>
+          {artwork.duration_s ? <p className="text-neutral-400">{artwork.duration_s} seconds</p> : null}
         </div>
       )}
     </div>
@@ -469,8 +477,7 @@ export function Card({ artwork, actions, animating, saved }) {
         {animating && <GeneratingOverlay />}
       </div>
       <div className="mt-2 flex items-center justify-between px-0.5">
-        <span className="flex items-center gap-1.5 text-[11px] text-neutral-500">
-          {artwork.width}×{artwork.height}
+        <span className="flex items-center gap-1.5 text-[11px] text-neutral-400">
           {saved && <span className="rounded bg-violet-950 px-1 py-0.5 text-[10px] font-medium text-violet-300">🔖 Saved</span>}
         </span>
         <StatusBadge status={animating ? 'generating' : artwork.status} stage={artwork.stage} />
@@ -508,14 +515,14 @@ function TweakBox({ busy, onSubmit, onCancel }) {
         }}
         placeholder="more electric blue · calmer background · bigger subject"
         aria-label="Describe the change you want"
-        className={`min-w-0 flex-1 rounded border border-neutral-700 bg-neutral-950 px-2 py-1 text-[11px] text-neutral-100 placeholder:text-neutral-600 disabled:opacity-50 ${focusRing}`}
+        className={`h-11 min-w-0 flex-1 rounded border border-neutral-700 bg-neutral-950 px-2 text-base text-neutral-100 placeholder:text-neutral-400 disabled:opacity-50 sm:text-[11px] ${focusRing}`}
       />
       <button
         type="button" onClick={submit} disabled={busy}
         title="Make this change (Enter)"
-        className={`shrink-0 rounded border border-[#0247FE] bg-[#0247FE] px-2 py-1 text-[11px] font-semibold text-white transition-colors hover:bg-[#0235c9] disabled:opacity-50 ${focusRing}`}
+        className={`h-11 shrink-0 rounded border border-[#0247FE] bg-[#0247FE] px-3 text-[11px] font-semibold text-white transition-colors hover:bg-[#0235c9] disabled:opacity-50 ${focusRing}`}
       >
-        →
+        Make version
       </button>
     </div>
   );
@@ -525,22 +532,21 @@ function TweakBox({ busy, onSubmit, onCancel }) {
 // exploring" badge). Vary/Tweak spin off variations; the original stays put.
 export function AnchorCard({ artwork, animating, busy, onApprove, onReject, onVary, onTweak, onUnkeep }) {
   const [tweaking, setTweaking] = useState(false);
-  const btn = `inline-flex items-center gap-1 rounded border px-2 py-1 text-[11px] font-medium transition-colors disabled:opacity-40 ${focusRing}`;
+  const btn = `inline-flex h-10 items-center gap-1 rounded border px-2 text-xs font-medium transition-colors disabled:opacity-40 ${focusRing}`;
   const ghost = 'border-neutral-700 bg-transparent text-neutral-400 hover:bg-neutral-800';
   const approved = artwork.status === 'approved';
   const rejected = artwork.status === 'rejected';
+  const sent = artwork.status === 'sent';
   return (
     <div className="card-in rounded-lg border border-amber-500/50 bg-neutral-900 p-3 ring-1 ring-amber-500/40">
       <div className="mb-2 flex items-center justify-between gap-2">
         <span className="inline-flex items-center gap-1 rounded-full bg-amber-950 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-300">⭐ Kept — exploring</span>
-        <span className="text-[10px] uppercase tracking-wide text-neutral-500">Original / keeper</span>
       </div>
       <div className="relative">
         <Preview artwork={artwork} />
         {animating && <GeneratingOverlay />}
       </div>
-      <div className="mt-2 flex items-center justify-between px-0.5">
-        <span className="text-[11px] text-neutral-500">{artwork.width}×{artwork.height}</span>
+      <div className="mt-2 flex items-center justify-end px-0.5">
         <StatusBadge status={animating ? 'generating' : artwork.status} stage={artwork.stage} />
       </div>
       <div className="px-0.5">
@@ -548,6 +554,13 @@ export function AnchorCard({ artwork, animating, busy, onApprove, onReject, onVa
         {artwork.stage === 'motion' && <SourceStill stillId={artwork.source_still_id} />}
         {animating ? (
           <p className="mt-2 flex items-center gap-1.5 text-[11px] text-amber-300"><Spinner className="h-3 w-3" /> Making the video…</p>
+        ) : sent ? (
+          /* Already delivered — the decision is history, not a live choice. */
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            <span className="inline-flex h-10 items-center gap-1 rounded border border-sky-700/60 bg-sky-950 px-2 text-xs font-medium text-sky-300">
+              ✓ Sent to Jeff
+            </span>
+          </div>
         ) : (
           <>
             <div className="mt-2 flex flex-wrap items-center gap-1.5">
@@ -563,14 +576,14 @@ export function AnchorCard({ artwork, animating, busy, onApprove, onReject, onVa
                 title="Describe a change in plain words — makes a new version ($0.03), original kept"
                 className={`${btn} ${ghost} hover:text-sky-300`}
               >
-                ✎ Tweak…
+                ✎ Tweak… (~$0.03)
               </button>
               <button
                 type="button" disabled={busy} onClick={onVary}
                 title="Generate another version of this design ($0.03) — the original is kept"
                 className={`${btn} ${ghost} hover:text-sky-300`}
               >
-                ↻ Vary
+                ↻ Vary (~$0.03)
               </button>
               <button
                 type="button" disabled={busy} onClick={onReject}
@@ -602,7 +615,7 @@ export function AnchorCard({ artwork, animating, busy, onApprove, onReject, onVa
 // one-line change note, and the actions to use / promote / tweak / vary / dismiss.
 export function VariationCard({ artwork, busy, onApprove, onReject, onPromote, onVary, onTweak }) {
   const [tweaking, setTweaking] = useState(false);
-  const btn = `inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-medium transition-colors disabled:opacity-40 ${focusRing}`;
+  const btn = `inline-flex h-9 items-center gap-1 rounded border px-1.5 text-[11px] font-medium transition-colors disabled:opacity-40 ${focusRing}`;
   const ghost = 'border-neutral-700 bg-transparent text-neutral-400 hover:bg-neutral-800';
   const approved = artwork.status === 'approved';
   return (
@@ -611,8 +624,7 @@ export function VariationCard({ artwork, busy, onApprove, onReject, onPromote, o
       {artwork.change_note && (
         <p className="mt-1 px-0.5 text-[10px] italic leading-snug text-neutral-400">{artwork.change_note}</p>
       )}
-      <div className="mt-1 flex items-center justify-between px-0.5">
-        <span className="text-[10px] text-neutral-600">{artwork.width}×{artwork.height}</span>
+      <div className="mt-1 flex items-center justify-end px-0.5">
         <StatusBadge status={artwork.status} stage={artwork.stage} />
       </div>
       <div className="px-0.5">
@@ -637,14 +649,14 @@ export function VariationCard({ artwork, busy, onApprove, onReject, onPromote, o
             title="Describe a change to this version ($0.03)"
             className={`${btn} ${ghost} hover:text-sky-300`}
           >
-            ✎ Tweak
+            ✎ Tweak (~$0.03)
           </button>
           <button
             type="button" disabled={busy} onClick={onVary}
             title="Another version like this one ($0.03)"
             className={`${btn} ${ghost} hover:text-sky-300`}
           >
-            ↻ Vary
+            ↻ Vary (~$0.03)
           </button>
           <button
             type="button" disabled={busy} onClick={onReject}
@@ -681,13 +693,13 @@ export function Stepper({ detail }) {
       {steps.map((label, i) => {
         const state = done[i] ? 'done' : i === current ? 'current' : 'upcoming';
         return (
-          <li key={label} className="flex items-center gap-2">
+          <li key={label} className="flex items-center gap-2" aria-current={state === 'current' ? 'step' : undefined}>
             <span
               aria-hidden="true"
               className={`grid h-5 w-5 place-items-center rounded-full text-[10px] font-bold ${
                 state === 'done' ? 'bg-emerald-600 text-white'
                   : state === 'current' ? 'bg-[#0247FE] text-white'
-                    : 'border border-neutral-700 text-neutral-500'
+                    : 'border border-neutral-700 text-neutral-400'
               }`}
             >
               {state === 'done' ? '✓' : i + 1}
@@ -695,12 +707,12 @@ export function Stepper({ detail }) {
             <span className={
               state === 'done' ? 'font-medium text-emerald-400'
                 : state === 'current' ? 'font-semibold text-white'
-                  : 'text-neutral-600'
+                  : 'text-neutral-400'
             }
             >
               {label}
             </span>
-            {i < steps.length - 1 && <span aria-hidden="true" className="text-neutral-700">→</span>}
+            {i < steps.length - 1 && <span aria-hidden="true" className="text-neutral-400">→</span>}
           </li>
         );
       })}
@@ -712,7 +724,7 @@ export function Stepper({ detail }) {
 // real shape (true aspect ratios) instead of flashing an empty state.
 export function SkeletonCard({ aspect = '16 / 9' }) {
   return (
-    <div className="animate-pulse rounded-lg border border-neutral-800 bg-neutral-900 p-2" aria-hidden="true">
+    <div className="motion-safe:animate-pulse rounded-lg border border-neutral-800 bg-neutral-900 p-2" aria-hidden="true">
       <div className="rounded bg-neutral-800" style={{ aspectRatio: aspect }} />
       <div className="mt-2 flex items-center justify-between px-0.5">
         <div className="h-3 w-16 rounded bg-neutral-800" />

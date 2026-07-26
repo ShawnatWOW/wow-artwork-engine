@@ -27,6 +27,7 @@ import * as qaModule from './qa.js';
 import { planJobs, POST, SURFACES, SPECS } from './generation/catalog.js';
 import { buildStillPrompt, buildMotionPrompt } from './generation/prompts.js';
 import { refineTweak } from './generation/tweak.js';
+import { resolveDesign } from './keeper.js';
 import falPricing from './generation/falPricing.js';
 import { getProviders } from './generation/index.js';
 import { getStore, artworkKey } from './storage/index.js';
@@ -40,6 +41,15 @@ const MAX_ADD_AT_ONCE = 3;
 
 const even = (n) => Math.max(2, Math.floor(n / 2) * 2);
 const thumbDims = (spec) => ({ width: even(spec.width / 2), height: even(spec.height / 2) });
+
+// Review-grid preview size. Nothing on the dashboard renders a design wider
+// than ~1400 CSS px, so a 4096px master is ~50x more bytes than the screen can
+// use. Caps the long edge and keeps the aspect exactly.
+const PREVIEW_MAX_EDGE = 1280;
+function previewDims(width, height, maxEdge = PREVIEW_MAX_EDGE) {
+  const scale = Math.min(1, maxEdge / Math.max(width, height));
+  return { width: even(width * scale), height: even(height * scale) };
+}
 
 /**
  * Divide ONE fal bill across the rows it produced, weighted (EON panels are
@@ -163,6 +173,27 @@ async function generateStill(job, ctx) {
     });
     const put = await store.put({ key, sourcePath: stillPath });
 
+    // A REAL thumbnail. The design-review grid used to point at this key for
+    // both the full image and the "thumbnail", so opening a week downloaded
+    // nine 4K PNGs — measured at 2.4-4.8 MB each, ~30 MB before a single card
+    // had pixels, and ~50 MB of decode memory apiece. That was the "slow and
+    // laggy" complaint (perf audit, 2026-07-26). A JPEG capped at 1280 on the
+    // long edge is ~45 KB — the same picture at review size, ~50x smaller.
+    // Best-effort: if it fails, fall back to the master so a card is never blank.
+    let thumbKey = put.key;
+    try {
+      const td = previewDims(job.gen.width, job.gen.height);
+      const thumbPath = path.join(dir, 'still_thumb.jpg');
+      await ffmpeg.thumbnail({ input: stillPath, output: thumbPath, width: td.width, height: td.height });
+      const thumbPut = await store.put({
+        key: artworkKey({ runId, surfaceKey: job.key, option: job.option, variant: `g${priorStills + 1}`, name: 'still_thumb.jpg' }),
+        sourcePath: thumbPath,
+      });
+      thumbKey = thumbPut.key;
+    } catch (err) {
+      logger.warn({ runId, surface: job.key, err: err.message }, 'Still thumbnail failed; serving the full image');
+    }
+
     // The Seedream image was billed the moment it generated ($0.03 flat), even
     // if it then fails QA — record the immutable cost. Fixtures are free.
     const stillLive = !String(gen.model || '').startsWith('fixture');
@@ -179,7 +210,7 @@ async function generateStill(job, ctx) {
         runId, surface: job.surface, style: job.style, mediaType: 'still', stage: 'still',
         specKey: job.specKey, width: job.gen.width, height: job.gen.height,
         prompt, motionPrompt, model: gen.model, remoteUrl: gen.url ?? null,
-        s3KeyFinal: put.key, thumbnailKey: put.key,
+        s3KeyFinal: put.key, thumbnailKey: thumbKey,
         status: 'failed', error: `qa: ${gate.reason}`, ...stillLedger, ...lineage,
       });
       logger.warn({ runId, surface: job.key, option: job.option, yavg: gate.yavg }, 'Still failed luma QA gate');
@@ -193,7 +224,7 @@ async function generateStill(job, ctx) {
       // Live providers return the fal-hosted URL; Phase 2 hands it to Seedance
       // as the image-to-video first frame (fixture mode has no URL).
       remoteUrl: gen.url ?? null,
-      s3KeyFinal: put.key, thumbnailKey: put.key, status: 'ready',
+      s3KeyFinal: put.key, thumbnailKey: thumbKey, status: 'ready',
       // Borderline-dark scenes reach review with an amber note (emissive LED
       // signs handle dark backgrounds; the reviewer decides).
       error: gate.warn ? `qa: ${gate.reason}` : null, ...stillLedger, ...lineage,
@@ -517,9 +548,11 @@ async function spawnVariation({ source, resolvePrompt, triggeredBy, onStart, dep
  */
 export async function varyStill({ artworkId, triggeredBy = 'dashboard', onStart, deps = {} } = {}) {
   const { repo } = resolveDeps(deps);
-  const source = await repo.getArtwork(artworkId);
-  if (!source) throw new Error(`Artwork ${artworkId} not found`);
-  if (source.stage !== 'still') throw new Error('Only style designs can be varied');
+  const card = await repo.getArtwork(artworkId);
+  if (!card) throw new Error(`Artwork ${artworkId} not found`);
+  // A video resolves to the design behind it: another "version" of a video is
+  // a new DESIGN for Scott to approve and animate, never an automatic re-render.
+  const source = await resolveDesign({ artwork: card, repo });
   if (source.status === 'superseded') throw new Error('This design was already replaced');
   return spawnVariation({
     source, triggeredBy, onStart, deps, label: 'vary',
@@ -537,9 +570,9 @@ export async function varyStill({ artworkId, triggeredBy = 'dashboard', onStart,
  */
 export async function tweakStill({ artworkId, instruction, triggeredBy = 'dashboard', onStart, deps = {} } = {}) {
   const { repo } = resolveDeps(deps);
-  const source = await repo.getArtwork(artworkId);
-  if (!source) throw new Error(`Artwork ${artworkId} not found`);
-  if (source.stage !== 'still') throw new Error('Only style designs can be tweaked');
+  const card = await repo.getArtwork(artworkId);
+  if (!card) throw new Error(`Artwork ${artworkId} not found`);
+  const source = await resolveDesign({ artwork: card, repo });
   if (source.status === 'superseded') throw new Error('This design was already replaced');
   // Injectable so tests never hit the network; refineTweak itself never throws
   // (falls back to the original prompt + the instruction as the note).

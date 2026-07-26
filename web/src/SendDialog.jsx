@@ -36,7 +36,6 @@ export default function SendDialog({ runId, onClose, onSent }) {
 
   const pf = preview?.preflight;
   const live = pf?.overall === 'live';
-  const to = test ? sender : pf?.gmail.to;
 
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4" onClick={onClose}>
@@ -101,7 +100,6 @@ export default function SendDialog({ runId, onClose, onSent }) {
                 {busy ? 'Sending…' : test ? 'Send test to me' : 'Send to Jeff'}
               </button>
             </div>
-            <p className="text-[11px] text-neutral-600">→ {to}</p>
           </div>
         )}
       </div>
@@ -119,7 +117,6 @@ function Result({ result, onClose }) {
             ? `✕ Not sent — ${result.detail?.error || 'send failed'}.`
             : `● Offline — ${result.count} piece(s) saved locally, email written as .eml. NOT actually sent.`}
       </div>
-      {result.offlineDir && <p className="text-xs text-neutral-500 break-all">Saved to: {result.offlineDir}</p>}
       <div className="flex justify-end"><button type="button" onClick={onClose} className="rounded bg-neutral-800 px-3 py-1.5 text-sm text-neutral-200">Close</button></div>
     </div>
   );

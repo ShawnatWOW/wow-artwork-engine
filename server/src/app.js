@@ -1,6 +1,7 @@
 // Express app factory. Kept separate from index.js so tests can mount the app
 // without binding a port.
 import express from 'express';
+import compression from 'compression';
 import logger from './config/logger.js';
 import healthRouter from './routes/health.js';
 import runsRouter from './routes/runs.js';
@@ -9,6 +10,16 @@ import handoffRouter from './routes/handoff.js';
 
 export function createApp() {
   const app = express();
+  // GET /runs/:id is ~125 KB of repetitive English (prompt text is ~78% of it)
+  // and is re-fetched every 2s while a batch runs. gzip takes it to ~12 KB.
+  // Media (mp4/jpg/png) is already compressed — skip it rather than burn CPU.
+  app.use(compression({
+    filter: (req, res) => {
+      const type = res.getHeader('Content-Type') || '';
+      if (/^(video|image)\//.test(String(type))) return false;
+      return compression.filter(req, res);
+    },
+  }));
   app.use(express.json({ limit: '2mb' }));
 
   // Lightweight request logging (pino-http when available, else a shim).

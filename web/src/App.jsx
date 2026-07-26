@@ -50,6 +50,11 @@ function mergeDetail(fetched, cur, pendingIds) {
   return { ...fetched, artworks, selections };
 }
 
+// The DESIGN behind a card. A video is a render OF a design, so its Save/Keep
+// state lives on `source_still_id`, not on the video row. Mirrors the server's
+// resolveDesign. Pure.
+const designIdOf = (a) => (a.stage === 'still' ? a.id : a.source_still_id ?? a.id);
+
 // Optimistic status helpers (pure — safe to share across renders).
 const setStatuses = (ids, status) => (d) => ({
   ...d,
@@ -427,10 +432,10 @@ export function ReviewDashboard() {
         busy={busy} run={view?.run} mode={mode} detail={view}
         running={running} makingVideos={makingVideos} spend={spend}
       />
-      {error && <p className="mb-4 rounded bg-rose-950 px-3 py-2 text-sm text-rose-200">{error}</p>}
+      {error && <p role="alert" className="mb-4 rounded bg-rose-950 px-3 py-2 text-sm text-rose-200">{error}</p>}
       {/* A failed batch says exactly WHY — never a silent page of missing art. */}
       {view?.run?.status === 'failed' && (
-        <p className="mb-4 rounded border border-rose-900 bg-rose-950 px-3 py-2 text-sm text-rose-200">
+        <p role="alert" className="mb-4 rounded border border-rose-900 bg-rose-950 px-3 py-2 text-sm text-rose-200">
           <span className="font-semibold">This batch failed.</span>{' '}
           {view.run.error || 'Some designs could not be generated — the cards below show details.'}{' '}
           You can retry with a new batch, or regenerate just the affected designs below.
@@ -484,16 +489,15 @@ function Header({ runs, runId, onSelectRun, onGenerate, onAnimate, pendingAnimat
             <SpendPill spend={spend} />
           </span>
         </h1>
-        <p className="text-xs text-neutral-500">
+        <p className="text-xs text-neutral-400">
           Weekly AI artwork for the WOW signs — you approve everything before anything is made or sent
-          <span className={health?.status === 'ok' ? 'text-emerald-400' : 'text-amber-400'}> · backend {health?.status ?? '…'}</span>
           {run && <> · week of {run.week_of} · <StatusBadge status={run.status} /></>}
         </p>
         <Stepper detail={detail} />
       </div>
       <div className="flex items-center gap-2">
         {running ? (
-          <span className="flex items-center gap-2 rounded-md bg-amber-950 px-3 py-1.5 text-sm font-medium text-amber-200">
+          <span role="status" aria-live="polite" className="flex items-center gap-2 rounded-md bg-amber-950 px-3 py-1.5 text-sm font-medium text-amber-200">
             <Spinner className="border-amber-700 border-t-amber-300" />
             {progressLabel(run) || (makingVideos ? 'Making videos… (a few minutes each)' : 'Creating designs… (about 1 min)')}
           </span>
@@ -519,12 +523,12 @@ function Header({ runs, runId, onSelectRun, onGenerate, onAnimate, pendingAnimat
             {pendingAnimate > 0 && (
               <button
                 type="button" onClick={onAnimate} disabled={busy}
-                title="Turns every design you approved into a video"
+                title="Turns every design you approved into a video (~$11.40 each)."
                 className={`${btnBase} ${primary === 'animate'
                   ? 'bg-emerald-600 text-white hover:bg-emerald-500'
                   : 'border border-emerald-700/70 bg-transparent text-emerald-300 hover:border-emerald-600 hover:bg-emerald-600 hover:text-white'}`}
               >
-                {busy ? 'Starting…' : `🎬 Make ${pendingAnimate} video${pendingAnimate === 1 ? '' : 's'}`}
+                {busy ? 'Starting…' : `🎬 Make ${pendingAnimate} video${pendingAnimate === 1 ? '' : 's'} (~$11.40 each)`}
               </button>
             )}
             {readyToSend > 0 && (
@@ -560,7 +564,7 @@ function Empty({ onGenerate, busy, mode }) {
     <div className="grid place-items-center rounded border border-dashed border-neutral-800 py-24 text-center">
       <div className="max-w-md">
         <p className="text-neutral-400">No artwork yet this week.</p>
-        <p className="mt-1 text-xs text-neutral-600">
+        <p className="mt-1 text-xs text-neutral-400">
           Click below to create 9 design options (3 per sign type). Nothing becomes a video
           and nothing goes to Jeff until you approve it.
         </p>
@@ -605,8 +609,8 @@ function SkeletonPage() {
 function SkeletonHeading() {
   return (
     <div className="mb-3 space-y-1.5">
-      <div className="h-3.5 w-56 max-w-full animate-pulse rounded bg-neutral-800" />
-      <div className="h-3 w-80 max-w-full animate-pulse rounded bg-neutral-800" />
+      <div className="h-3.5 w-56 max-w-full rounded bg-neutral-800 motion-safe:animate-pulse" />
+      <div className="h-3 w-80 max-w-full rounded bg-neutral-800 motion-safe:animate-pulse" />
     </div>
   );
 }
@@ -644,15 +648,16 @@ function RunView({ detail, busy, running, pendingIds, onApprove, onReject, onSav
     // A kept still isn't a plain card anymore — it renders as an anchor instead.
     // Save = set aside without approving; a redo can't replace it. Toggling
     // off is offered on the same button so a saved card isn't a dead end.
-    ...(a.stage === 'still' && a.status !== 'superseded'
+    // Both work from a VIDEO card too (Shawn, 2026-07-26): a video is a render
+    // OF a design, so they act on the design behind it. Exploring from a video
+    // yields a new DESIGN to approve and animate — never an automatic re-render.
+    ...(a.status !== 'superseded' && a.status !== 'sent' && (a.stage === 'still' || a.source_still_id)
       ? {
-        saved: savedSet.has(a.id),
-        onToggleSave: () => (savedSet.has(a.id) ? onUnsave(a) : onSave(a)),
+        saved: savedSet.has(designIdOf(a)),
+        onToggleSave: () => (savedSet.has(designIdOf(a)) ? onUnsave(a) : onSave(a)),
+        // Keep & explore is the heavier commitment: it also opens a versions rail.
+        ...(savedSet.has(designIdOf(a)) ? {} : { onKeep: () => onKeep(a) }),
       }
-      : {}),
-    // Keep & explore is the heavier commitment: it also opens a variations rail.
-    ...(a.stage === 'still' && a.status !== 'superseded' && !savedSet.has(a.id)
-      ? { onKeep: () => onKeep(a) }
       : {}),
     // Replace just THIS design (approved and saved ones are protected —
     // Pass / unsave first).
@@ -660,13 +665,25 @@ function RunView({ detail, busy, running, pendingIds, onApprove, onReject, onSav
       ? { onRegen: () => onRegenerateOne(a.id) }
       : {}),
   });
-  // For a set of faces, apply one action to all three.
-  const groupActions = (faces) => ({
-    status: faces[0]?.status,
-    busy: busy || faces.some((f) => pendingIds.has(f.id)),
-    onApprove: () => onApprove(faces),
-    onReject: () => onReject(faces),
-  });
+  // One decision covers every panel of a pillar set. Save/Keep act on the
+  // DESIGN the set was rendered from, which all its panels share.
+  const groupActions = (faces) => {
+    const design = faces[0] ? designIdOf(faces[0]) : null;
+    const isSaved = design != null && savedSet.has(design);
+    return {
+      status: faces[0]?.status,
+      busy: busy || faces.some((f) => pendingIds.has(f.id)),
+      onApprove: () => onApprove(faces),
+      onReject: () => onReject(faces),
+      ...(faces[0]?.source_still_id && faces[0]?.status !== 'sent'
+        ? {
+          saved: isSaved,
+          onToggleSave: () => (isSaved ? onUnsave(faces[0]) : onSave(faces[0])),
+          ...(isSaved ? {} : { onKeep: () => onKeep(faces[0]) }),
+        }
+        : {}),
+    };
+  };
 
   // Superseded = retired by a per-sign regenerate; hidden from review.
   const stillsOf = (style) =>
@@ -687,8 +704,8 @@ function RunView({ detail, busy, running, pendingIds, onApprove, onReject, onSav
 
   // Per-sign header buttons. Two deliberately different verbs:
   //   Add another  — one MORE option; nothing you already have is touched.
-  //   Redo unsaved — REPLACES the ones you haven't saved or approved.
-  // The pair matters: with all three designs liked, Redo refuses outright, and
+  //   Replace unsaved — REPLACES the ones you haven't saved or approved.
+  // The pair matters: with all three designs liked, Replace refuses outright, and
   // "I want to see a fourth" had no button at all before (Scott, 2026-07-26).
   const cost = mode === 'live' ? ' (~$0.03)' : ' (free)';
   const headerBtn = `rounded border px-2.5 py-1 text-[11px] font-medium transition-colors disabled:opacity-40 ${focusRing}`;
@@ -703,10 +720,10 @@ function RunView({ detail, busy, running, pendingIds, onApprove, onReject, onSav
       </button>
       <button
         type="button" disabled={busy || running} onClick={() => onRegenerate(surfaceKey)}
-        title="Replaces only the designs you haven't saved or approved — saved ones stay."
+        title="Replaces the designs you haven't saved or approved."
         className={`${headerBtn} border-neutral-700 bg-neutral-900 text-neutral-300 hover:border-[#0247FE] hover:text-white`}
       >
-        ↻ Redo unsaved designs{mode === 'live' ? ' (~$0.03 each)' : ' (free)'}
+        ↻ Replace unsaved designs{mode === 'live' ? ' (~$0.03 each)' : ' (free)'}
       </button>
     </span>
   );
@@ -766,7 +783,7 @@ function RunView({ detail, busy, running, pendingIds, onApprove, onReject, onSav
 
   return (
     <div className="space-y-10">
-      <Section title="Spectacular — big street billboard" subtitle={`${options(specChip)} · the one(s) you approve become 4K (3840×1062) videos with the black-frame look`} chip={specChip} action={sectionActions('spectacular')}>
+      <Section title="Spectacular — big street billboard" subtitle={`${options(specChip)} · Approved designs become 4K videos.`} chip={specChip} action={sectionActions('spectacular')}>
         {renderAnchors(spectacularU.anchors, latestMotion)}
         <div className="space-y-4">
           {spectacularU.loners.map((still) => {
@@ -780,7 +797,7 @@ function RunView({ detail, busy, running, pendingIds, onApprove, onReject, onSav
 
       <Section
         title="EON — 3-pillar set"
-        subtitle={`${options(connChip)} · each is one wide design split across the three pillars so the artwork travels from pillar to pillar — every pillar gets its face plus the narrow LED spine down its left side`}
+        subtitle={`${options(connChip)} · One wide design spread across all three pillars.`}
         chip={connChip} action={sectionActions('eon_connected')}
       >
         {renderAnchors(connectedU.anchors, noMotion)}
@@ -797,7 +814,7 @@ function RunView({ detail, busy, running, pendingIds, onApprove, onReject, onSav
 
       <Section
         title="EON — single pillar"
-        subtitle={`${options(singChip)} · each approved one becomes a 4K-class pillar video — its face (1280×1920) plus its side spine (320×1920)`}
+        subtitle={`${options(singChip)} · Approved designs become a 4K pillar video — the face plus the side strip.`}
         chip={singChip} action={sectionActions('eon_single')}
       >
         {renderAnchors(singlesU.anchors, noMotion)}
@@ -835,7 +852,7 @@ function Section({ title, subtitle, chip, action, children }) {
               </span>
             )}
           </h2>
-          <p className="text-xs text-neutral-500">{subtitle}</p>
+          <p className="text-xs text-neutral-400">{subtitle}</p>
         </div>
         {action}
       </div>
@@ -870,7 +887,7 @@ function ExplorationFamily({ keeper, keeperMotion, variations, animating, busy, 
       />
       <div className="mt-3">
         <p className="mb-2 text-[11px] leading-snug text-neutral-400">
-          Each new version is just $0.03 — your kept design stays safe. Promote one to make it the keeper.
+          Each version costs ~$0.03. This design stays.
         </p>
         {variations.length > 0 ? (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
@@ -888,8 +905,8 @@ function ExplorationFamily({ keeper, keeperMotion, variations, animating, busy, 
             ))}
           </div>
         ) : (
-          <p className="rounded border border-dashed border-neutral-800 px-3 py-2 text-[11px] text-neutral-500">
-            No other versions yet — use ↻ Vary for a fresh take, or ✎ Tweak to describe a change. Your kept design stays safe.
+          <p className="rounded border border-dashed border-neutral-800 px-3 py-2 text-[11px] text-neutral-400">
+            No versions yet.
           </p>
         )}
       </div>
