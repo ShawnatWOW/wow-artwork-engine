@@ -17,7 +17,7 @@ import { getRepo } from '../db/index.js';
 import { getStore } from '../services/storage/index.js';
 import { contentTypeFor } from '../services/storage/s3.js';
 import { animateRun, regenerateStill, varyStill, tweakStill } from '../services/orchestrator.js';
-import { keepArtwork, promoteArtwork, resolveDesign } from '../services/keeper.js';
+import { keepArtwork, unkeepArtwork, promoteArtwork, resolveDesign } from '../services/keeper.js';
 
 const router = Router();
 
@@ -56,8 +56,7 @@ router.delete('/artworks/:id/select', async (req, res, next) => {
   try {
     const artwork = await loadArtwork(req, res);
     if (!artwork) return;
-    const design = await resolveDesign({ artwork, repo: getRepo() });
-    await getRepo().removeSelection(design.id);
+    await unkeepArtwork({ artworkId: artwork.id, repo: getRepo() });
     res.status(204).end();
   } catch (err) {
     next(err);
@@ -129,8 +128,7 @@ router.delete('/artworks/:id/keep', async (req, res, next) => {
   try {
     const artwork = await loadArtwork(req, res);
     if (!artwork) return;
-    const design = await resolveDesign({ artwork, repo: getRepo() });
-    await getRepo().removeSelection(design.id);
+    await unkeepArtwork({ artworkId: artwork.id, repo: getRepo() });
     res.status(204).end();
   } catch (err) {
     next(err);

@@ -65,6 +65,30 @@ export async function keepArtwork({ artworkId, selectedBy = null, repo = getRepo
 }
 
 /**
+ * Drop a design's selection — the un-keep / unsave path. From a video card this
+ * acts on the design behind it.
+ *
+ * Also retires the family marker when nothing else is in the family. Leaving it
+ * set meant a design that had once been kept came back as a full exploration
+ * anchor the next time it was merely SAVED, since the dashboard tells Save from
+ * Keep by family_id (QA, 2026-07-26). When variations DO exist the marker
+ * stays — they belong to that family and must not be orphaned.
+ * @returns {Promise<object|null>} the updated design row
+ */
+export async function unkeepArtwork({ artworkId, repo = getRepo() }) {
+  const artwork = await repo.getArtwork(artworkId);
+  if (!artwork) throw Object.assign(new Error('artwork_not_found'), { code: 'artwork_not_found' });
+  const design = await resolveDesign({ artwork, repo });
+  await repo.removeSelection(design.id);
+  if (design.family_id != null) {
+    const siblings = (await repo.listArtworks(design.run_id))
+      .filter((a) => a.family_id === design.family_id && a.id !== design.id);
+    if (siblings.length === 0) return repo.updateArtwork(design.id, { familyId: null });
+  }
+  return repo.getArtwork(design.id);
+}
+
+/**
  * Promote any family member (typically a variation) to be THE keeper: clear the
  * whole family's selections, then select this one. The original is never lost —
  * only the anchor's selection moves.
@@ -79,4 +103,4 @@ export async function promoteArtwork({ artworkId, selectedBy = null, repo = getR
   return repo.getArtwork(artworkId);
 }
 
-export default { keepArtwork, promoteArtwork, resolveDesign };
+export default { keepArtwork, unkeepArtwork, promoteArtwork, resolveDesign };

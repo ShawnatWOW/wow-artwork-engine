@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { createMemoryRepo } from '../src/db/memoryRepo.js';
-import { keepArtwork, promoteArtwork } from '../src/services/keeper.js';
+import { keepArtwork, unkeepArtwork, promoteArtwork } from '../src/services/keeper.js';
 
 // A still row helper for the "keep & explore" family tests — no generation
 // needed; the keeper logic only reads/writes rows + selections.
@@ -120,6 +120,30 @@ test('keep: bootstraps the family and enforces exactly one keeper per family', a
   // A video with no design behind it has nothing to explore — say so plainly.
   const orphan = await repo.insertArtwork({ runId: run.id, surface: 'eon', style: 'eon_single', mediaType: 'video', stage: 'motion', specKey: 'eon_face', status: 'ready' });
   await assert.rejects(() => keepArtwork({ artworkId: orphan.id, repo }), /no design behind it/);
+});
+
+// QA 2026-07-26: un-keeping dropped the selection but left family_id set, so
+// the next plain SAVE re-promoted the design to a full exploration anchor —
+// the dashboard tells Save from Keep by family_id.
+test('unkeep: clears a lone design\'s family marker, but never orphans variations', async () => {
+  const repo = createMemoryRepo();
+  const run = await repo.createRun({ weekOf: '2026-08-10', triggeredBy: 'test' });
+
+  // A design kept and then un-kept goes fully back to being a plain design.
+  const solo = await stillIn(repo, run.id);
+  await keepArtwork({ artworkId: solo.id, repo });
+  assert.equal((await repo.getArtwork(solo.id)).family_id, solo.id);
+  await unkeepArtwork({ artworkId: solo.id, repo });
+  assert.equal((await repo.getArtwork(solo.id)).family_id, null, 'a lone design must not stay anchored');
+  assert.deepEqual(await pickIds(repo, run.id), []);
+
+  // With variations in the family the marker MUST survive, or they orphan.
+  const anchor = await stillIn(repo, run.id);
+  await keepArtwork({ artworkId: anchor.id, repo });
+  const variation = await stillIn(repo, run.id, { familyId: anchor.id, parentArtworkId: anchor.id });
+  await unkeepArtwork({ artworkId: anchor.id, repo });
+  assert.equal((await repo.getArtwork(anchor.id)).family_id, anchor.id, 'family with members must stay intact');
+  assert.equal((await repo.getArtwork(variation.id)).family_id, anchor.id);
 });
 
 test('promote: a variation becomes the keeper; the original is never lost', async () => {

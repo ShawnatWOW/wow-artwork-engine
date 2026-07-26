@@ -302,54 +302,79 @@ export function ReviewDashboard() {
   // the same selections row as Keep, so it gets the same protection; the
   // difference is that Save leaves family_id null, which is what keeps the card
   // in place instead of promoting it to an exploration anchor. ----
-  const saveArtwork = useCallback((art) => runOptimistic({
-    ids: [art.id],
-    apply: (d) => ((d.selections || []).some((s) => s.artwork_id === art.id)
-      ? d
-      : { ...d, selections: [...(d.selections || []), { artwork_id: art.id }] }),
-    revert: (d) => ({ ...d, selections: (d.selections || []).filter((s) => s.artwork_id !== art.id) }),
-    call: () => api.select(art.id),
-    success: 'Saved — a redo won’t replace it',
-    tone: 'violet',
-  }), [runOptimistic]);
+  // The selection always lands on the DESIGN, never on a video row — the server
+  // resolves it the same way, so the optimistic state has to match or the card
+  // shows a Saved badge next to an un-saved button (QA, 2026-07-26).
+  const addSelection = (id) => (d) => ((d.selections || []).some((s) => s.artwork_id === id)
+    ? d
+    : { ...d, selections: [...(d.selections || []), { artwork_id: id }] });
+  const dropSelection = (id) => (d) => ({ ...d, selections: (d.selections || []).filter((s) => s.artwork_id !== id) });
 
-  const unsaveArtwork = useCallback((art) => runOptimistic({
-    ids: [art.id],
-    apply: (d) => ({ ...d, selections: (d.selections || []).filter((s) => s.artwork_id !== art.id) }),
-    revert: (d) => ((d.selections || []).some((s) => s.artwork_id === art.id)
-      ? d
-      : { ...d, selections: [...(d.selections || []), { artwork_id: art.id }] }),
-    call: () => api.unselect(art.id),
-    success: 'No longer saved',
-    tone: 'neutral',
-  }), [runOptimistic]);
+  const saveArtwork = useCallback((art) => {
+    const id = designIdOf(art);
+    return runOptimistic({
+      ids: [art.id, id],
+      apply: addSelection(id),
+      revert: dropSelection(id),
+      call: () => api.select(art.id),
+      success: 'Saved — a redo won’t replace it',
+      tone: 'violet',
+    });
+  }, [runOptimistic]);
+
+  const unsaveArtwork = useCallback((art) => {
+    const id = designIdOf(art);
+    return runOptimistic({
+      ids: [art.id, id],
+      apply: dropSelection(id),
+      revert: addSelection(id),
+      call: () => api.unselect(art.id),
+      success: 'No longer saved',
+      tone: 'neutral',
+    });
+  }, [runOptimistic]);
 
   // ---- Keep & explore. keep/unkeep/promote only move the keeper marker, so
   // they're OPTIMISTIC like the other card actions (the 2s poll / next nav
   // reconciles). vary/tweak GENERATE a family member — heavy path below. ----
 
   // Anchor a favourite so regeneration skips it and its variations rail opens.
-  const keepArtwork = useCallback((art) => runOptimistic({
-    ids: [art.id],
-    apply: (d) => ((d.selections || []).some((s) => s.artwork_id === art.id)
-      ? d
-      : { ...d, selections: [...(d.selections || []), { artwork_id: art.id }] }),
-    revert: (d) => ({ ...d, selections: (d.selections || []).filter((s) => s.artwork_id !== art.id) }),
-    call: () => api.keep(art.id),
-    success: 'Kept — exploring versions',
-    tone: 'violet',
-  }), [runOptimistic]);
+  // Keep must ALSO set family_id optimistically. The dashboard tells Keep from
+  // Save by family_id, and only the server was setting it — so keeping looked
+  // like it did nothing at all until the page was reloaded (QA, 2026-07-26).
+  const keepArtwork = useCallback((art) => {
+    const id = designIdOf(art);
+    const design = detailRef.current?.artworks.find((a) => a.id === id);
+    const familyId = design?.family_id ?? id;
+    const priorFamily = design?.family_id ?? null;
+    const setFamily = (value) => (d) => ({
+      ...d,
+      artworks: d.artworks.map((a) => (a.id === id ? { ...a, family_id: value } : a)),
+    });
+    return runOptimistic({
+      ids: [art.id, id],
+      apply: (d) => setFamily(familyId)(addSelection(id)(d)),
+      revert: (d) => setFamily(priorFamily)(dropSelection(id)(d)),
+      call: () => api.keep(art.id),
+      success: 'Kept — exploring versions',
+      tone: 'violet',
+    });
+  }, [runOptimistic]);
 
-  const unkeepArtwork = useCallback((art) => runOptimistic({
-    ids: [art.id],
-    apply: (d) => ({ ...d, selections: (d.selections || []).filter((s) => s.artwork_id !== art.id) }),
-    revert: (d) => ((d.selections || []).some((s) => s.artwork_id === art.id)
-      ? d
-      : { ...d, selections: [...(d.selections || []), { artwork_id: art.id }] }),
-    call: () => api.unkeep(art.id),
-    success: 'No longer keeping that one',
-    tone: 'neutral',
-  }), [runOptimistic]);
+  const unkeepArtwork = useCallback((art) => {
+    const id = designIdOf(art);
+    return runOptimistic({
+      ids: [art.id, id],
+      apply: dropSelection(id),
+      revert: addSelection(id),
+      // The server also clears family_id when nothing else is in the family;
+      // refetch so the card demotes back to a plain card rather than lingering
+      // as an anchor with no keeper.
+      call: () => api.unkeep(art.id).then(() => loadDetail(runId)),
+      success: 'No longer keeping that one',
+      tone: 'neutral',
+    });
+  }, [runOptimistic, loadDetail, runId]);
 
   // Promote a variation to keeper: the old keeper in its family steps down.
   // familyIds carries every member so the previous keeper's marker is cleared.
@@ -475,7 +500,7 @@ function Header({ runs, runId, onSelectRun, onGenerate, onAnimate, pendingAnimat
   // ONE primary CTA at a time — the next step in the flow is solid, everything
   // else drops to a quiet outline (CEO feedback: three loud buttons = "which?").
   const primary = pendingAnimate > 0 ? 'animate' : readyToSend > 0 ? 'send' : 'generate';
-  const btnBase = `rounded px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-50 ${focusRing}`;
+  const btnBase = `inline-flex min-h-[44px] items-center rounded px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-50 sm:min-h-0 ${focusRing}`;
   return (
     <header className="mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-neutral-800 pb-4">
       <div className="space-y-1">
@@ -495,7 +520,11 @@ function Header({ runs, runId, onSelectRun, onGenerate, onAnimate, pendingAnimat
         </p>
         <Stepper detail={detail} />
       </div>
-      <div className="flex items-center gap-2">
+      {/* flex-wrap + w-full below sm: without it this row measured 565px in a
+          390px viewport, pushing "Send to Jeff" and "Create designs" entirely
+          off-screen and giving the page 199px of horizontal scroll
+          (QA, 2026-07-26). */}
+      <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
         {running ? (
           <span role="status" aria-live="polite" className="flex items-center gap-2 rounded-md bg-amber-950 px-3 py-1.5 text-sm font-medium text-amber-200">
             <Spinner className="border-amber-700 border-t-amber-300" />
@@ -708,7 +737,8 @@ function RunView({ detail, busy, running, pendingIds, onApprove, onReject, onSav
   // The pair matters: with all three designs liked, Replace refuses outright, and
   // "I want to see a fourth" had no button at all before (Scott, 2026-07-26).
   const cost = mode === 'live' ? ' (~$0.03)' : ' (free)';
-  const headerBtn = `rounded border px-2.5 py-1 text-[11px] font-medium transition-colors disabled:opacity-40 ${focusRing}`;
+  // 26.5px measured before — under half the phone tap target (QA, 2026-07-26).
+  const headerBtn = `inline-flex min-h-[40px] items-center rounded border px-2.5 py-2 text-xs font-medium transition-colors disabled:opacity-50 ${focusRing}`;
   const sectionActions = (surfaceKey) => (
     <span className="flex flex-wrap items-center gap-1.5">
       <button
@@ -756,13 +786,17 @@ function RunView({ detail, busy, running, pendingIds, onApprove, onReject, onSav
   // surface's plain-card layout. getMotion swaps in the keeper's video once it's
   // been animated (EON keepers stay stills — their motion is a set of panels,
   // shown as a pod set below rather than as one card).
-  const renderAnchors = (anchors, getMotion) => (anchors.length > 0 ? (
-    <div className="mb-6 space-y-6">
+  // `maxW` caps the anchor for tall surfaces. A kept single pillar is 2:3, so
+  // full-width rendered it 1078x1436 — 1.6 screen-heights for one card, versus
+  // 357x546 as a plain card in the same section (QA, 2026-07-26). Wide
+  // surfaces (the 3.6:1 billboard) genuinely want the full width.
+  const renderAnchors = (anchors, getMotion, maxW = '') => (anchors.length > 0 ? (
+    <div className={`mb-6 space-y-6 ${maxW}`}>
       {anchors.map(({ keeper, variations }) => {
         const keeperMotion = getMotion(keeper);
         return (
           <ExplorationFamily
-            key={keeper.id} keeper={keeper} keeperMotion={keeperMotion} variations={variations}
+            key={keeper.id} keeper={keeper} keeperMotion={keeperMotion} variations={variations} mode={mode}
             animating={isAnimating(keeper, keeperMotion || null)} busy={busy} running={running}
             pendingIds={pendingIds} handlers={familyHandlers}
           />
@@ -790,7 +824,7 @@ function RunView({ detail, busy, running, pendingIds, onApprove, onReject, onSav
             // .at(-1): after a re-roll, show the LATEST video.
             const motion = motionsByStill.get(still.id)?.at(-1);
             const a = motion || still;
-            return <Card key={still.id} artwork={a} actions={actionsFor(a)} animating={isAnimating(still, motion)} saved={savedSet.has(a.id)} />;
+            return <Card key={still.id} artwork={a} actions={actionsFor(a)} animating={isAnimating(still, motion)} saved={savedSet.has(designIdOf(a))} />;
           })}
         </div>
       </Section>
@@ -807,7 +841,7 @@ function RunView({ detail, busy, running, pendingIds, onApprove, onReject, onSav
             const panels = panelsFor(still); // latest spine+face set per pillar
             return panels.length
               ? <PodSet key={still.id} panels={panels} actions={groupActions(panels)} caption="The finished 3-pillar set — watch the artwork cross from one pillar to the next, and wrap onto each spine" />
-              : <div key={still.id} className="max-w-2xl"><Card artwork={still} actions={actionsFor(still)} animating={isAnimating(still, null)} saved={savedSet.has(still.id)} /></div>;
+              : <div key={still.id} className="max-w-2xl"><Card artwork={still} actions={actionsFor(still)} animating={isAnimating(still, null)} saved={savedSet.has(designIdOf(still))} /></div>;
           })}
         </div>
       </Section>
@@ -817,7 +851,7 @@ function RunView({ detail, busy, running, pendingIds, onApprove, onReject, onSav
         subtitle={`${options(singChip)} · Approved designs become a 4K pillar video — the face plus the side strip.`}
         chip={singChip} action={sectionActions('eon_single')}
       >
-        {renderAnchors(singlesU.anchors, noMotion)}
+        {renderAnchors(singlesU.anchors, noMotion, 'max-w-md')}
         <WrapLegend pods={1} />
         {/* One column on a phone: each card carries four action buttons under
             it, which are unusable squeezed into a half-width column. */}
@@ -826,7 +860,7 @@ function RunView({ detail, busy, running, pendingIds, onApprove, onReject, onSav
             const panels = panelsFor(still);
             return panels.length
               ? <PodSet key={still.id} panels={panels} actions={groupActions(panels)} caption="The finished pillar — its face plus the spine that wraps around its left edge" />
-              : <Card key={still.id} artwork={still} actions={actionsFor(still)} animating={isAnimating(still, null)} saved={savedSet.has(still.id)} />;
+              : <Card key={still.id} artwork={still} actions={actionsFor(still)} animating={isAnimating(still, null)} saved={savedSet.has(designIdOf(still))} />;
           })}
         </div>
       </Section>
@@ -865,7 +899,7 @@ function Section({ title, subtitle, chip, action, children }) {
 // Approve/Pass/Un-keep settle optimistically; Vary/Tweak generate ($0.03) and
 // flip the run to 'running'. Every button is pre-bound to the right artwork id
 // here so AnchorCard/VariationCard stay purely presentational.
-function ExplorationFamily({ keeper, keeperMotion, variations, animating, busy, running, pendingIds, handlers }) {
+function ExplorationFamily({ keeper, keeperMotion, variations, animating, busy, running, pendingIds, handlers, mode }) {
   const { onApprove, onReject, onUnkeep, onVary, onTweak, onPromote } = handlers;
   const preview = keeperMotion || keeper; // show the keeper's video once animated
   const familyIds = useMemo(
@@ -873,6 +907,9 @@ function ExplorationFamily({ keeper, keeperMotion, variations, animating, busy, 
     [keeper.id, variations],
   );
   const gen = busy || running; // a generation locks the whole family
+  // Fixture mode really is free — quoting $0.03 there contradicts the section
+  // buttons, which already say "(free)" (QA, 2026-07-26).
+  const cost = mode === 'live' ? ' (~$0.03)' : ' (free)';
   return (
     <div className="rounded-xl border border-amber-500/30 bg-amber-500/[0.03] p-3">
       <AnchorCard
@@ -884,10 +921,11 @@ function ExplorationFamily({ keeper, keeperMotion, variations, animating, busy, 
         onVary={() => onVary(keeper.id)}
         onTweak={(t) => onTweak(keeper.id, t)}
         onUnkeep={() => onUnkeep(keeper)}
+        cost={cost}
       />
       <div className="mt-3">
         <p className="mb-2 text-[11px] leading-snug text-neutral-400">
-          Each version costs ~$0.03. This design stays.
+          {mode === 'live' ? 'Each version costs ~$0.03.' : 'Each version is free.'} This design stays.
         </p>
         {variations.length > 0 ? (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
@@ -901,6 +939,7 @@ function ExplorationFamily({ keeper, keeperMotion, variations, animating, busy, 
                 onPromote={() => onPromote(v, familyIds)}
                 onVary={() => onVary(v.id)}
                 onTweak={(t) => onTweak(v.id, t)}
+                cost={cost}
               />
             ))}
           </div>

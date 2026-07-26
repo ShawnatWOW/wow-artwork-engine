@@ -192,6 +192,13 @@ function FadeImg({ src, alt = '', className = '' }) {
 // around the corner (WOW template spec sheet). A pod is 1 part spine to 4 parts
 // face, which is the ratio these components render at.
 
+// Plain-language names for the three sign types, used for image alt text.
+const SURFACE_NAMES = {
+  frame_break: 'Spectacular billboard',
+  eon_connected: 'EON 3-pillar',
+  eon_single: 'EON single pillar',
+};
+
 const PODS_FOR_STYLE = { eon_connected: 3, eon_single: 1 };
 const SPINE_SHARE = 0.2; // a spine is 320 of a pod's 1600 delivery pixels
 
@@ -262,7 +269,13 @@ export function Preview({ artwork }) {
         // nothing here renders wider than ~1400px, so pointing the grid at the
         // master downloaded ~30 MB to show nine cards (perf audit 2026-07-26).
         // The thumbnail is the same picture at ~45 KB.
-        <FadeImg className="h-full w-full object-cover" src={api.thumbUrl(artwork.id)} alt="" />
+        <FadeImg
+          className="h-full w-full object-cover"
+          src={api.thumbUrl(artwork.id)}
+          // The artwork IS the thing being reviewed, so it needs a real name —
+          // an empty alt tells a screen reader there is nothing here at all.
+          alt={`${SURFACE_NAMES[artwork.style] || 'Artwork'} design, ${statusLabel(artwork.status, artwork.stage)}`}
+        />
       ) : (
         <LazyVideo artworkId={artwork.id} />
       )}
@@ -530,7 +543,7 @@ function TweakBox({ busy, onSubmit, onCancel }) {
 
 // The kept design, rendered as a highlighted anchor (amber ring + "Kept —
 // exploring" badge). Vary/Tweak spin off variations; the original stays put.
-export function AnchorCard({ artwork, animating, busy, onApprove, onReject, onVary, onTweak, onUnkeep }) {
+export function AnchorCard({ artwork, animating, busy, onApprove, onReject, onVary, onTweak, onUnkeep, cost = ' (~$0.03)' }) {
   const [tweaking, setTweaking] = useState(false);
   const btn = `inline-flex h-10 items-center gap-1 rounded border px-2 text-xs font-medium transition-colors disabled:opacity-40 ${focusRing}`;
   const ghost = 'border-neutral-700 bg-transparent text-neutral-400 hover:bg-neutral-800';
@@ -564,26 +577,31 @@ export function AnchorCard({ artwork, animating, busy, onApprove, onReject, onVa
         ) : (
           <>
             <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              {/* Once the keeper has been animated this card IS the video, so
+                  approving it queues it for Jeff — it must not still say
+                  "design" (QA, 2026-07-26). */}
               <button
                 type="button" disabled={busy} onClick={onApprove}
-                title="Approve this design — approved designs get turned into videos"
+                title={artwork.stage === 'still'
+                  ? 'Approve this design — approved designs get turned into videos'
+                  : 'Approve this video — approved videos can be sent to Jeff'}
                 className={`${btn} ${approved ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-emerald-700/60 bg-transparent text-emerald-300 hover:border-emerald-600 hover:bg-emerald-600 hover:text-white'}`}
               >
-                {approved ? '✓ Approved' : '✓ Use this design'}
+                {approved ? '✓ Approved' : artwork.stage === 'still' ? '✓ Use this design' : '✓ Approve video'}
               </button>
               <button
                 type="button" disabled={busy} onClick={() => setTweaking((v) => !v)}
                 title="Describe a change in plain words — makes a new version ($0.03), original kept"
                 className={`${btn} ${ghost} hover:text-sky-300`}
               >
-                ✎ Tweak… (~$0.03)
+                ✎ Tweak…{cost}
               </button>
               <button
                 type="button" disabled={busy} onClick={onVary}
                 title="Generate another version of this design ($0.03) — the original is kept"
                 className={`${btn} ${ghost} hover:text-sky-300`}
               >
-                ↻ Vary (~$0.03)
+                ↻ Vary{cost}
               </button>
               <button
                 type="button" disabled={busy} onClick={onReject}
@@ -613,9 +631,9 @@ export function AnchorCard({ artwork, animating, busy, onApprove, onReject, onVa
 
 // A single variation in the rail beneath the anchor: compact preview + its
 // one-line change note, and the actions to use / promote / tweak / vary / dismiss.
-export function VariationCard({ artwork, busy, onApprove, onReject, onPromote, onVary, onTweak }) {
+export function VariationCard({ artwork, busy, onApprove, onReject, onPromote, onVary, onTweak, cost = ' (~$0.03)' }) {
   const [tweaking, setTweaking] = useState(false);
-  const btn = `inline-flex h-9 items-center gap-1 rounded border px-1.5 text-[11px] font-medium transition-colors disabled:opacity-40 ${focusRing}`;
+  const btn = `inline-flex h-10 items-center gap-1 rounded border px-2 text-[11px] font-medium transition-colors disabled:opacity-50 ${focusRing}`;
   const ghost = 'border-neutral-700 bg-transparent text-neutral-400 hover:bg-neutral-800';
   const approved = artwork.status === 'approved';
   return (
@@ -649,14 +667,14 @@ export function VariationCard({ artwork, busy, onApprove, onReject, onPromote, o
             title="Describe a change to this version ($0.03)"
             className={`${btn} ${ghost} hover:text-sky-300`}
           >
-            ✎ Tweak (~$0.03)
+            ✎ Tweak{cost}
           </button>
           <button
             type="button" disabled={busy} onClick={onVary}
             title="Another version like this one ($0.03)"
             className={`${btn} ${ghost} hover:text-sky-300`}
           >
-            ↻ Vary (~$0.03)
+            ↻ Vary{cost}
           </button>
           <button
             type="button" disabled={busy} onClick={onReject}
