@@ -14,7 +14,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from './api.js';
 import {
-  StatusBadge, Card, AnchorCard, VariationCard, PodSet, WrapLegend,
+  StatusBadge, Card, AnchorCard, VariationCard, PodSet, WrapLegend, PendingDesignCard,
   ModePill, SpendPill, Stepper, Spinner, SkeletonCard, Toasts, useToasts,
   focusRing, progressLabel, latestPanels,
 } from './ui.jsx';
@@ -117,6 +117,8 @@ export function ReviewDashboard() {
   const [showSend, setShowSend] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [spend, setSpend] = useState(null);
+  // Which sign is generating a new design (drives the in-place placeholder).
+  const [pendingSurface, setPendingSurface] = useState(null);
   const { toasts, push: pushToast, dismiss: dismissToast } = useToasts();
 
   const runIdRef = useRef(null);
@@ -176,6 +178,15 @@ export function ReviewDashboard() {
   // state for an exact rollback without re-subscribing to every change.
   useEffect(() => { detailRef.current = detail; }, [detail]);
 
+  // Retire the placeholder once the run stops running. Guarded on having SEEN
+  // it run, because `running` is still false in the moment between the click
+  // and the 202 coming back.
+  const sawRunning = useRef(false);
+  useEffect(() => {
+    if (running) sawRunning.current = true;
+    else if (sawRunning.current) { sawRunning.current = false; setPendingSurface(null); }
+  }, [running]);
+
   // Poll every 2s ONLY while a job runs — and not in a hidden tab. Resuming
   // visibility refetches immediately so the page catches up at a glance.
   useEffect(() => {
@@ -231,10 +242,21 @@ export function ReviewDashboard() {
   // Per-sign ADD: one more option for ONE surface. Nothing is retired — this is
   // the "I like all three but want to see a fourth" path, which regenerate
   // can't serve because it replaces (and refuses once everything is spoken for).
+  //
+  // `pendingSurface` is what makes the wait visible: the button shows its own
+  // spinner and the section renders a placeholder card in the slot the new
+  // design will fill. Before this, the ONLY feedback was a spinner in the page
+  // header — frequently scrolled far out of view from the button you just
+  // pressed, so the click looked like it did nothing (Shawn, 2026-07-29).
   const addDesign = async (surfaceKey) => {
-    setBusy(true); setError(null);
-    try { await api.addDesign(runId, surfaceKey); await loadDetail(runId); }
-    catch (e) { setError(e.message); } finally { setBusy(false); }
+    setBusy(true); setError(null); setPendingSurface(surfaceKey);
+    try {
+      await api.addDesign(runId, surfaceKey);
+      await loadDetail(runId);
+    } catch (e) {
+      setError(e.message);
+      setPendingSurface(null); // the request never started — drop the placeholder
+    } finally { setBusy(false); }
   };
 
   // Per-design regenerate: replace ONE card only — its siblings stay.
@@ -476,6 +498,7 @@ export function ReviewDashboard() {
           onKeep={keepArtwork} onUnkeep={unkeepArtwork}
           onVary={vary} onTweak={tweak} onPromote={promoteArtwork}
           onRetry={retryAnimate} onRegenerate={regenerate} onAdd={addDesign} onRegenerateOne={regenerateOne}
+          pendingSurface={pendingSurface}
           mode={mode}
         />
       ) : (
@@ -644,7 +667,7 @@ function SkeletonHeading() {
   );
 }
 
-function RunView({ detail, busy, running, pendingIds, onApprove, onReject, onSave, onUnsave, onKeep, onUnkeep, onVary, onTweak, onPromote, onRetry, onRegenerate, onAdd, onRegenerateOne, mode }) {
+function RunView({ detail, busy, running, pendingIds, onApprove, onReject, onSave, onUnsave, onKeep, onUnkeep, onVary, onTweak, onPromote, onRetry, onRegenerate, onAdd, onRegenerateOne, mode, pendingSurface }) {
   const { artworks } = detail;
   // Saved (bookmarked) design ids — kept while regenerating, without approving.
   const savedSet = useMemo(() => new Set((detail.selections || []).map((s) => s.artwork_id)), [detail.selections]);
@@ -741,12 +764,16 @@ function RunView({ detail, busy, running, pendingIds, onApprove, onReject, onSav
   const headerBtn = `inline-flex min-h-[40px] items-center rounded border px-2.5 py-2 text-xs font-medium transition-colors disabled:opacity-50 ${focusRing}`;
   const sectionActions = (surfaceKey) => (
     <span className="flex flex-wrap items-center gap-1.5">
+      {/* The button says what it is doing. Dimming a disabled button is far too
+          quiet a signal for an action that takes ~20 seconds. */}
       <button
         type="button" disabled={busy || running} onClick={() => onAdd(surfaceKey)}
         title="Generate one more option for this sign — everything you already have stays exactly as it is."
-        className={`${headerBtn} border-[#0247FE]/60 bg-transparent text-[#7FA3FF] hover:border-[#0247FE] hover:bg-[#0247FE] hover:text-white`}
+        className={`${headerBtn} gap-1.5 border-[#0247FE]/60 bg-transparent text-[#7FA3FF] hover:border-[#0247FE] hover:bg-[#0247FE] hover:text-white disabled:hover:bg-transparent`}
       >
-        + Add another design{cost}
+        {pendingSurface === surfaceKey
+          ? <><Spinner className="h-3.5 w-3.5" /> Making a new design…</>
+          : <>+ Add another design{cost}</>}
       </button>
       <button
         type="button" disabled={busy || running} onClick={() => onRegenerate(surfaceKey)}
@@ -815,6 +842,13 @@ function RunView({ detail, busy, running, pendingIds, onApprove, onReject, onSav
   const singChip = chipFromUnits(singlesU, sing.animated);
   const options = (chip) => `${chip?.total ?? 0} design option${chip?.total === 1 ? '' : 's'}`;
 
+  // The placeholder occupies the slot the new design will fill, at that sign's
+  // real aspect ratio so nothing jumps when the design arrives.
+  const GEN_ASPECT = { spectacular: '4096 / 1132', eon_connected: '4096 / 1638', eon_single: '3200 / 3840' };
+  const pendingCard = (surfaceKey) => (pendingSurface === surfaceKey
+    ? <PendingDesignCard aspect={GEN_ASPECT[surfaceKey]} sub={mode === 'live' ? 'about 20 seconds' : 'a moment'} />
+    : null);
+
   return (
     <div className="space-y-10">
       <Section title="Spectacular — big street billboard" subtitle={`${options(specChip)} · Approved designs become 4K videos.`} chip={specChip} action={sectionActions('spectacular')}>
@@ -826,6 +860,7 @@ function RunView({ detail, busy, running, pendingIds, onApprove, onReject, onSav
             const a = motion || still;
             return <Card key={still.id} artwork={a} actions={actionsFor(a)} animating={isAnimating(still, motion)} saved={savedSet.has(designIdOf(a))} />;
           })}
+          {pendingCard('spectacular')}
         </div>
       </Section>
 
@@ -843,6 +878,7 @@ function RunView({ detail, busy, running, pendingIds, onApprove, onReject, onSav
               ? <PodSet key={still.id} panels={panels} actions={groupActions(panels)} caption="The finished 3-pillar set — watch the artwork cross from one pillar to the next, and wrap onto each spine" />
               : <div key={still.id} className="max-w-2xl"><Card artwork={still} actions={actionsFor(still)} animating={isAnimating(still, null)} saved={savedSet.has(designIdOf(still))} /></div>;
           })}
+          <div className="max-w-2xl">{pendingCard('eon_connected')}</div>
         </div>
       </Section>
 
@@ -862,6 +898,7 @@ function RunView({ detail, busy, running, pendingIds, onApprove, onReject, onSav
               ? <PodSet key={still.id} panels={panels} actions={groupActions(panels)} caption="The finished pillar — its face plus the spine that wraps around its left edge" />
               : <Card key={still.id} artwork={still} actions={actionsFor(still)} animating={isAnimating(still, null)} saved={savedSet.has(designIdOf(still))} />;
           })}
+          {pendingCard('eon_single')}
         </div>
       </Section>
     </div>

@@ -740,6 +740,36 @@ export function Stepper({ detail }) {
 
 // Pulse placeholder shown while a batch's details load — the page keeps its
 // real shape (true aspect ratios) instead of flashing an empty state.
+// A design that is being generated RIGHT NOW, shown in the slot it will occupy.
+//
+// Clicking "Add another design" used to give feedback only in the page header —
+// often thousands of pixels above the button, and nothing at all where the new
+// design would land (Shawn, 2026-07-29). This card makes the wait visible in
+// place: it scrolls itself into view on mount, so you always see that something
+// is coming and where.
+export function PendingDesignCard({ aspect = '16 / 9', label = 'Making a new design…', sub }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    // 'nearest': scroll only if it is actually off-screen, and only as far as
+    // needed. 'center' yanked the page away from the button just clicked.
+    ref.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, []);
+  return (
+    <div
+      ref={ref} role="status" aria-live="polite"
+      className="card-in rounded-lg border border-[#0247FE]/70 bg-neutral-900 p-2 ring-1 ring-[#0247FE]/30"
+    >
+      <div className="grid place-items-center rounded bg-neutral-950" style={{ aspectRatio: aspect }}>
+        <div className="flex flex-col items-center gap-2 px-3 text-center">
+          <Spinner className="h-7 w-7" />
+          <span className="text-xs font-semibold text-white">{label}</span>
+          <span className="text-[11px] text-neutral-400">{sub || 'about 20 seconds'}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function SkeletonCard({ aspect = '16 / 9' }) {
   return (
     <div className="motion-safe:animate-pulse rounded-lg border border-neutral-800 bg-neutral-900 p-2" aria-hidden="true">
