@@ -22,28 +22,36 @@
 //   line. Subjects are characterful creatures caught mid-motion; the connected
 //   wide master gets a choreographed 3-act journey (loop on the right screen,
 //   a unique trick in the middle, land on the left) that rotates every week.
-// - WRAP BANDS (Shawn, 2026-07-25): every EON pod has a narrow LED spine down
-//   its left side, cut from the same master as its face (see eonSlicer.js), so
-//   parts of the frame bend 90 degrees away from the viewer. Those strips are
-//   described as narrow vertical BANDS at frame positions — never as spines or
-//   hardware — with two art rules: color and light must flow through them
-//   unbroken (they're one continuous piece), and the subject's finest detail
-//   must stay out of them (detail landing on a fold is lost around the corner).
+// - WRAP FOLDS (Shawn, 2026-07-25, hardened 2026-07-31): every EON pod has a
+//   narrow LED spine down its left side, cut from the same master as its face
+//   (see eonSlicer.js), so parts of the frame bend 90 degrees away from the
+//   viewer. Two art rules: the scene must stay seamless through the fold
+//   positions, and the subject's finest detail must stay out of them (detail
+//   landing on a fold is lost around the corner). Described strictly as AREAS —
+//   never as bands/lines/stripes (Seedance painted literal white lines at the
+//   named positions) and never as spines/hardware.
 // Pure + deterministic (seeded by week + option) so runs are reproducible.
 
-// Where the wrap bands fall, as plain-language frame positions. A pod slab is
-// exactly one third of the connected master, and its band leads that third —
-// so the bands sit at the far-left edge and just past the one-third and
-// two-thirds lines. A single pod is one slab, so its band is the left fifth.
+// Where the wrap folds fall, as plain-language frame positions: the far-left
+// edge and just past the one-third and two-thirds marks (a pod slab is exactly
+// one third of the connected master, and its spine leads the slab). A single
+// pod is one slab, so its fold zone is the left fifth.
+//
+// CRITICAL VOCABULARY RULE (learned the hard way, 2026-07-31): describe these
+// as AREAS to keep clear, never as "bands", "lines" or "stripes". The first
+// version said "narrow vertical bands at the one-third and two-thirds lines" —
+// and Seedance PAINTED white vertical lines at exactly those positions in the
+// finished pillar videos. Models literalize drawable nouns; areas are spatial,
+// not drawable.
 const WRAP_BANDS_CONNECTED =
-  'Three narrow vertical bands — one at the very left edge of the frame, one immediately to the right of ' +
-  'the one-third line, one immediately to the right of the two-thirds line, each about one fifteenth of the ' +
-  'frame width — must read as continuous parts of the scene: color, light and flowing texture carry straight ' +
-  'through them unbroken. Keep the hero subject\'s head and finest detail out of these three bands.';
+  'The scene is one unbroken continuous environment across its entire width, perfectly seamless everywhere. ' +
+  'Keep the hero subject\'s head and finest detail away from the far left edge of the frame and away from ' +
+  'the areas just right of one-third and two-thirds of the frame width; background color and texture flow ' +
+  'evenly through those areas.';
 const WRAP_BAND_SINGLE =
-  'The left-most fifth of the frame is a narrow vertical band that must read as a continuous part of the scene: ' +
-  'color, light and flowing texture carry straight through it unbroken, with glowing vertical streaks running ' +
-  'its full height. Keep the hero subject\'s head and finest detail out of that band.';
+  'The scene is one unbroken continuous environment across its entire width, perfectly seamless everywhere. ' +
+  'Keep the hero subject\'s head and finest detail out of the left fifth of the frame; background color and ' +
+  'texture flow evenly through it.';
 
 // (style, subject) pairs — the subject is a concrete, characterful, non-human
 // creature or object with personality. Rotated deterministically by week + option.
@@ -164,7 +172,7 @@ export function buildStillPrompt({ style, specKey, option, weekOf }) {
       `across the full width for it to travel through. The background itself is alive with motion — ` +
       `swirling patterns, flowing textures, and dynamic layers that suggest movement and depth as the subject travels. ` +
       `Lighting shifts and evolves as the subject journeys; no secondary focal objects; ` +
-      `keep the subject clear of the vertical lines at one-third and two-thirds of the frame width. ` +
+      `keep the subject clear of the areas at one-third and two-thirds of the frame width. ` +
       `${WRAP_BANDS_CONNECTED} ${CONTRAST} ${SAFE}`;
   }
   if (style === 'frame_break') {
@@ -190,6 +198,39 @@ export function buildStillPrompt({ style, specKey, option, weekOf }) {
     `${WRAP_BAND_SINGLE} ${ENERGY} ${CONTRAST} ${SAFE}`;
 }
 
+// Negative guard for the EON motion prompts (frame_break keeps its border on
+// purpose, so it does NOT get this): the pillar videos are cut at fixed x
+// offsets, so any painted seam lands mid-panel and reads as a defect on the
+// physical sign.
+const NO_SEAMS =
+  'The scene stays one seamless continuous environment for the whole clip — no borders, no frames, ' +
+  'no dividing marks, no pale vertical streaks appear anywhere at any time.';
+
+// The exact wrap sentences shipped 2026-07-25..30. Stills generated in that
+// window carry them in their STORED motion_prompt, and re-animating replays the
+// stored prompt — so the orchestrator strips these at animate time
+// (sanitizeMotionPrompt below). Keep byte-identical to what the builders
+// emitted; do not reword.
+const LEGACY_BAND_SENTENCES = [
+  'Motion runs continuously through the narrow vertical bands at the left edge and just past the one-third and ' +
+    'two-thirds lines — streaks of colour flow through them without pausing — but the subject never parks its head ' +
+    'or finest detail inside one of those bands. ',
+  'Colour and light stream continuously down the narrow vertical band at the very left edge of the frame, ' +
+    'while the subject keeps its head and finest detail out of that band. ',
+];
+
+/**
+ * Strip the legacy "vertical band" sentences from a stored motion prompt.
+ * Seedance literalized them into painted white lines at the named positions
+ * (Scott's pillar videos, 2026-07-31). Pure; a no-op on current prompts.
+ */
+export function sanitizeMotionPrompt(prompt) {
+  if (!prompt) return prompt;
+  let out = prompt;
+  for (const sentence of LEGACY_BAND_SENTENCES) out = out.split(sentence).join('');
+  return out;
+}
+
 /**
  * The motion prompt for one option — how the art moves within the frame.
  * @param {{ style, specKey, option, weekOf }} job
@@ -209,9 +250,7 @@ export function buildMotionPrompt({ style, specKey, option, weekOf }) {
       `Critically: the entire background is in constant motion at all times — not calm or steady. ` +
       `The background environment swirls, ripples, flows, shifts, and evolves continuously in sync with the subject's journey; ` +
       `every pixel of the composition is active. The entire scene is kinetic and alive, never static or passive. ` +
-      `Motion runs continuously through the narrow vertical bands at the left edge and just past the one-third and ` +
-      `two-thirds lines — streaks of colour flow through them without pausing — but the subject never parks its head ` +
-      `or finest detail inside one of those bands. ${CONSTANCY}`;
+      `${NO_SEAMS} ${CONSTANCY}`;
   }
   const solo = soloMotionFor({ specKey, option, weekOf })(t.subject);
   if (style === 'frame_break') {
@@ -226,10 +265,8 @@ export function buildMotionPrompt({ style, specKey, option, weekOf }) {
       `Smooth, premium, explosive high-energy movement — never static, never jittery. ${CONSTANCY}`;
   }
   return `Vivid ambient motion: ${solo}. ` +
-    `Colour and light stream continuously down the narrow vertical band at the very left edge of the frame, ` +
-    `while the subject keeps its head and finest detail out of that band. ` +
-    `Smooth and hypnotic, never chaotic or jittery. ${CONSTANCY}`;
+    `${NO_SEAMS} Smooth and hypnotic, never chaotic or jittery. ${CONSTANCY}`;
 }
 
 export { THEMES, CHOREOGRAPHIES, SOLO_MOTIONS };
-export default { buildStillPrompt, buildMotionPrompt, travelFor, themeFor, choreographyFor, soloMotionFor, THEMES };
+export default { buildStillPrompt, buildMotionPrompt, sanitizeMotionPrompt, travelFor, themeFor, choreographyFor, soloMotionFor, THEMES };

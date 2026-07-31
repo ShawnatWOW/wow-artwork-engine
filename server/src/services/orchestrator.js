@@ -25,7 +25,7 @@ import { sliceMaster } from './eonSlicer.js';
 import * as guardrailsModule from './guardrails.js';
 import * as qaModule from './qa.js';
 import { planJobs, POST, SURFACES, SPECS } from './generation/catalog.js';
-import { buildStillPrompt, buildMotionPrompt } from './generation/prompts.js';
+import { buildStillPrompt, buildMotionPrompt, sanitizeMotionPrompt } from './generation/prompts.js';
 import { refineTweak } from './generation/tweak.js';
 import { resolveDesign } from './keeper.js';
 import falPricing from './generation/falPricing.js';
@@ -671,6 +671,14 @@ async function animateStill(still, ctx) {
   if (!surface) throw new Error(`No surface for style "${still.style}"`);
   const finalSpec = SPECS[surface.specKey];
 
+  // Stills generated 2026-07-25..30 stored a motion prompt naming "vertical
+  // bands at the one-third and two-thirds lines" — vocabulary Seedance
+  // literalized into painted white lines at exactly those positions in the
+  // finished pillar videos (Scott, 2026-07-31). Stripping the sentence here,
+  // at the one place the motion spend happens, fixes re-animation of every
+  // affected still without touching stored data. No-op on current prompts.
+  const motionPrompt = sanitizeMotionPrompt(still.motion_prompt);
+
   const dir = path.join(workDir, `still${still.id}`);
   await mkdir(dir, { recursive: true });
 
@@ -682,7 +690,7 @@ async function animateStill(still, ctx) {
   const raw = path.join(dir, 'raw.mp4');
   const gen = await providers.motion.generate({
     width: surface.gen.width, height: surface.gen.height, ratio: surface.gen.ratio,
-    durationS: duration, fps, output: raw, prompt: still.motion_prompt,
+    durationS: duration, fps, output: raw, prompt: motionPrompt,
     referenceImage: ref,                       // local file — fixture mode
     referenceImageUrl: still.remote_url ?? null, // fal-hosted URL — live Seedance
   });
@@ -760,7 +768,7 @@ async function animateStill(still, ctx) {
 
   const insertMotion = (extra) => repo.insertArtwork({
     runId, surface: surface.surface, style: surface.style, mediaType: 'video', stage: 'motion',
-    sourceStillId: still.id, prompt: still.prompt, motionPrompt: still.motion_prompt, model: gen.model,
+    sourceStillId: still.id, prompt: still.prompt, motionPrompt, model: gen.model,
     s3KeyRaw: rawPut.key, error: driftWarn ?? null, ...extra,
   });
 

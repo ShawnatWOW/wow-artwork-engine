@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  buildStillPrompt, buildMotionPrompt, travelFor, themeFor, choreographyFor, THEMES, CHOREOGRAPHIES,
+  buildStillPrompt, buildMotionPrompt, sanitizeMotionPrompt, travelFor, themeFor, choreographyFor, THEMES, CHOREOGRAPHIES,
 } from '../src/services/generation/prompts.js';
 import { checkPrompt } from '../src/services/guardrails.js';
 import { planJobs } from '../src/services/generation/catalog.js';
@@ -95,6 +95,41 @@ test('connected still: subject at start edge, seam-avoidance, room to travel', (
   assert.match(s, /positioned at the right edge/);
   assert.match(s, /one-third and two-thirds of the frame width/); // seam avoidance
   assert.match(s, /continuous seamless environment/);
+});
+
+// Seedance PAINTED white vertical lines at exactly the positions the motion
+// prompt named "narrow vertical bands at the one-third and two-thirds lines"
+// (Scott's pillar videos, 2026-07-31). Two defenses, both tested:
+test('EON prompts never name a drawable seam (band/stripe/line as a noun)', () => {
+  for (const style of ['eon_connected', 'eon_single']) {
+    for (const option of [1, 2, 3]) {
+      const job = { style, specKey: style === 'eon_connected' ? 'eon_master_3pod' : 'eon_master_pod', option, weekOf: '2026-08-10' };
+      for (const prompt of [buildStillPrompt(job), buildMotionPrompt(job)]) {
+        // "lines" is allowed only in the frame_break border language, never EON.
+        assert.doesNotMatch(prompt, /\bbands?\b/i, `${style} names bands: ${prompt}`);
+        assert.doesNotMatch(prompt, /\bstripes?\b/i, `${style} names stripes`);
+        assert.doesNotMatch(prompt, /vertical lines?\b/i, `${style} names vertical lines`);
+      }
+    }
+  }
+});
+
+test('sanitizeMotionPrompt strips the legacy band sentences from stored prompts', () => {
+  // A stored 2026-07-25-era connected motion prompt, reconstructed.
+  const legacy = 'Choreographed whole-scene motion: things happen. ' +
+    'Motion runs continuously through the narrow vertical bands at the left edge and just past the one-third and ' +
+    'two-thirds lines — streaks of colour flow through them without pausing — but the subject never parks its head ' +
+    'or finest detail inside one of those bands. ' +
+    'Locked static camera; no zoom, no pan.';
+  const clean = sanitizeMotionPrompt(legacy);
+  assert.doesNotMatch(clean, /band/i);
+  assert.match(clean, /Choreographed whole-scene motion/);
+  assert.match(clean, /Locked static camera/);
+
+  // Current prompts pass through untouched, and null is safe.
+  const current = buildMotionPrompt({ style: 'eon_connected', specKey: 'eon_master_3pod', option: 1, weekOf: '2026-08-10' });
+  assert.equal(sanitizeMotionPrompt(current), current);
+  assert.equal(sanitizeMotionPrompt(null), null);
 });
 
 test('NO prompt contains placement/hardware or meta-artwork terms, all pass guardrails', () => {
