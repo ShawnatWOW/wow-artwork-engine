@@ -310,6 +310,114 @@ export function WrapLegend({ pods }) {
 // third pillar onto its own line, which breaks the one thing this view exists
 // to show — the artwork travelling from pillar to pillar. Now the row holds its
 // shape at any width and just gets smaller.
+// --- Synced pod playback -----------------------------------------------------
+//
+// A pillar set is ONE piece of art cut into panels, but each panel used to be
+// an independent <video> (LazyVideo): each attached its stream when it
+// personally crossed the viewport threshold, started when it personally
+// finished buffering, and looped on its own clock — so the six cuts of one
+// 15s clip played visibly out of sync and the travel illusion fell apart
+// (Shawn, 2026-07-31). This conductor makes the set behave as one player:
+//
+//   attach together   one IntersectionObserver on the whole set, not six
+//   start together    nothing plays until EVERY panel can play through
+//   stay together     a 400ms tick snaps stragglers to the first panel's
+//                     clock whenever they drift past 80ms (loop wraps are just
+//                     a big drift, so the same snap re-syncs each cycle)
+//   pause together    one Play/Pause for the set; off-screen pauses all
+//
+// Per-panel native controls are deliberately gone — pausing one cut of a
+// six-cut artwork is never what a reviewer means.
+function useSyncedSet(count) {
+  const containerRef = useRef(null);
+  const videoRefs = useRef(new Map());
+  const readyIds = useRef(new Set());
+  const [attached, setAttached] = useState(false); // latched: srcs stay on
+  const [inView, setInView] = useState(false);
+  const [readyCount, setReadyCount] = useState(0);
+  // 'auto' = play when ready+visible · 'play' = user insisted (overrides
+  // reduced-motion) · 'pause' = user stopped the set
+  const [intent, setIntent] = useState('auto');
+  const reducedMotion = usePrefersReducedMotion();
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return undefined;
+    if (typeof IntersectionObserver === 'undefined') {
+      setAttached(true); setInView(true);
+      return undefined;
+    }
+    const io = new IntersectionObserver(([entry]) => {
+      setInView(entry.isIntersecting);
+      if (entry.isIntersecting) setAttached(true);
+    }, { threshold: 0.25 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+
+  const ready = count > 0 && readyCount >= count;
+  const shouldPlay = ready && inView
+    && (intent === 'play' || (intent === 'auto' && !reducedMotion));
+
+  useEffect(() => {
+    const vids = [...videoRefs.current.values()].filter(Boolean);
+    if (!vids.length) return undefined;
+    if (!shouldPlay) {
+      for (const v of vids) v.pause();
+      return undefined;
+    }
+    const lead = vids[0];
+    for (const v of vids) {
+      if (Math.abs(v.currentTime - lead.currentTime) > 0.05) v.currentTime = lead.currentTime;
+    }
+    for (const v of vids) v.play().catch(() => {});
+    const timer = setInterval(() => {
+      if (lead.paused || lead.readyState < 3) return;
+      for (const v of vids) {
+        if (v !== lead && Math.abs(v.currentTime - lead.currentTime) > 0.08) {
+          v.currentTime = lead.currentTime;
+        }
+      }
+    }, 400);
+    return () => clearInterval(timer);
+  }, [shouldPlay]);
+
+  const markReady = (id) => {
+    if (readyIds.current.has(id)) return;
+    readyIds.current.add(id);
+    setReadyCount(readyIds.current.size);
+  };
+  const setVideoRef = (id) => (el) => {
+    if (el) {
+      videoRefs.current.set(id, el);
+      if (el.readyState >= 3) markReady(id); // cache hit: canplaythrough already passed
+    } else {
+      videoRefs.current.delete(id);
+    }
+  };
+  return { containerRef, setVideoRef, markReady, attached, ready, readyCount, shouldPlay, setIntent };
+}
+
+// One panel of a synced set. No native controls — the set's single button is
+// the transport (see useSyncedSet).
+function SyncedPanel({ panel, attached, setVideoRef, markReady }) {
+  const aspect = panel.width && panel.height ? `${panel.width} / ${panel.height}` : '2 / 3';
+  return (
+    <div className="overflow-hidden rounded bg-black" style={{ aspectRatio: aspect }}>
+      <video
+        ref={setVideoRef(panel.id)}
+        className="h-full w-full object-cover"
+        src={attached ? api.mediaUrl(panel.id) : undefined}
+        poster={api.thumbUrl(panel.id)}
+        preload={attached ? 'auto' : 'none'}
+        onCanPlayThrough={() => markReady(panel.id)}
+        muted loop playsInline
+        aria-label={`Pillar video, ${panel.panel || 'panel'}`}
+      />
+    </div>
+  );
+}
+
 export function PodSet({ panels, actions, caption }) {
   const pods = [];
   for (const p of panels) {
@@ -318,13 +426,37 @@ export function PodSet({ panels, actions, caption }) {
     if (!pod) { pod = { n, spine: null, face: null }; pods.push(pod); }
     pod[p.panel?.endsWith('spine') ? 'spine' : 'face'] = p;
   }
+  const sync = useSyncedSet(panels.length);
+  const panelProps = {
+    attached: sync.attached, setVideoRef: sync.setVideoRef, markReady: sync.markReady,
+  };
   return (
     <div className="card-in rounded-lg border border-neutral-800 bg-neutral-900 p-3">
-      <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <span className="min-w-0 flex-1 text-xs leading-snug text-neutral-400">{caption}</span>
-        <span className="shrink-0"><StatusBadge status={panels[0]?.status} stage="motion" /></span>
+        <span className="flex shrink-0 items-center gap-1.5">
+          <button
+            type="button"
+            disabled={!sync.ready}
+            onClick={() => sync.setIntent(sync.shouldPlay ? 'pause' : 'play')}
+            title={sync.ready
+              ? (sync.shouldPlay ? 'Pause the whole set' : 'Play all panels together, in sync')
+              : 'The panels start together once every one of them has loaded'}
+            aria-label={sync.shouldPlay ? 'Pause the set' : 'Play the set'}
+            className={`inline-flex h-10 items-center gap-1.5 rounded border px-3 text-xs font-medium transition-colors disabled:opacity-60 ${focusRing} ${
+              sync.shouldPlay
+                ? 'border-neutral-700 bg-neutral-800 text-neutral-200 hover:bg-neutral-700'
+                : 'border-[#0247FE] bg-[#0247FE] text-white hover:bg-[#0235c9]'}`}
+          >
+            {!sync.ready
+              ? <><Spinner className="h-3.5 w-3.5" /> Loading video… {sync.readyCount}/{panels.length}</>
+              : sync.shouldPlay ? '❚❚ Pause' : '▶ Play'}
+          </button>
+          <StatusBadge status={panels[0]?.status} stage="motion" />
+        </span>
       </div>
       <div
+        ref={sync.containerRef}
         className={`grid items-end gap-2 sm:gap-4 ${pods.length > 1 ? 'max-w-2xl' : 'max-w-[220px]'}`}
         style={{ gridTemplateColumns: `repeat(${pods.length}, minmax(0, 1fr))` }}
       >
@@ -333,8 +465,8 @@ export function PodSet({ panels, actions, caption }) {
             {/* gap-px = the corner; basis-1/5 = the spine's true share of a
                 pillar (320 of 1600 delivery pixels). */}
             <div className="flex items-end gap-px">
-              {pod.spine && <div className="basis-1/5 shrink-0"><Preview artwork={pod.spine} /></div>}
-              {pod.face && <div className="min-w-0 flex-1"><Preview artwork={pod.face} /></div>}
+              {pod.spine && <div className="basis-1/5 shrink-0"><SyncedPanel panel={pod.spine} {...panelProps} /></div>}
+              {pod.face && <div className="min-w-0 flex-1"><SyncedPanel panel={pod.face} {...panelProps} /></div>}
             </div>
             <p className="mt-1 truncate text-center text-[10px] text-neutral-400">
               Pillar {pod.n}
