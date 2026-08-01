@@ -4,6 +4,7 @@
 // newest first, grouped by the batch each piece came from.
 import { useEffect, useMemo, useState } from 'react';
 import { api } from './api.js';
+import { focusRing, useBodyScrollLock } from './ui.jsx';
 
 // Honest per-delivery outcome: 'sent' really went out; 'offline' was only
 // written to a local folder; 'failed' never left.
@@ -17,6 +18,7 @@ const STATUS_TEXT = { sent: 'Sent', offline: 'Offline copy', failed: 'Failed' };
 export default function SentHistory({ onClose }) {
   const [deliveries, setDeliveries] = useState(null);
   const [error, setError] = useState(null);
+  useBodyScrollLock();
 
   useEffect(() => {
     api.deliveries().then((d) => setDeliveries(d.deliveries)).catch((e) => setError(e.message));
@@ -36,15 +38,22 @@ export default function SentHistory({ onClose }) {
   }, [deliveries]);
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4" onClick={onClose}>
-      <div className="flex max-h-[85vh] w-full max-w-2xl flex-col rounded-lg border border-neutral-700 bg-neutral-900 p-5" onClick={(e) => e.stopPropagation()}>
+    // dvh, not vh: iOS resolves vh against the URL-bar-retracted viewport, so
+    // 85vh clipped the header (and its ✕) above the visible top edge on first
+    // open (mobile audit 2026-08-01). Bottom-sheet below sm.
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center overscroll-contain bg-black/60 sm:items-center sm:p-4"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      role="dialog" aria-modal="true" aria-label="Sent history"
+    >
+      <div className="flex max-h-[92dvh] w-full max-w-2xl flex-col rounded-t-lg border border-neutral-700 bg-neutral-900 p-4 sm:max-h-[85dvh] sm:rounded-lg sm:p-5" onClick={(e) => e.stopPropagation()}>
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-base font-semibold">Sent history</h2>
-          <button type="button" onClick={onClose} aria-label="Close" className="rounded px-1 text-neutral-400 transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0247FE]">✕</button>
+          <button type="button" onClick={onClose} aria-label="Close" className={`-mr-2 inline-flex h-11 w-11 items-center justify-center rounded text-neutral-400 transition-colors hover:text-white ${focusRing}`}>✕</button>
         </div>
 
         {!deliveries && !error && <p className="text-sm text-neutral-400">Loading…</p>}
-        {error && <p className="mb-3 rounded bg-rose-950 px-3 py-2 text-sm text-rose-200">{error}</p>}
+        {error && <p className="mb-3 break-words rounded bg-rose-950 px-3 py-2 text-sm text-rose-200">{error}</p>}
 
         {deliveries?.length === 0 && (
           <p className="rounded bg-neutral-800 px-3 py-2 text-xs text-neutral-300">
@@ -74,19 +83,29 @@ export default function SentHistory({ onClose }) {
 function DeliveryRow({ d }) {
   const a = d.artwork;
   return (
-    <li className="flex items-center gap-3 rounded border border-neutral-800 bg-neutral-950/60 p-2 text-xs">
-      <img src={api.thumbUrl(a.id)} alt="" className="h-16 w-16 shrink-0 rounded object-cover" loading="lazy" decoding="async" />
-      <div className="min-w-0 flex-1">
+    // flex-wrap: a fixed thumb + a shrink-0 chip cluster left ~8px for the
+    // label on a phone — the one line saying WHICH piece this is rendered as
+    // nothing (mobile audit 2026-08-01). Chips wrap to their own row instead.
+    <li className="flex flex-wrap items-center gap-3 rounded border border-neutral-800 bg-neutral-950/60 p-2 text-xs">
+      <img src={api.thumbUrl(a.id)} alt="" className="h-12 w-12 shrink-0 rounded object-cover sm:h-16 sm:w-16" loading="lazy" decoding="async" />
+      <div className="min-w-0 flex-1 basis-40">
         <p className="truncate text-neutral-200">{a.surface} · {a.width}×{a.height}</p>
         <p className="text-neutral-500">{d.sent_at ? new Date(d.sent_at).toLocaleString() : '—'}</p>
       </div>
-      <div className="flex shrink-0 items-center gap-1.5">
+      <div className="flex w-full flex-wrap items-center gap-1.5 sm:w-auto sm:shrink-0">
         {d.jeff_notified_at && <span className="rounded bg-sky-950 px-1.5 py-0.5 text-[10px] text-sky-300">Email ✓</span>}
         <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ${STATUS_CHIP[d.status] || 'bg-neutral-700 text-neutral-200'}`}>
           {STATUS_TEXT[d.status] || d.status}
         </span>
         {String(d.destination || '').startsWith('http') && (
-          <a href={d.destination} target="_blank" rel="noreferrer" className="text-[#0247FE] hover:underline">Open in Drive ↗</a>
+          // A real 44px target with an always-on underline — touch never sees
+          // hover, so the old bare blue text didn't read as a link at all.
+          <a
+            href={d.destination} target="_blank" rel="noreferrer"
+            className={`inline-flex min-h-11 items-center rounded px-2 text-[#0247FE] underline decoration-[#0247FE]/40 underline-offset-2 hover:decoration-[#0247FE] sm:min-h-0 sm:px-0 ${focusRing}`}
+          >
+            Open in Drive ↗
+          </a>
         )}
       </div>
     </li>
