@@ -98,13 +98,17 @@ function SpendPillButton({ lines, monthName, total }) {
   );
 }
 
-// Honest LIVE (spends) vs TEST ($0) indicator.
+// Honest LIVE (spends) vs TEST ($0) indicator. Short label below sm: the full
+// sentence wrapped into a two-line shouting banner on a phone (screenshot
+// review 2026-08-01) — the load-bearing bit is LIVE-costs-money vs TEST-free,
+// not the prose.
 export function ModePill({ mode }) {
   if (!mode) return null;
   const live = mode === 'live';
   return (
-    <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${live ? 'bg-rose-600 text-white' : 'bg-emerald-700 text-emerald-100'}`}>
-      {live ? '● Live — makes real art, costs money' : '● Test mode — free placeholders'}
+    <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${live ? 'bg-rose-600 text-white' : 'bg-emerald-700 text-emerald-100'}`}>
+      <span className="sm:hidden">{live ? '● Live — costs money' : '● Test — free'}</span>
+      <span className="hidden sm:inline">{live ? '● Live — makes real art, costs money' : '● Test mode — free placeholders'}</span>
     </span>
   );
 }
