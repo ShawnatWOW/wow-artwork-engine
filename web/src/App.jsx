@@ -469,8 +469,14 @@ export function ReviewDashboard() {
   // switching weeks) — never a blank page, never last week's cards.
   const showSkeleton = !error && (!runsLoaded || (runId != null && !detailReady));
 
+  // Mobile bottom bar: on a phone the header CTA ends up ~5,000px above the
+  // last card it acts on (mobile audit 2026-08-01). Shown only when there is a
+  // next step to take; main gets matching bottom padding so it never covers
+  // the last card's buttons.
+  const showActionBar = !running && !busy && (pendingAnimate > 0 || readyToSend > 0);
+
   return (
-    <main className="mx-auto max-w-6xl p-6">
+    <main className={`mx-auto max-w-6xl p-4 sm:p-6 ${showActionBar ? 'pb-28 sm:pb-6' : ''}`}>
       <Header
         runs={runs} runId={runId} onSelectRun={setRunId}
         onGenerate={generate} onAnimate={animate} pendingAnimate={pendingAnimate}
@@ -479,7 +485,7 @@ export function ReviewDashboard() {
         busy={busy} run={view?.run} mode={mode} detail={view}
         running={running} makingVideos={makingVideos} spend={spend}
       />
-      {error && <p role="alert" className="mb-4 rounded bg-rose-950 px-3 py-2 text-sm text-rose-200">{error}</p>}
+      {error && <p role="alert" className="mb-4 break-words rounded bg-rose-950 px-3 py-2 text-sm text-rose-200">{error}</p>}
       {/* A failed batch says exactly WHY — never a silent page of missing art. */}
       {view?.run?.status === 'failed' && (
         <p role="alert" className="mb-4 rounded border border-rose-900 bg-rose-950 px-3 py-2 text-sm text-rose-200">
@@ -511,6 +517,26 @@ export function ReviewDashboard() {
         />
       )}
       {showHistory && <SentHistory onClose={() => setShowHistory(false)} />}
+      {showActionBar && (
+        <div className="fixed inset-x-0 bottom-0 z-40 flex gap-2 border-t border-neutral-800 bg-neutral-950/95 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur sm:hidden">
+          {pendingAnimate > 0 && (
+            <button
+              type="button" onClick={animate} disabled={busy}
+              className={`flex min-h-12 flex-1 items-center justify-center rounded bg-emerald-600 px-3 text-sm font-medium text-white transition-colors hover:bg-emerald-500 disabled:opacity-50 ${focusRing}`}
+            >
+              🎬 Make {pendingAnimate} video{pendingAnimate === 1 ? '' : 's'}
+            </button>
+          )}
+          {readyToSend > 0 && (
+            <button
+              type="button" onClick={() => setShowSend(true)} disabled={busy}
+              className={`flex min-h-12 flex-1 items-center justify-center rounded bg-amber-500 px-3 text-sm font-medium text-neutral-950 transition-colors hover:bg-amber-400 disabled:opacity-50 ${focusRing}`}
+            >
+              ✉ Send {readyToSend} to Jeff
+            </button>
+          )}
+        </div>
+      )}
       <Toasts items={toasts} onDismiss={dismissToast} />
     </main>
   );
@@ -523,7 +549,10 @@ function Header({ runs, runId, onSelectRun, onGenerate, onAnimate, pendingAnimat
   // ONE primary CTA at a time — the next step in the flow is solid, everything
   // else drops to a quiet outline (CEO feedback: three loud buttons = "which?").
   const primary = pendingAnimate > 0 ? 'animate' : readyToSend > 0 ? 'send' : 'generate';
-  const btnBase = `inline-flex min-h-[44px] items-center rounded px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-50 sm:min-h-0 ${focusRing}`;
+  // min-h-11 with NO width gate: the old sm:min-h-0 shrank these back to
+  // 32-34px on touch iPads, which are ≥sm but still thumbs (mobile audit
+  // 2026-08-01).
+  const btnBase = `inline-flex min-h-11 items-center rounded px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-50 ${focusRing}`;
   return (
     <header className="mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-neutral-800 pb-4">
       <div className="space-y-1">
@@ -560,7 +589,9 @@ function Header({ runs, runId, onSelectRun, onGenerate, onAnimate, pendingAnimat
                 value={runId ?? ''}
                 onChange={(e) => onSelectRun(Number(e.target.value))}
                 title="Look back at earlier weeks"
-                className={`rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm transition-colors ${focusRing}`}
+                // text-base below sm: iOS force-zooms a focused select under
+                // 16px. Full-width there — it shares a stacked column anyway.
+                className={`min-h-11 w-full rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-base transition-colors sm:w-auto sm:text-sm ${focusRing}`}
               >
                 {runs.map((r) => <option key={r.id} value={r.id}>Week of {r.week_of} · batch #{r.id}</option>)}
               </select>
@@ -613,7 +644,7 @@ function Header({ runs, runId, onSelectRun, onGenerate, onAnimate, pendingAnimat
 function Empty({ onGenerate, busy, mode }) {
   const live = mode === 'live';
   return (
-    <div className="grid place-items-center rounded border border-dashed border-neutral-800 py-24 text-center">
+    <div className="grid place-items-center rounded border border-dashed border-neutral-800 px-4 py-12 text-center sm:py-24">
       <div className="max-w-md">
         <p className="text-neutral-400">No artwork yet this week.</p>
         <p className="mt-1 text-xs text-neutral-400">
@@ -622,7 +653,7 @@ function Empty({ onGenerate, busy, mode }) {
         </p>
         <button
           type="button" onClick={onGenerate} disabled={busy}
-          className={`mt-3 rounded bg-[#0247FE] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#0235c9] disabled:opacity-50 ${focusRing}`}
+          className={`mt-3 min-h-11 rounded bg-[#0247FE] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#0235c9] disabled:opacity-50 ${focusRing}`}
         >
           {busy ? 'Creating designs…' : live ? 'Create new designs (~$0.30)' : 'Create sample designs (free)'}
         </button>
@@ -645,12 +676,16 @@ function SkeletonPage() {
       <section>
         <SkeletonHeading />
         <div className="max-w-2xl space-y-6">
-          {[0, 1, 2].map((i) => <SkeletonCard key={i} aspect="2 / 1" />)}
+          {[0, 1, 2].map((i) => <SkeletonCard key={i} aspect="4096 / 1638" />)}
         </div>
       </section>
       <section>
         <SkeletonHeading />
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+        {/* Mirrors the REAL single-pillar grid (grid-cols-1 lg:2 xl:3) — the
+            skeleton's whole job is to hold the page's shape, and a 2-col
+            skeleton reflowing into a 1-col page was the most-seen frame on a
+            slow phone connection (mobile audit 2026-08-01). */}
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3">
           {[0, 1, 2].map((i) => <SkeletonCard key={i} aspect="2 / 3" />)}
         </div>
       </section>
@@ -761,9 +796,11 @@ function RunView({ detail, busy, running, pendingIds, onApprove, onReject, onSav
   // "I want to see a fourth" had no button at all before (Scott, 2026-07-26).
   const cost = mode === 'live' ? ' (~$0.03)' : ' (free)';
   // 26.5px measured before — under half the phone tap target (QA, 2026-07-26).
-  const headerBtn = `inline-flex min-h-[40px] items-center rounded border px-2.5 py-2 text-xs font-medium transition-colors disabled:opacity-50 ${focusRing}`;
+  // min-h-11 unconditional + justify-center: labels wrap to two lines inside
+  // full-width stacked buttons below sm (mobile audit 2026-08-01).
+  const headerBtn = `inline-flex min-h-11 items-center justify-center rounded border px-2.5 py-2 text-center text-xs font-medium leading-snug transition-colors disabled:opacity-50 sm:justify-start sm:text-left ${focusRing}`;
   const sectionActions = (surfaceKey) => (
-    <span className="flex flex-wrap items-center gap-1.5">
+    <span className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center sm:gap-1.5">
       {/* The button says what it is doing. Dimming a disabled button is far too
           quiet a signal for an action that takes ~20 seconds. */}
       <button
@@ -782,6 +819,11 @@ function RunView({ detail, busy, running, pendingIds, onApprove, onReject, onSav
       >
         ↻ Replace unsaved designs{mode === 'live' ? ' (~$0.03 each)' : ' (free)'}
       </button>
+      {/* The Add-vs-Replace distinction lived only in title tooltips, which
+          never fire on touch (mobile audit 2026-08-01). */}
+      <span className="text-[11px] leading-snug text-neutral-400 sm:hidden">
+        Add = one more option, nothing changes. Replace = re-rolls the ones you haven’t saved or approved.
+      </span>
     </span>
   );
 
@@ -948,7 +990,7 @@ function ExplorationFamily({ keeper, keeperMotion, variations, animating, busy, 
   // buttons, which already say "(free)" (QA, 2026-07-26).
   const cost = mode === 'live' ? ' (~$0.03)' : ' (free)';
   return (
-    <div className="rounded-xl border border-amber-500/30 bg-amber-500/[0.03] p-3">
+    <div className="rounded-xl border border-amber-500/30 bg-amber-500/[0.03] p-2 sm:p-3">
       <AnchorCard
         artwork={preview}
         animating={animating}
@@ -965,7 +1007,9 @@ function ExplorationFamily({ keeper, keeperMotion, variations, animating, busy, 
           {mode === 'live' ? 'Each version costs ~$0.03.' : 'Each version is free.'} This design stays.
         </p>
         {variations.length > 0 ? (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+          // grid-cols-1 base: at 2-up a phone-width 3.6:1 variation preview
+          // measured 42px tall under ~230px of buttons (mobile audit 2026-08-01).
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             {variations.map((v) => (
               <VariationCard
                 key={v.id}

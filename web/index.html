@@ -2,7 +2,11 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- viewport-fit=cover: without it env(safe-area-inset-*) resolves to 0 and
+         the sticky action bar / toasts sit under the iPhone home indicator.
+         No maximum-scale on purpose — pinch-zoom is how tiny art gets inspected. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#0a0a0a" />
     <title>WOW Artwork Engine</title>
   </head>
   <body class="bg-neutral-950 text-neutral-100">

@@ -33,11 +33,14 @@ export function Spinner({ className = '' }) {
 // Overlay shown on a card while its video is being generated.
 export function GeneratingOverlay({ label = 'Making video…', sub = 'about 2–4 minutes' }) {
   return (
-    <div className="absolute inset-0 z-10 grid place-items-center rounded bg-black/70 backdrop-blur-sm">
-      <div className="flex flex-col items-center gap-2 text-center">
-        <span className="h-8 w-8 animate-spin rounded-full border-2 border-neutral-500 border-t-[#0247FE]" />
+    <div className="absolute inset-0 z-10 grid place-items-center overflow-hidden rounded bg-black/70 backdrop-blur-sm">
+      {/* Row layout below sm: a 3.6:1 card is only ~90px tall on a phone, and
+          the stacked spinner + two lines measured taller than the card itself
+          (mobile audit 2026-08-01). */}
+      <div className="flex items-center gap-2 px-3 text-center sm:flex-col">
+        <span className="h-5 w-5 shrink-0 animate-spin rounded-full border-2 border-neutral-500 border-t-[#0247FE] sm:h-8 sm:w-8" />
         <span className="text-xs font-semibold text-white">{label}</span>
-        <span className="text-[10px] text-neutral-300">{sub}</span>
+        <span className="hidden text-[10px] text-neutral-300 sm:block">{sub}</span>
       </div>
     </div>
   );
@@ -69,22 +72,43 @@ export function SpendPill({ spend }) {
     `fal's account bill also covers Content Automation + Broken News — this is artwork only.`,
   ].filter(Boolean).join('\n');
   return (
-    <span
-      title={lines}
-      className="rounded-full bg-neutral-800 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-300"
-    >
-      💰 {monthName} spend: ${spend.totalUsd.toFixed(2)}
+    // A button, not a title-only span: tooltips never fire on touch, and the
+    // itemized breakdown is load-bearing money information (mobile audit
+    // 2026-08-01). Tap toggles it; desktop hover still gets the tooltip.
+    <SpendPillButton lines={lines} monthName={monthName} total={spend.totalUsd} />
+  );
+}
+
+function SpendPillButton({ lines, monthName, total }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <span className="relative inline-flex">
+      <button
+        type="button" onClick={() => setOpen((v) => !v)} title={lines} aria-expanded={open}
+        className={`min-h-11 rounded-full bg-neutral-800 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-300 sm:min-h-0 sm:px-2 ${focusRing}`}
+      >
+        💰 {monthName} spend: ${total.toFixed(2)}
+      </button>
+      {open && (
+        <span className="absolute left-0 top-full z-30 mt-1 block w-72 max-w-[80vw] whitespace-pre-line rounded-md border border-neutral-700 bg-neutral-900 p-2.5 text-[11px] font-normal normal-case tracking-normal text-neutral-200 shadow-lg shadow-black/50">
+          {lines}
+        </span>
+      )}
     </span>
   );
 }
 
-// Honest LIVE (spends) vs TEST ($0) indicator.
+// Honest LIVE (spends) vs TEST ($0) indicator. Short label below sm: the full
+// sentence wrapped into a two-line shouting banner on a phone (screenshot
+// review 2026-08-01) — the load-bearing bit is LIVE-costs-money vs TEST-free,
+// not the prose.
 export function ModePill({ mode }) {
   if (!mode) return null;
   const live = mode === 'live';
   return (
-    <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${live ? 'bg-rose-600 text-white' : 'bg-emerald-700 text-emerald-100'}`}>
-      {live ? '● Live — makes real art, costs money' : '● Test mode — free placeholders'}
+    <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${live ? 'bg-rose-600 text-white' : 'bg-emerald-700 text-emerald-100'}`}>
+      <span className="sm:hidden">{live ? '● Live — costs money' : '● Test — free'}</span>
+      <span className="hidden sm:inline">{live ? '● Live — makes real art, costs money' : '● Test mode — free placeholders'}</span>
     </span>
   );
 }
@@ -94,11 +118,48 @@ export function ErrorRibbon({ artwork }) {
   if (!artwork.error) return null;
   const hard = artwork.status === 'failed' || /refus|moderation|likeness|guardrail|no video/i.test(artwork.error);
   return (
-    <p className={`mt-1.5 rounded px-2 py-1 text-[11px] leading-snug ${hard ? 'bg-rose-950 text-rose-200' : 'bg-amber-950 text-amber-200'}`}>
+    // text-xs on phones: 11px error explanations are the layer that tells a
+    // non-technical reviewer WHY something failed (mobile audit 2026-08-01).
+    <p className={`mt-1.5 break-words rounded px-2 py-1 text-xs leading-snug sm:text-[11px] ${hard ? 'bg-rose-950 text-rose-200' : 'bg-amber-950 text-amber-200'}`}>
       {hard ? '⚠ ' : '△ '}{artwork.error}
     </p>
   );
 }
+
+// Lock the page scroll while a modal is open. On touch, a fling that starts
+// (or ends) on the backdrop otherwise scrolls the page underneath and the
+// reviewer loses his place (mobile audit 2026-08-01).
+export function useBodyScrollLock() {
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, []);
+}
+
+// True on devices whose PRIMARY pointer can't hover (phones, tablets).
+// Width is the wrong test — a 768px iPad is still all thumbs.
+export function useCoarsePointer() {
+  const [coarse, setCoarse] = useState(
+    () => typeof window !== 'undefined' && !!window.matchMedia
+      && window.matchMedia('(pointer: coarse)').matches,
+  );
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return undefined;
+    const mq = window.matchMedia('(pointer: coarse)');
+    const onChange = (e) => setCoarse(e.matches);
+    if (mq.addEventListener) {
+      mq.addEventListener('change', onChange);
+      return () => mq.removeEventListener('change', onChange);
+    }
+    mq.addListener(onChange);
+    return () => mq.removeListener(onChange);
+  }, []);
+  return coarse;
+}
+
+// Data-saver signal: never open multi-MB streams uninvited on a metered link.
+const wantsDataSaver = () => typeof navigator !== 'undefined' && !!navigator.connection?.saveData;
 
 // True when the OS asks for reduced motion — then we never autoplay video.
 function usePrefersReducedMotion() {
@@ -131,9 +192,12 @@ function usePrefersReducedMotion() {
 // controls, play is the viewer's choice.
 export function LazyVideo({ artworkId, className = 'h-full w-full object-cover' }) {
   const ref = useRef(null);
-  const [attached, setAttached] = useState(false); // latched once in view
+  const [attached, setAttached] = useState(false); // on while near the viewport
   const [inView, setInView] = useState(false);
+  const [paused, setPaused] = useState(false); // touch tap-to-pause state
   const reducedMotion = usePrefersReducedMotion();
+  const coarse = useCoarsePointer();
+  const saveData = wantsDataSaver();
 
   useEffect(() => {
     const el = ref.current;
@@ -147,27 +211,64 @@ export function LazyVideo({ artworkId, className = 'h-full w-full object-cover' 
       if (entry.isIntersecting) setAttached(true);
     }, { threshold: 0.4 });
     io.observe(el);
-    return () => io.disconnect();
+    // Release the stream once the card is far off-screen. `attached` used to
+    // latch forever, so one long scroll accumulated every 4K stream on the page
+    // (mobile audit 2026-08-01: 5-6 ultra-wide cards latch in a single
+    // screenful). Three viewports of margin means casual back-and-forth
+    // scrolling never drops a stream, but a real departure frees it.
+    const release = new IntersectionObserver(([entry]) => {
+      if (!entry.isIntersecting) setAttached(false);
+    }, { rootMargin: '300% 0px' });
+    release.observe(el);
+    return () => { io.disconnect(); release.disconnect(); };
   }, []);
 
   // Drive playback from visibility. play() may reject (autoplay policy) — fine.
+  // Reduced-motion or data-saver: no uninvited playback — tap is the invite.
   useEffect(() => {
     const el = ref.current;
     if (!el || !attached) return;
-    if (inView && !reducedMotion) el.play().catch(() => {});
+    if (inView && !reducedMotion && !saveData && !paused) el.play().catch(() => {});
     else el.pause();
-  }, [attached, inView, reducedMotion]);
+  }, [attached, inView, reducedMotion, saveData, paused]);
 
-  return (
+  // Native controls covered ~half of a 90px-tall billboard frame on a phone
+  // (mobile audit 2026-08-01). On coarse pointers the frame itself is the
+  // play/pause control and a thumb-sized ⛶ opens real fullscreen — where the
+  // native controls belong.
+  const goFullscreen = (e) => {
+    e.stopPropagation();
+    const el = ref.current;
+    if (!el) return;
+    if (el.requestFullscreen) el.requestFullscreen().catch(() => {});
+    else if (el.webkitEnterFullscreen) el.webkitEnterFullscreen(); // iPhone Safari
+  };
+
+  const video = (
     <video
       ref={ref}
       className={className}
       src={attached ? api.mediaUrl(artworkId) : undefined}
       poster={api.thumbUrl(artworkId)}
       preload="none"
-      muted loop playsInline controls
+      muted loop playsInline controls={!coarse}
       aria-label="Video preview"
     />
+  );
+  if (!coarse) return video;
+  return (
+    <div className="relative h-full w-full" onClick={() => { setAttached(true); setPaused((p) => !p); }}>
+      {video}
+      {(paused || reducedMotion || saveData) && (
+        <span aria-hidden="true" className="pointer-events-none absolute inset-0 grid place-items-center text-2xl text-white/90 drop-shadow">▶</span>
+      )}
+      <button
+        type="button" onClick={goFullscreen} aria-label="Watch fullscreen"
+        className={`absolute bottom-1 right-1 inline-flex h-11 w-11 items-center justify-center rounded-md bg-black/55 text-base text-white backdrop-blur-sm ${focusRing}`}
+      >
+        ⛶
+      </button>
+    </div>
   );
 }
 
@@ -257,9 +358,45 @@ export function WrapGuide({ pods }) {
   );
 }
 
+// Full-screen loupe for a design still. The grid preview of a 3.6:1 billboard
+// is a ~90px-tall sliver on a phone — an approval decision needs the real
+// pixels. Renders the MASTER (multi-MB) — on demand only, never in the grid.
+// The container pans; the browser's pinch-zoom does the rest (the viewport
+// meta deliberately allows scaling).
+function Lightbox({ artwork, onClose }) {
+  useBodyScrollLock();
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+  return (
+    <div className="fixed inset-0 z-[70] overflow-auto overscroll-contain bg-black/95" onClick={onClose} role="dialog" aria-label="Design close-up">
+      <button
+        type="button" onClick={onClose} aria-label="Close close-up"
+        className={`fixed right-3 top-3 z-10 inline-flex h-11 w-11 items-center justify-center rounded-full bg-neutral-900/80 text-lg text-white ${focusRing}`}
+      >
+        ✕
+      </button>
+      <div className="grid min-h-full place-items-center p-2">
+        <img
+          src={api.mediaUrl(artwork.id)} alt={`${SURFACE_NAMES[artwork.style] || 'Artwork'} design, full size`}
+          className="max-w-none"
+          style={{ width: artwork.width && artwork.width > 2000 ? `${artwork.width / 2}px` : '100%', maxWidth: 'none' }}
+          onClick={(e) => e.stopPropagation()}
+        />
+      </div>
+      <p className="pointer-events-none fixed inset-x-0 bottom-2 text-center text-[11px] text-neutral-400">Pinch to zoom · drag to pan · tap outside to close</p>
+    </div>
+  );
+}
+
 // Preview an artwork at its true aspect ratio: design → image, video → video.
-// An un-cut EON design also gets its wrap guide.
+// An un-cut EON design also gets its wrap guide. Stills open a fullscreen
+// pinch-zoom loupe on tap (mobile audit 2026-08-01 — there was no way to
+// actually SEE a phone-width billboard before approving it).
 export function Preview({ artwork }) {
+  const [zoom, setZoom] = useState(false);
   const aspect = artwork.width && artwork.height ? `${artwork.width} / ${artwork.height}` : '16 / 9';
   const guidePods = artwork.stage === 'still' ? podsForStyle(artwork.style) : 0;
   return (
@@ -269,17 +406,21 @@ export function Preview({ artwork }) {
         // nothing here renders wider than ~1400px, so pointing the grid at the
         // master downloaded ~30 MB to show nine cards (perf audit 2026-07-26).
         // The thumbnail is the same picture at ~45 KB.
-        <FadeImg
-          className="h-full w-full object-cover"
-          src={api.thumbUrl(artwork.id)}
-          // The artwork IS the thing being reviewed, so it needs a real name —
-          // an empty alt tells a screen reader there is nothing here at all.
-          alt={`${SURFACE_NAMES[artwork.style] || 'Artwork'} design, ${statusLabel(artwork.status, artwork.stage)}`}
-        />
+        <button type="button" onClick={() => setZoom(true)} className={`block h-full w-full ${focusRing}`} title="Tap to see it full size">
+          <FadeImg
+            className="h-full w-full object-cover"
+            src={api.thumbUrl(artwork.id)}
+            // The artwork IS the thing being reviewed, so it needs a real name —
+            // an empty alt tells a screen reader there is nothing here at all.
+            alt={`${SURFACE_NAMES[artwork.style] || 'Artwork'} design, ${statusLabel(artwork.status, artwork.stage)} — opens full size`}
+          />
+          <span aria-hidden="true" className="pointer-events-none absolute bottom-1 right-1 rounded bg-black/55 px-1.5 py-0.5 text-[10px] text-white/90">⤢</span>
+        </button>
       ) : (
         <LazyVideo artworkId={artwork.id} />
       )}
       <WrapGuide pods={guidePods} />
+      {zoom && <Lightbox artwork={artwork} onClose={() => setZoom(false)} />}
     </div>
   );
 }
@@ -338,6 +479,12 @@ function useSyncedSet(count) {
   // 'auto' = play when ready+visible · 'play' = user insisted (overrides
   // reduced-motion) · 'pause' = user stopped the set
   const [intent, setIntent] = useState('auto');
+  // Escape hatch: iOS downgrades preload under Low Power Mode / cellular, so
+  // one stalled panel used to pin the ONLY transport control at "Loading…
+  // n/6" forever (mobile audit 2026-08-01). After 6s of being attached we
+  // stop waiting for stragglers — the 400ms sync tick reels them in once
+  // they do buffer.
+  const [forced, setForced] = useState(false);
   const reducedMotion = usePrefersReducedMotion();
 
   useEffect(() => {
@@ -355,7 +502,13 @@ function useSyncedSet(count) {
     return () => io.disconnect();
   }, []);
 
-  const ready = count > 0 && readyCount >= count;
+  useEffect(() => {
+    if (!attached) return undefined;
+    const t = setTimeout(() => setForced(true), 6000);
+    return () => clearTimeout(t);
+  }, [attached]);
+
+  const ready = forced || (count > 0 && readyCount >= count);
   const shouldPlay = ready && inView
     && (intent === 'play' || (intent === 'auto' && !reducedMotion));
 
@@ -390,12 +543,15 @@ function useSyncedSet(count) {
   const setVideoRef = (id) => (el) => {
     if (el) {
       videoRefs.current.set(id, el);
-      if (el.readyState >= 3) markReady(id); // cache hit: canplaythrough already passed
+      if (el.readyState >= 2) markReady(id); // cache hit: first frame already decodable
     } else {
       videoRefs.current.delete(id);
     }
   };
-  return { containerRef, setVideoRef, markReady, attached, ready, readyCount, shouldPlay, setIntent };
+  // A tap on the transport must always work: it forces the attach (data-saver
+  // paths may not have latched yet) and stops waiting for stragglers.
+  const insistPlay = () => { setAttached(true); setForced(true); setIntent('play'); };
+  return { containerRef, setVideoRef, markReady, attached, ready, readyCount, shouldPlay, setIntent, insistPlay };
 }
 
 // One panel of a synced set. No native controls — the set's single button is
@@ -410,7 +566,10 @@ function SyncedPanel({ panel, attached, setVideoRef, markReady }) {
         src={attached ? api.mediaUrl(panel.id) : undefined}
         poster={api.thumbUrl(panel.id)}
         preload={attached ? 'auto' : 'none'}
-        onCanPlayThrough={() => markReady(panel.id)}
+        // loadeddata (first frame), not canplaythrough: iOS frequently never
+        // fires canplaythrough on cellular/Low Power Mode, which dead-locked
+        // the whole set behind its slowest panel (mobile audit 2026-08-01).
+        onLoadedData={() => markReady(panel.id)}
         muted loop playsInline
         aria-label={`Pillar video, ${panel.panel || 'panel'}`}
       />
@@ -432,24 +591,28 @@ export function PodSet({ panels, actions, caption }) {
   };
   return (
     <div className="card-in rounded-lg border border-neutral-800 bg-neutral-900 p-3">
-      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <span className="min-w-0 flex-1 text-xs leading-snug text-neutral-400">{caption}</span>
+      {/* flex-col below sm: the caption used to share one row with a shrink-0
+          Play button, leaving it a 46px-wide column rendering one word per
+          line, ~300px tall (mobile audit 2026-08-01, blocker #1). */}
+      <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+        <span className="text-xs leading-snug text-neutral-400 sm:min-w-0 sm:flex-1">{caption}</span>
         <span className="flex shrink-0 items-center gap-1.5">
           <button
             type="button"
-            disabled={!sync.ready}
-            onClick={() => sync.setIntent(sync.shouldPlay ? 'pause' : 'play')}
+            // Never disabled: a stalled panel must not brick the only
+            // transport control. Tapping while loading insists on playback.
+            onClick={() => (sync.shouldPlay ? sync.setIntent('pause') : sync.insistPlay())}
             title={sync.ready
               ? (sync.shouldPlay ? 'Pause the whole set' : 'Play all panels together, in sync')
-              : 'The panels start together once every one of them has loaded'}
+              : 'Still loading — tap to start as soon as the panels can play'}
             aria-label={sync.shouldPlay ? 'Pause the set' : 'Play the set'}
-            className={`inline-flex h-10 items-center gap-1.5 rounded border px-3 text-xs font-medium transition-colors disabled:opacity-60 ${focusRing} ${
+            className={`inline-flex min-h-11 items-center gap-1.5 rounded border px-3 text-xs font-medium transition-colors ${focusRing} ${
               sync.shouldPlay
                 ? 'border-neutral-700 bg-neutral-800 text-neutral-200 hover:bg-neutral-700'
                 : 'border-[#0247FE] bg-[#0247FE] text-white hover:bg-[#0235c9]'}`}
           >
             {!sync.ready
-              ? <><Spinner className="h-3.5 w-3.5" /> Loading video… {sync.readyCount}/{panels.length}</>
+              ? <><Spinner className="h-3.5 w-3.5" /> Loading… {sync.readyCount}/{panels.length} — tap to play</>
               : sync.shouldPlay ? '❚❚ Pause' : '▶ Play'}
           </button>
           <StatusBadge status={panels[0]?.status} stage="motion" />
@@ -457,7 +620,7 @@ export function PodSet({ panels, actions, caption }) {
       </div>
       <div
         ref={sync.containerRef}
-        className={`grid items-end gap-2 sm:gap-4 ${pods.length > 1 ? 'max-w-2xl' : 'max-w-[220px]'}`}
+        className={`grid items-end gap-2 sm:gap-4 ${pods.length > 1 ? 'max-w-2xl' : 'max-w-[280px] sm:max-w-[220px]'}`}
         style={{ gridTemplateColumns: `repeat(${pods.length}, minmax(0, 1fr))` }}
       >
         {pods.map((pod) => (
@@ -488,21 +651,24 @@ export function PodSet({ panels, actions, caption }) {
 // taken, outlined invitation until then. Keep is the amber-star invitation.
 // Pass and Replace this design are quiet ghosts that fill on hover.
 export function Actions({ status, busy, stage, saved, onApprove, onReject, onRetry, onRegen, onKeep, onToggleSave }) {
-  const btn = `inline-flex h-10 items-center gap-1 rounded border px-2 text-xs font-medium transition-colors disabled:opacity-40 ${focusRing}`;
+  // min-h-11 (44px) UNCONDITIONALLY — not gated on width. The old h-10 (40px)
+  // missed the iOS/Android minimum on every card action, and width gates like
+  // sm:min-h-0 re-shrank buttons on touch iPads (mobile audit 2026-08-01).
+  const btn = `inline-flex min-h-11 items-center gap-1 rounded border px-2.5 text-xs font-medium transition-colors disabled:opacity-40 ${focusRing}`;
   const ghost = 'border-neutral-700 bg-transparent text-neutral-400 hover:bg-neutral-800';
   const approveLabel = status === 'approved' ? '✓ Approved' : stage === 'still' ? '✓ Use this design' : '✓ Approve video';
   // Already delivered — the decision is history, not a live choice.
   if (status === 'sent') {
     return (
-      <div className="mt-2 flex flex-wrap items-center gap-1.5">
-        <span className="inline-flex h-10 items-center gap-1 rounded border border-sky-700/60 bg-sky-950 px-2 text-xs font-medium text-sky-300">
+      <div className="mt-2 flex flex-wrap items-center gap-2 sm:gap-1.5">
+        <span className="inline-flex min-h-11 items-center gap-1 rounded border border-sky-700/60 bg-sky-950 px-2.5 text-xs font-medium text-sky-300">
           ✓ Sent to Jeff
         </span>
       </div>
     );
   }
   return (
-    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+    <div className="mt-2 flex flex-wrap items-center gap-2 sm:gap-1.5">
       <button
         type="button" disabled={busy} onClick={onApprove}
         title={stage === 'still' ? 'Approve this design — approved designs get turned into videos' : 'Approve this video — approved videos can be sent to Jeff'}
@@ -587,7 +753,7 @@ export function Details({ artwork }) {
     <div className="mt-1.5">
       <button
         type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open}
-        className={`-mx-1 flex min-h-[40px] items-center gap-1 rounded px-1 py-2 text-xs text-neutral-400 transition-colors hover:text-neutral-200 ${focusRing}`}
+        className={`-mx-1 flex min-h-11 items-center gap-1 rounded px-1 py-2 text-xs text-neutral-400 transition-colors hover:text-neutral-200 ${focusRing}`}
       >
         <span className={`transition-transform ${open ? 'rotate-90' : ''}`}>›</span> How the AI was instructed
       </button>
@@ -650,7 +816,9 @@ function TweakBox({ busy, onSubmit, onCancel }) {
   useEffect(() => { ref.current?.focus(); }, []);
   const submit = () => { const t = text.trim(); if (t) onSubmit(t); };
   return (
-    <div className="mt-2 flex items-center gap-1.5">
+    // Stacked below sm: side-by-side inside a narrow card left the input ~35px
+    // wide — unusable for typing a sentence (mobile audit 2026-08-01).
+    <div className="mt-2 flex flex-col gap-1.5 sm:flex-row sm:items-center">
       <input
         ref={ref} type="text" value={text} disabled={busy}
         onChange={(e) => setText(e.target.value)}
@@ -660,12 +828,12 @@ function TweakBox({ busy, onSubmit, onCancel }) {
         }}
         placeholder="more electric blue · calmer background · bigger subject"
         aria-label="Describe the change you want"
-        className={`h-11 min-w-0 flex-1 rounded border border-neutral-700 bg-neutral-950 px-2 text-base text-neutral-100 placeholder:text-neutral-400 disabled:opacity-50 sm:text-[11px] ${focusRing}`}
+        className={`h-11 w-full min-w-0 rounded border border-neutral-700 bg-neutral-950 px-2 text-base text-neutral-100 placeholder:text-neutral-400 disabled:opacity-50 sm:flex-1 sm:text-[11px] ${focusRing}`}
       />
       <button
         type="button" onClick={submit} disabled={busy}
         title="Make this change (Enter)"
-        className={`h-11 shrink-0 rounded border border-[#0247FE] bg-[#0247FE] px-3 text-[11px] font-semibold text-white transition-colors hover:bg-[#0235c9] disabled:opacity-50 ${focusRing}`}
+        className={`h-11 w-full shrink-0 rounded border border-[#0247FE] bg-[#0247FE] px-3 text-xs font-semibold text-white transition-colors hover:bg-[#0235c9] disabled:opacity-50 sm:w-auto sm:text-[11px] ${focusRing}`}
       >
         Make version
       </button>
@@ -677,13 +845,13 @@ function TweakBox({ busy, onSubmit, onCancel }) {
 // exploring" badge). Vary/Tweak spin off variations; the original stays put.
 export function AnchorCard({ artwork, animating, busy, onApprove, onReject, onVary, onTweak, onUnkeep, cost = ' (~$0.03)' }) {
   const [tweaking, setTweaking] = useState(false);
-  const btn = `inline-flex h-10 items-center gap-1 rounded border px-2 text-xs font-medium transition-colors disabled:opacity-40 ${focusRing}`;
+  const btn = `inline-flex min-h-11 items-center gap-1 rounded border px-2.5 text-xs font-medium transition-colors disabled:opacity-40 ${focusRing}`;
   const ghost = 'border-neutral-700 bg-transparent text-neutral-400 hover:bg-neutral-800';
   const approved = artwork.status === 'approved';
   const rejected = artwork.status === 'rejected';
   const sent = artwork.status === 'sent';
   return (
-    <div className="card-in rounded-lg border border-amber-500/50 bg-neutral-900 p-3 ring-1 ring-amber-500/40">
+    <div className="card-in rounded-lg border border-amber-500/50 bg-neutral-900 p-2 ring-1 ring-amber-500/40 sm:p-3">
       <div className="mb-2 flex items-center justify-between gap-2">
         <span className="inline-flex items-center gap-1 rounded-full bg-amber-950 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-300">⭐ Kept — exploring</span>
       </div>
@@ -701,14 +869,14 @@ export function AnchorCard({ artwork, animating, busy, onApprove, onReject, onVa
           <p className="mt-2 flex items-center gap-1.5 text-[11px] text-amber-300"><Spinner className="h-3 w-3" /> Making the video…</p>
         ) : sent ? (
           /* Already delivered — the decision is history, not a live choice. */
-          <div className="mt-2 flex flex-wrap items-center gap-1.5">
-            <span className="inline-flex h-10 items-center gap-1 rounded border border-sky-700/60 bg-sky-950 px-2 text-xs font-medium text-sky-300">
+          <div className="mt-2 flex flex-wrap items-center gap-2 sm:gap-1.5">
+            <span className="inline-flex min-h-11 items-center gap-1 rounded border border-sky-700/60 bg-sky-950 px-2.5 text-xs font-medium text-sky-300">
               ✓ Sent to Jeff
             </span>
           </div>
         ) : (
           <>
-            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            <div className="mt-2 flex flex-wrap items-center gap-2 sm:gap-1.5">
               {/* Once the keeper has been animated this card IS the video, so
                   approving it queues it for Jeff — it must not still say
                   "design" (QA, 2026-07-26). */}
@@ -765,7 +933,7 @@ export function AnchorCard({ artwork, animating, busy, onApprove, onReject, onVa
 // one-line change note, and the actions to use / promote / tweak / vary / dismiss.
 export function VariationCard({ artwork, busy, onApprove, onReject, onPromote, onVary, onTweak, cost = ' (~$0.03)' }) {
   const [tweaking, setTweaking] = useState(false);
-  const btn = `inline-flex h-10 items-center gap-1 rounded border px-2 text-[11px] font-medium transition-colors disabled:opacity-50 ${focusRing}`;
+  const btn = `inline-flex min-h-11 items-center gap-1 rounded border px-2.5 text-[11px] font-medium transition-colors disabled:opacity-50 ${focusRing}`;
   const ghost = 'border-neutral-700 bg-transparent text-neutral-400 hover:bg-neutral-800';
   const approved = artwork.status === 'approved';
   return (
@@ -779,7 +947,7 @@ export function VariationCard({ artwork, busy, onApprove, onReject, onPromote, o
       </div>
       <div className="px-0.5">
         <ErrorRibbon artwork={artwork} />
-        <div className="mt-1.5 flex flex-wrap items-center gap-1">
+        <div className="mt-1.5 flex flex-wrap items-center gap-2 sm:gap-1">
           <button
             type="button" disabled={busy} onClick={onApprove}
             title="Approve this version — it becomes a video"
@@ -862,7 +1030,9 @@ export function Stepper({ detail }) {
             >
               {label}
             </span>
-            {i < steps.length - 1 && <span aria-hidden="true" className="text-neutral-400">→</span>}
+            {/* Hidden below sm — when the row wraps, an arrow strands at a line
+                start pointing at nothing (mobile audit 2026-08-01). */}
+            {i < steps.length - 1 && <span aria-hidden="true" className="hidden text-neutral-400 sm:inline">→</span>}
           </li>
         );
       })}
@@ -891,11 +1061,13 @@ export function PendingDesignCard({ aspect = '16 / 9', label = 'Making a new des
       ref={ref} role="status" aria-live="polite"
       className="card-in rounded-lg border border-[#0247FE]/70 bg-neutral-900 p-2 ring-1 ring-[#0247FE]/30"
     >
-      <div className="grid place-items-center rounded bg-neutral-950" style={{ aspectRatio: aspect }}>
-        <div className="flex flex-col items-center gap-2 px-3 text-center">
-          <Spinner className="h-7 w-7" />
+      {/* Row layout below sm — the ultra-wide slot is ~90px tall on a phone and
+          the stacked spinner + two lines overflowed it (mobile audit 2026-08-01). */}
+      <div className="grid place-items-center overflow-hidden rounded bg-neutral-950" style={{ aspectRatio: aspect }}>
+        <div className="flex items-center gap-2 px-3 text-center sm:flex-col">
+          <Spinner className="h-5 w-5 shrink-0 sm:h-7 sm:w-7" />
           <span className="text-xs font-semibold text-white">{label}</span>
-          <span className="text-[11px] text-neutral-400">{sub || 'about 20 seconds'}</span>
+          <span className="hidden text-[11px] text-neutral-400 sm:block">{sub || 'about 20 seconds'}</span>
         </div>
       </div>
     </div>
@@ -952,7 +1124,9 @@ export function useToasts() {
 export function Toasts({ items, onDismiss }) {
   if (!items.length) return null;
   return (
-    <div className="pointer-events-none fixed bottom-4 right-4 z-[60] flex w-72 max-w-[calc(100vw-2rem)] flex-col items-stretch gap-2" role="status" aria-live="polite">
+    // inset-x-4 below sm (full-width toasts are easier thumb targets) and
+    // safe-area padding so the bottom toast clears the iPhone home indicator.
+    <div className="pointer-events-none fixed inset-x-4 bottom-4 z-[60] flex flex-col items-stretch gap-2 pb-[env(safe-area-inset-bottom)] sm:inset-x-auto sm:right-4 sm:w-72 sm:max-w-[calc(100vw-2rem)]" role="status" aria-live="polite">
       {items.map((t) => (
         <button
           key={t.id} type="button" onClick={() => onDismiss(t.id)}
