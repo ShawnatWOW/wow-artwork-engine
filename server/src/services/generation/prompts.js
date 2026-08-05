@@ -176,19 +176,36 @@ export function buildStillPrompt({ style, specKey, option, weekOf }) {
       `${WRAP_BANDS_CONNECTED} ${CONTRAST} ${SAFE}`;
   }
   if (style === 'frame_break') {
-    // The WOW signature 3D pop-out. The black border is PAINTED INTO the scene
+    // The WOW signature 3D pop-out. The black frame is PAINTED INTO the scene
     // (trompe-l'oeil) and the subject physically breaks through it, overlapping
-    // the border in front. Never rely on a post-composited letterbox — that
-    // clips the art BEHIND the border so nothing can ever pop out
+    // the frame in front. Never rely on a post-composited letterbox — that
+    // clips the art BEHIND the frame so nothing can ever pop out
     // (Shawn, 2026-07-15 + 2026-07-21).
-    return `An ultra-wide trompe-l'oeil 3D pop-out illusion. Style: ${t.style}. ` +
-      `Composition: a bold matte-black rectangular border is painted into the image, inset from the outer edges ` +
-      `like the mouth of a deep shadow box, with solid black filling the area outside the border. Seen through ` +
-      `the border opening, the scene recedes into deep vivid distance. The single hero subject is ${t.subject}, ` +
-      `bursting OUT through the opening toward the viewer: its body, limbs and trailing light spill across and ` +
-      `clearly overlap the black border — rendered IN FRONT of the border, partially covering it, casting soft ` +
-      `shadows onto it — unmistakably closer to the viewer than the border plane, while the deep scene stays ` +
-      `behind the opening. ${ENERGY} ${CONTRAST} ${SAFE}`;
+    //
+    // GEOMETRY (Shawn, 2026-08-04, from the historical dragon reference): the
+    // frame lives ON THE PERIMETER of the image — its outer edge IS the image
+    // edge, so on the physical structure it reads as an extension of the real
+    // black bezel. The earlier wording ("inset from the outer edges … solid
+    // black filling the area outside") made the model paint a floating
+    // rectangle INSIDE the shot with dead black margin around it, which kills
+    // the illusion. The box shows interior depth (inner walls in perspective),
+    // the scene lives inside it, and pop-outs overlap the frame's front face
+    // but always stop short of the outer edge — nothing is ever cropped by or
+    // escapes the image boundary, so the piece reads as one contained 3D box.
+    return `An ultra-wide trompe-l'oeil 3D shadow-box illusion, viewed straight on. Style: ${t.style}. ` +
+      `Composition: the entire image is the open front of one deep matte-black shadow box. The box's thick ` +
+      `matte-black frame runs exactly along all four outer edges of the image — the outermost pixels on every ` +
+      `side ARE the front face of the frame. Nothing exists outside the frame: no margin, no gap, no background ` +
+      `beyond it, the frame is flush with the image boundary on all four sides. The frame has real 3D thickness: ` +
+      `its interior walls are visible in perspective receding inward — a ceiling, a floor and two side walls ` +
+      `leading the eye into the box — and through the opening the scene recedes into deep vivid distance. ` +
+      `The single hero subject is ${t.subject}, living inside the box and bursting forward through the opening ` +
+      `toward the viewer: its body, limbs and trailing light cross the frame's inner edge and overlap the ` +
+      `frame's front face — rendered IN FRONT of the black frame, partially covering it, casting soft shadows ` +
+      `onto it — unmistakably closer to the viewer than the frame plane. Yet every element stops short of the ` +
+      `image's outer edge: nothing touches, crosses or is cropped by the outer boundary, so the subject stays ` +
+      `fully contained within the black frame's outer edge and the whole piece reads as one solid 3D box. ` +
+      `${ENERGY} ${CONTRAST} ${SAFE}`;
   }
   // eon_single: tall portrait composition, composed to wrap (the left band is
   // cut away onto the pod's spine — see WRAP_BAND_SINGLE).
@@ -254,13 +271,18 @@ export function buildMotionPrompt({ style, specKey, option, weekOf }) {
   }
   const solo = soloMotionFor({ specKey, option, weekOf })(t.subject);
   if (style === 'frame_break') {
-    return `Trompe-l'oeil 3D pop-out motion: ${solo}. ` +
-      `The painted matte-black border stays perfectly fixed in place for the whole clip — it never moves, bends or fades. ` +
-      `The subject repeatedly punches THROUGH the border opening toward the viewer: lunging out so its body and trailing ` +
-      `light pass OVER and IN FRONT of the black border (covering parts of it), then swinging back behind the opening into ` +
-      `the deep scene — in front, behind, in front again — so the 3D pop-out illusion reads instantly and constantly. ` +
-      `Whenever the subject crosses the border it visibly occludes it, casting moving shadows onto it. ` +
-      `Inside the opening the scene stays in perpetual motion — the environment swirls, flows and evolves continuously; ` +
+    return `Trompe-l'oeil 3D shadow-box motion: ${solo}. ` +
+      `The matte-black frame running along all four outer edges of the image stays perfectly fixed for the whole clip — ` +
+      `it never moves, bends, shrinks, detaches from the edges or fades, and nothing ever appears outside it: ` +
+      `the frame's outer edge remains the absolute boundary of the piece at all times. ` +
+      `The subject repeatedly punches forward through the box opening toward the viewer: lunging out so its body and trailing ` +
+      `light cross the frame's inner edge and pass OVER and IN FRONT of the black frame's face (covering parts of it), then ` +
+      `swinging back through the opening into the deep scene inside the box — in front, behind, in front again — so the ` +
+      `3D pop-out illusion reads instantly and constantly. ` +
+      `Whenever the subject crosses the frame it visibly occludes it, casting moving shadows onto it, yet it always stops ` +
+      `short of the image's outer edge — the subject and every trail and effect stay fully inside the image bounds, never ` +
+      `touched or cropped by the outer boundary, always contained within the frame's outer edge. ` +
+      `Inside the box the scene stays in perpetual motion — the environment swirls, flows and evolves continuously; ` +
       `lighting pulses across the scene; every pixel is alive. ` +
       `Smooth, premium, explosive high-energy movement — never static, never jittery. ${CONSTANCY}`;
   }
