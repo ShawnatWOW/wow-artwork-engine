@@ -192,19 +192,23 @@ export function buildStillPrompt({ style, specKey, option, weekOf }) {
     // the scene lives inside it, and pop-outs overlap the frame's front face
     // but always stop short of the outer edge — nothing is ever cropped by or
     // escapes the image boundary, so the piece reads as one contained 3D box.
-    return `An ultra-wide trompe-l'oeil 3D shadow-box illusion, viewed straight on. Style: ${t.style}. ` +
-      `Composition: the entire image is the open front of one deep matte-black shadow box. The box's thick ` +
-      `matte-black frame runs exactly along all four outer edges of the image — the outermost pixels on every ` +
-      `side ARE the front face of the frame. Nothing exists outside the frame: no margin, no gap, no background ` +
-      `beyond it, the frame is flush with the image boundary on all four sides. The frame has real 3D thickness: ` +
-      `its interior walls are visible in perspective receding inward — a ceiling, a floor and two side walls ` +
-      `leading the eye into the box — and through the opening the scene recedes into deep vivid distance. ` +
-      `The single hero subject is ${t.subject}, living inside the box and bursting forward through the opening ` +
+    return `An ultra-wide trompe-l'oeil deep-relief composition in perfectly frontal, dead-centered, ` +
+      `symmetrical one-point perspective. Style: ${t.style}. ` +
+      `Composition: the picture's border IS a thick matte-black frame — flat matte-black strips run along ` +
+      `the top edge, bottom edge, left edge and right edge of the picture, meeting at the four corners, ` +
+      `flush with the picture's edges on all sides. Just inside those black strips the frame's interior ` +
+      `walls recede inward in one-point perspective — a ceiling, a floor and two side walls, like looking ` +
+      `straight into a deep recessed niche — and through the opening the scene recedes into deep vivid ` +
+      `distance. The frame is never shown as an object: no outside of it, no top or sides of any box, no ` +
+      `ground it sits on, no room around it, no tilt or angle — the viewpoint is exactly perpendicular, ` +
+      `centered, and cropped precisely at the frame's outer edge. ` +
+      `The single hero subject is ${t.subject}, inside the niche and bursting forward through the opening ` +
       `toward the viewer: its body, limbs and trailing light cross the frame's inner edge and overlap the ` +
-      `frame's front face — rendered IN FRONT of the black frame, partially covering it, casting soft shadows ` +
-      `onto it — unmistakably closer to the viewer than the frame plane. Yet every element stops short of the ` +
-      `image's outer edge: nothing touches, crosses or is cropped by the outer boundary, so the subject stays ` +
-      `fully contained within the black frame's outer edge and the whole piece reads as one solid 3D box. ` +
+      `frame's black front strips — rendered IN FRONT of them, partially covering them, casting soft shadows ` +
+      `onto them — unmistakably closer to the viewer than the frame plane. Every element stays well inside ` +
+      `the picture's borders: nothing but the black frame itself ever touches the picture's edge, and nothing ` +
+      `is cropped by the picture's boundary — the subject and all its trails stay fully contained within the ` +
+      `frame's outer edge, one solid contained 3D space. ` +
       `${ENERGY} ${CONTRAST} ${SAFE}`;
   }
   // eon_single: tall portrait composition, composed to wrap (the left band is
