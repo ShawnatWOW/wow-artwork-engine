@@ -11,6 +11,8 @@ import ffmpeg, {
   buildCropArgs,
   buildFrameBreakArgs,
   buildThumbnailArgs,
+  buildLastFrameArgs,
+  buildConcatArgs,
 } from '../src/services/ffmpeg.js';
 import { motionProvider, stillProvider } from '../src/services/generation/fixture.js';
 
@@ -71,6 +73,24 @@ test('buildFrameBreakArgs builds an overlay that overshoots the inner frame', ()
   const fc = args[args.indexOf('-filter_complex') + 1];
   assert.match(fc, /color=c=black:s=1692x468/);
   assert.match(fc, /overlay=x=40:y=-20/);
+});
+
+test('buildLastFrameArgs seeks from the end and keeps the final decoded frame', () => {
+  const args = buildLastFrameArgs({ input: 'a.mp4', output: 'last.png' });
+  // -sseof BEFORE -i (input option), -update so the last write wins.
+  assert.ok(args.indexOf('-sseof') < args.indexOf('-i'));
+  assert.equal(args[args.indexOf('-sseof') + 1], '-0.5');
+  assert.ok(args.includes('-update'));
+  assert.equal(args.at(-1), 'last.png');
+});
+
+test('buildConcatArgs joins segments with a filter concat and re-encode', () => {
+  const args = buildConcatArgs({ inputs: ['a.mp4', 'b.mp4'], output: 'joined.mp4', fps: 30 });
+  const filter = args[args.indexOf('-filter_complex') + 1];
+  assert.equal(filter, '[0:v][1:v]concat=n=2:v=1:a=0[out]');
+  assert.ok(args.includes('libx264')); // re-encode, never stream-copy across encoders
+  assert.equal(args.at(-1), 'joined.mp4');
+  assert.throws(() => buildConcatArgs({ inputs: ['only.mp4'], output: 'x.mp4' }), /at least 2/);
 });
 
 test('buildThumbnailArgs grabs one frame at the given time', () => {

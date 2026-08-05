@@ -22,10 +22,19 @@ export function getProviders(mode = config.generationMode) {
       );
     }
     logger.warn('Generation mode: LIVE — calls will spend credits.');
-    return { mode, still: seedream.stillProvider, motion: fal.motionProvider };
+    return {
+      mode,
+      still: seedream.stillProvider,
+      motion: fal.motionProvider,
+      // Chain plumbing for the 30s two-segment spectacular: upload local files
+      // (handoff frame, stitched clip) to fal storage, one Topaz pass over the
+      // stitched result, and download it back. null in fixture mode — the
+      // orchestrator chains via local files and skips the upscale.
+      media: { upload: fal.uploadToFalStorage, upscale: fal.upscaleVideo, download: fal.downloadTo },
+    };
   }
   logger.info('Generation mode: fixture — synthesizing media locally (no cost).');
-  return { mode: 'fixture', still: fixture.stillProvider, motion: fixture.motionProvider };
+  return { mode: 'fixture', still: fixture.stillProvider, motion: fixture.motionProvider, media: null };
 }
 
 export default { getProviders };

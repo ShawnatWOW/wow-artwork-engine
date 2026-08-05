@@ -24,6 +24,12 @@ const ARTWORK_COLUMNS = {
   stage: 'stage',
   motionPrompt: 'motion_prompt',
   remoteUrl: 'remote_url',
+  // Storyboard + two-act spectacular (008_storyboard_30s.sql).
+  closingPrompt: 'closing_prompt',
+  closingKey: 'closing_key',
+  closingThumbKey: 'closing_thumb_key',
+  closingRemoteUrl: 'closing_remote_url',
+  motionPromptAct2: 'motion_prompt_act2',
   // "Keep & explore" lineage (see migration 006_keep_and_explore.sql).
   familyId: 'family_id',
   parentArtworkId: 'parent_artwork_id',
@@ -68,8 +74,9 @@ export const pgRepo = {
           duration_s, prompt, model, s3_key_raw, s3_key_final, thumbnail_key, status, error,
           stage, motion_prompt, source_still_id, remote_url,
           family_id, parent_artwork_id, change_note,
-          panel, fal_request_id, upscale_request_id, cost_usd)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26)
+          panel, fal_request_id, upscale_request_id, cost_usd,
+          closing_prompt, closing_key, closing_thumb_key, closing_remote_url, motion_prompt_act2)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31)
        RETURNING *`,
       [
         a.runId, a.surface, a.style, a.mediaType, a.specKey,
@@ -85,6 +92,9 @@ export const pgRepo = {
         // the pg path at parity so a DATABASE_URL deploy records them too.
         a.panel ?? null,
         a.falRequestId ?? null, a.upscaleRequestId ?? null, a.costUsd ?? null,
+        // Storyboard + two-act spectacular (008).
+        a.closingPrompt ?? null, a.closingKey ?? null, a.closingThumbKey ?? null,
+        a.closingRemoteUrl ?? null, a.motionPromptAct2 ?? null,
       ],
     );
     return rows[0];

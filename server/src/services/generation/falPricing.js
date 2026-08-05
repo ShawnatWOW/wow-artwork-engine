@@ -114,6 +114,26 @@ export function renderDimsForTier(aspect, tier = 'standard') {
   return { width, height };
 }
 
+// Pixel budgets per fal `resolution` request param. Since 2026-08-05 the
+// engine runs the STANDARD tier at 720p (billboards are 1692x468 native), so
+// tier alone no longer implies the pixel count — the ledger must price the
+// resolution actually requested, or it overstates spend ~2.2x (found on the
+// first live 30s validation: $22.84 recorded for a ~$12 run).
+const RESOLUTION_PIXEL_BUDGET = { '480p': 854 * 480, '720p': 1280 * 720, '1080p': 1920 * 1080 };
+
+/**
+ * The dimensions Seedance actually renders (and bills) for a clip of a given
+ * aspect at a given requested resolution: that resolution's pixel budget,
+ * shaped to `aspect` (W/H), rounded to even. Pure.
+ */
+export function renderDimsForResolution(aspect, resolution = '720p') {
+  const budget = RESOLUTION_PIXEL_BUDGET[resolution] ?? RESOLUTION_PIXEL_BUDGET['720p'];
+  const even = (n) => Math.max(2, Math.round(n / 2) * 2);
+  const height = even(Math.sqrt(budget / aspect));
+  const width = even(aspect * height);
+  return { width, height };
+}
+
 // Canonical 16:9 dims for a fal resolution string — for callers (e.g. Content
 // Automation) that only know the resolution tier, not exact output pixels.
 const RESOLUTION_DIMS = {
@@ -167,7 +187,7 @@ export const REFERENCE_PER_SECOND = {
 
 export default {
   seedanceTier, usedTopaz, seedanceTokens, seedanceCostUsd, topazCostUsd,
-  seedreamCostUsd, renderDimsForTier, dimsForResolution, videoCostUsd,
+  seedreamCostUsd, renderDimsForTier, renderDimsForResolution, dimsForResolution, videoCostUsd,
   requestIdFromStatusUrl, REFERENCE_PER_SECOND,
   SEEDANCE_RATE_PER_1K, TOPAZ_PER_SECOND, SEEDREAM_PER_IMAGE,
 };

@@ -75,6 +75,112 @@ const TRAVELS = [
   { dir: 'rtl', start: 'right', end: 'left', verb: 'drifts' },
 ];
 
+// ===========================================================================
+// SPECTACULAR v2 (Scott's notes, 2026-08-05): ensemble casts, two-act scene
+// arcs, distinct style families. The spectacular is a 30s piece built from two
+// chained 15s segments — act 1 and act 2 — with a generated CLOSING still that
+// the reviewer sees as a storyboard ("opens with / ends with") and Seedance
+// receives as end_image_url, so the clip provably lands on the approved frame.
+// ===========================================================================
+
+// Style families × matching ensemble casts. Every family is hyper-colorful and
+// built for constant motion; every cast member is a NAMED non-human creature
+// (vague subjects collapse to humanoids, which Seedance moderation refuses).
+// The 3 weekly options are guaranteed DIFFERENT families — see familyFor().
+const SPECTACULAR_FAMILIES = [
+  {
+    key: 'liquid_chrome',
+    style: 'liquid-chrome psychedelia — molten mirror surfaces streaked with hot pink, electric blue and acid green',
+    cast: ['a serpent of liquid chrome', 'a mirrored octopus dripping rainbow paint', 'a molten-mercury hummingbird'],
+  },
+  {
+    key: 'neon_botanical',
+    style: 'neon botanical jungle — day-glo flora, luminous vines and hyper-saturated tropical light',
+    cast: ['a giant day-glo orchid with curling luminous tendrils', 'an electric-green vine serpent', 'a neon hummingbird moth'],
+  },
+  {
+    key: 'cosmic_candy',
+    style: 'cosmic candy — glossy sugar-glass surfaces, swirling nebula taffy and hyper-sweet saturated color',
+    cast: ['a candy-glass koi fish', 'a taffy-winged phoenix', 'a gummy comet whale trailing sparkling sugar dust'],
+  },
+  {
+    key: 'stained_glass',
+    style: 'stained-glass kaleidoscope — jewel-toned translucent facets refracting brilliant light',
+    cast: ['a crystal butterfly with kaleidoscope stained-glass wings', 'a stained-glass phoenix', 'a prism-shelled beetle'],
+  },
+  {
+    key: 'wet_paint',
+    style: 'wet-paint pop surrealism — thick glossy paint in collision, splashing and swirling in saturated color',
+    cast: ['a paint-splash cheetah', 'a dripping-rainbow cobra', 'an ink-burst falcon'],
+  },
+  {
+    key: 'deep_sea',
+    style: 'iridescent deep-sea bioluminescence — electric glowing life against rich abyssal color',
+    cast: ['a pulsing electric jellyfish with trailing neon tentacles', 'an iridescent manta ray', 'a bioluminescent anglerfish'],
+  },
+  {
+    key: 'ultraviolet',
+    style: 'ultraviolet blacklight neon — trippy UV glow, vivid and electric',
+    cast: ['a dancing cluster of glowing neon mushrooms', 'an ultraviolet chameleon', 'a neon-striped gecko'],
+  },
+  {
+    key: 'cosmic_tiedye',
+    style: 'cosmic tie-dye nebula — swirling stardust bursting with saturated color',
+    cast: ['a cosmic koi fish swimming through swirls of stardust', 'a nebula fox with a comet tail', 'a stardust dragon serpent'],
+  },
+];
+
+// Two-act scene arcs. Each template takes the joined cast string and returns
+// act 1 (segment A motion), act 2 (segment B motion — the scene TRANSFORMS),
+// and the finale (the closing still's scene — segment B's end_image target).
+// Every act keeps multiple characters moving at once and takes turns punching
+// through the frame; the finale reads as a settled, poster-worthy composition.
+const SPECTACULAR_ARCS = [
+  (cast) => ({
+    act1: `The scene erupts to life: ${cast} chase each other in sweeping interlocking loops, diving deep into the distance and lunging forward through the opening, each taking a turn bursting over the black frame while the environment churns with streaming color trails`,
+    act2: `The environment transforms around them — the deep space blooms into a completely new landscape of the same vivid palette; the characters regroup and spiral together into one grand formation, weaving between foreground and deep background as the new scenery surges with kinetic light`,
+    finale: 'the full cast gathered in one dramatic settled formation, the largest character front and center bursting through the opening over the black frame, the others arranged at staggered depths behind it in the transformed scenery',
+  }),
+  (cast) => ({
+    act1: `A playful high-speed pursuit: ${cast} ricochet between the deep interior and the near foreground, colliding into bursts of color, one after another punching out through the opening and over the frame while the scene ripples in their wake`,
+    // "celebration" pulled CROWDS of neon human runners into the walls, and
+    // "frozen" pulled stone statues + a museum room (live QA, 2026-08-05).
+    // Keep this arc's beats described purely as the cast + light.
+    act2: `The chase erupts into a blaze of shared light — the environment fractures and reforms into a brighter, denser dreamscape; the characters swirl in a shared vortex, trading places between front and back, throwing cascades of light against the transformed scenery`,
+    finale: 'the full cast caught mid-leap in the reformed dreamscape, two characters bursting through the opening over the black frame from opposite sides, the rest fanned out at depth between them',
+  }),
+  (cast) => ({
+    act1: `The scene breathes like one organism: ${cast} orbit a blazing center of light, plunging toward the viewer and back into the depths in rolling waves, each pass sending one of them through the opening and across the black frame`,
+    act2: `The center of light blossoms and swallows the scene — an entirely new environment unfurls from it in the same palette; the characters ride the expanding wave outward and regroup in the fresh scenery, weaving figure-eights between depth layers as everything pulses with light`,
+    finale: 'the full cast arranged in a sweeping arc around the blossomed center of light in the new environment, the nearest character surging through the opening over the black frame, the scene at maximum brilliance',
+  }),
+  (cast) => ({
+    act1: `Duelling energies: ${cast} split the space and spar in flamboyant bursts, whipping the environment into spirals, lunging past each other through the opening and over the frame in alternating waves`,
+    act2: `The duel resolves into harmony — the churning environment recomposes into a majestic new vista of the same colors; the characters merge their trails into one braided stream of light that sweeps through the deep space and out over the frame`,
+    finale: 'the full cast aligned along one braided stream of light flowing from deep in the vista out through the opening and across the black frame, every character distinct and glowing',
+  }),
+];
+
+/** Join a cast into prose: "a, b and c". Pure. */
+const joinCast = (cast) => `${cast.slice(0, -1).join(', ')} and ${cast.at(-1)}`;
+
+/**
+ * The style family for one spectacular option. Consecutive options are
+ * GUARANTEED different families: the week picks a base index, the option
+ * strides from it. Pure; exported for the UI/tests.
+ */
+export function familyFor({ specKey, option, weekOf }) {
+  const base = hash(`fam:${weekOf || 'week'}:${specKey}`);
+  return SPECTACULAR_FAMILIES[(base + (option - 1)) % SPECTACULAR_FAMILIES.length];
+}
+
+/** The two-act arc for one spectacular option. Pure; exported for tests. */
+export function arcFor({ specKey, option, weekOf }) {
+  const f = familyFor({ specKey, option, weekOf });
+  const arc = SPECTACULAR_ARCS[hash(`arc:${weekOf || 'week'}:${specKey}:${option}`) % SPECTACULAR_ARCS.length];
+  return arc(joinCast(f.cast));
+}
+
 // 3-act journeys for the connected wide master. Each act plays out in one
 // third of the frame — which is exactly one screen of the triptych — so the
 // subject performs on the first screen, does something unique in the middle,
@@ -157,6 +263,42 @@ const ENERGY =
   'explosive blooms of saturated color detonate around it, with layered depth suggesting ' +
   'the subject is moving through 3D space at high velocity.';
 
+// The VERIFIED spectacular frame geometry (3 live Seedream tests, 2026-08-04).
+// The picture's border IS the frame, flush on all four sides, interior niche
+// walls in one-point perspective, never depicted as an object in a room.
+// Byte-stable: opening AND closing stills share these so the two storyboard
+// frames agree on geometry. Do not reword without a live re-test.
+const FRAME_GEOMETRY =
+  `Composition: the picture's border IS a thick matte-black frame — flat matte-black strips run along ` +
+  `the top edge, bottom edge, left edge and right edge of the picture, meeting at the four corners, ` +
+  `flush with the picture's edges on all sides. Just inside those black strips the frame's interior ` +
+  `walls recede inward in one-point perspective — a ceiling, a floor and two side walls, like looking ` +
+  `straight into a deep recessed niche — and through the opening the scene recedes into deep vivid ` +
+  `distance. The frame is never shown as an object: no outside of it, no top or sides of any box, no ` +
+  `ground it sits on, no room around it, no tilt or angle — the viewpoint is exactly perpendicular, ` +
+  `centered, and cropped precisely at the frame's outer edge.`;
+const FRAME_CONTAINMENT =
+  `Every element stays well inside the picture's borders: nothing but the black frame itself ever ` +
+  `touches the picture's edge, and nothing is cropped by the picture's boundary — every character ` +
+  `and every trail stays fully contained within the frame's outer edge, one solid contained 3D space.`;
+// Ensemble variant of ENERGY: the whole cast alive at layered depths.
+const CAST_ENERGY =
+  'Every character is caught mid-motion and bursting with kinetic energy — trails of light streak ' +
+  'behind them, kaleidoscopic shockwaves radiate outward, explosive blooms of saturated color ' +
+  'detonate across the scene, with layered depth placing the characters at clearly different distances.';
+// Cast WHITELIST, stated early where it carries weight. The trailing SAFE
+// blacklist alone was not enough: the first live 30s validation rendered
+// gallery-visitor silhouettes in the opening frame and a stage full of human
+// statues and a central man in the closing frame (2026-08-05). An explicit
+// "only these" beats a distant "none of those" — and the whitelist must stay
+// NOUN-FREE on the banned side: listing "statues, sculptures, carved figures"
+// here literalized into an avenue of statues (the "bands" lesson again).
+// ("figures" is itself a humanoid-shaped drawable noun — v4 drew neon runner
+// outlines along the walls while the whitelist said "the ONLY figures".)
+const ONLY_CAST = (cast) =>
+  `These are the ONLY living things anywhere in the scene: ${cast}. ` +
+  `Nothing else appears — every other shape in the scene is pure scenery: plants, flowers, light and color.`;
+
 /**
  * The still (first-frame) prompt for one option — art + composition only.
  * @param {{ style, specKey, option, weekOf }} job
@@ -176,40 +318,25 @@ export function buildStillPrompt({ style, specKey, option, weekOf }) {
       `${WRAP_BANDS_CONNECTED} ${CONTRAST} ${SAFE}`;
   }
   if (style === 'frame_break') {
-    // The WOW signature 3D pop-out. The black frame is PAINTED INTO the scene
-    // (trompe-l'oeil) and the subject physically breaks through it, overlapping
-    // the frame in front. Never rely on a post-composited letterbox — that
-    // clips the art BEHIND the frame so nothing can ever pop out
-    // (Shawn, 2026-07-15 + 2026-07-21).
-    //
-    // GEOMETRY (Shawn, 2026-08-04, from the historical dragon reference): the
-    // frame lives ON THE PERIMETER of the image — its outer edge IS the image
-    // edge, so on the physical structure it reads as an extension of the real
-    // black bezel. The earlier wording ("inset from the outer edges … solid
-    // black filling the area outside") made the model paint a floating
-    // rectangle INSIDE the shot with dead black margin around it, which kills
-    // the illusion. The box shows interior depth (inner walls in perspective),
-    // the scene lives inside it, and pop-outs overlap the frame's front face
-    // but always stop short of the outer edge — nothing is ever cropped by or
-    // escapes the image boundary, so the piece reads as one contained 3D box.
+    // The WOW signature 3D pop-out — ensemble edition (Scott, 2026-08-05).
+    // The black frame is PAINTED INTO the scene (trompe-l'oeil); characters
+    // physically break through it. Never rely on a post-composited letterbox —
+    // that clips the art BEHIND the frame so nothing can ever pop out
+    // (Shawn, 2026-07-15 + 2026-07-21). Geometry formula verified live
+    // 2026-08-04 — see FRAME_GEOMETRY / FRAME_CONTAINMENT; never regress to
+    // "inset border" or "shadow box as an object" wording (both failed live).
+    const f = familyFor({ specKey, option, weekOf });
+    const cast = joinCast(f.cast);
     return `An ultra-wide trompe-l'oeil deep-relief composition in perfectly frontal, dead-centered, ` +
-      `symmetrical one-point perspective. Style: ${t.style}. ` +
-      `Composition: the picture's border IS a thick matte-black frame — flat matte-black strips run along ` +
-      `the top edge, bottom edge, left edge and right edge of the picture, meeting at the four corners, ` +
-      `flush with the picture's edges on all sides. Just inside those black strips the frame's interior ` +
-      `walls recede inward in one-point perspective — a ceiling, a floor and two side walls, like looking ` +
-      `straight into a deep recessed niche — and through the opening the scene recedes into deep vivid ` +
-      `distance. The frame is never shown as an object: no outside of it, no top or sides of any box, no ` +
-      `ground it sits on, no room around it, no tilt or angle — the viewpoint is exactly perpendicular, ` +
-      `centered, and cropped precisely at the frame's outer edge. ` +
-      `The single hero subject is ${t.subject}, inside the niche and bursting forward through the opening ` +
-      `toward the viewer: its body, limbs and trailing light cross the frame's inner edge and overlap the ` +
+      `symmetrical one-point perspective. Style: ${f.style}. ` +
+      `${FRAME_GEOMETRY} ` +
+      `The scene is home to an ensemble of characters: ${cast}. ${ONLY_CAST(cast)} They are placed at clearly ` +
+      `different depths — some deep in the distance, some mid-ground, and at least one bursting forward through the ` +
+      `opening toward the viewer: its body and trailing light cross the frame's inner edge and overlap the ` +
       `frame's black front strips — rendered IN FRONT of them, partially covering them, casting soft shadows ` +
-      `onto them — unmistakably closer to the viewer than the frame plane. Every element stays well inside ` +
-      `the picture's borders: nothing but the black frame itself ever touches the picture's edge, and nothing ` +
-      `is cropped by the picture's boundary — the subject and all its trails stay fully contained within the ` +
-      `frame's outer edge, one solid contained 3D space. ` +
-      `${ENERGY} ${CONTRAST} ${SAFE}`;
+      `onto them — unmistakably closer to the viewer than the frame plane. Every character is distinct, ` +
+      `mid-motion and interacting with the others. ${FRAME_CONTAINMENT} ` +
+      `${CAST_ENERGY} ${CONTRAST} ${SAFE}`;
   }
   // eon_single: tall portrait composition, composed to wrap (the left band is
   // cut away onto the pod's spine — see WRAP_BAND_SINGLE).
@@ -217,6 +344,38 @@ export function buildStillPrompt({ style, specKey, option, weekOf }) {
     `The single hero subject is ${t.subject}, filling most of the frame height with a strong central focal point ` +
     `and bold silhouette, centred in the right four-fifths of the frame. ` +
     `${WRAP_BAND_SINGLE} ${ENERGY} ${CONTRAST} ${SAFE}`;
+}
+
+/**
+ * The CLOSING still for a storyboard surface (spectacular only): the exact
+ * frame the 30s piece must END on. Same geometry, same family, same cast as
+ * the opening still — the scene is the arc's finale. Shown to the reviewer as
+ * the second storyboard panel and handed to Seedance segment B as
+ * end_image_url, so approval of this image is approval of the ending.
+ * @param {{ style, specKey, option, weekOf }} job
+ */
+export function buildClosingStillPrompt({ style, specKey, option, weekOf }) {
+  if (style !== 'frame_break') return null; // storyboard is a spectacular-only feature
+  const f = familyFor({ specKey, option, weekOf });
+  const cast = joinCast(f.cast);
+  const arc = arcFor({ specKey, option, weekOf });
+  return `An ultra-wide trompe-l'oeil deep-relief composition in perfectly frontal, dead-centered, ` +
+    `symmetrical one-point perspective. Style: ${f.style}. ` +
+    `${FRAME_GEOMETRY} ` +
+    `The scene is home to an ensemble of characters: ${cast}. ${ONLY_CAST(cast)} ` +
+    // "grand finale"/"closing pose of a performance" wording literalized into a
+    // STAGE SHOW — human statues and a central performer (live QA, 2026-08-05);
+    // "final scene" then drew a framed screen INSIDE the picture, and BANNING
+    // "a screen, a framed rectangle" drew an empty framed rectangle — models
+    // literalize drawable nouns even inside negations (same lesson as the
+    // painted "bands", 2026-07-31). So: no show words, no screen words at all;
+    // instead POSITIVELY fill the back of the box so nothing invents a panel.
+    `This is how the story ends: ${arc.finale}. ` +
+    `Every character is distinct and glowing with energy, the composition settled and majestic. ` +
+    `Glowing scenery, drifting light and rich atmospheric color fill the space continuously all the way ` +
+    `to its deep far end. ` +
+    `${FRAME_CONTAINMENT} ` +
+    `${CAST_ENERGY} ${CONTRAST} ${SAFE}`;
 }
 
 // Negative guard for the EON motion prompts (frame_break keeps its border on
@@ -273,26 +432,55 @@ export function buildMotionPrompt({ style, specKey, option, weekOf }) {
       `every pixel of the composition is active. The entire scene is kinetic and alive, never static or passive. ` +
       `${NO_SEAMS} ${CONSTANCY}`;
   }
-  const solo = soloMotionFor({ specKey, option, weekOf })(t.subject);
   if (style === 'frame_break') {
-    return `Trompe-l'oeil 3D shadow-box motion: ${solo}. ` +
-      `The matte-black frame running along all four outer edges of the image stays perfectly fixed for the whole clip — ` +
-      `it never moves, bends, shrinks, detaches from the edges or fades, and nothing ever appears outside it: ` +
-      `the frame's outer edge remains the absolute boundary of the piece at all times. ` +
-      `The subject repeatedly punches forward through the box opening toward the viewer: lunging out so its body and trailing ` +
-      `light cross the frame's inner edge and pass OVER and IN FRONT of the black frame's face (covering parts of it), then ` +
-      `swinging back through the opening into the deep scene inside the box — in front, behind, in front again — so the ` +
-      `3D pop-out illusion reads instantly and constantly. ` +
-      `Whenever the subject crosses the frame it visibly occludes it, casting moving shadows onto it, yet it always stops ` +
-      `short of the image's outer edge — the subject and every trail and effect stay fully inside the image bounds, never ` +
-      `touched or cropped by the outer boundary, always contained within the frame's outer edge. ` +
-      `Inside the box the scene stays in perpetual motion — the environment swirls, flows and evolves continuously; ` +
-      `lighting pulses across the scene; every pixel is alive. ` +
-      `Smooth, premium, explosive high-energy movement — never static, never jittery. ${CONSTANCY}`;
+    return buildSpectacularAct({ specKey, option, weekOf, act: 1 });
   }
+  const solo = soloMotionFor({ specKey, option, weekOf })(t.subject);
   return `Vivid ambient motion: ${solo}. ` +
     `${NO_SEAMS} Smooth and hypnotic, never chaotic or jittery. ${CONSTANCY}`;
 }
 
-export { THEMES, CHOREOGRAPHIES, SOLO_MOTIONS };
-export default { buildStillPrompt, buildMotionPrompt, sanitizeMotionPrompt, travelFor, themeFor, choreographyFor, soloMotionFor, THEMES };
+// Spectacular color rule: scenes TRANSFORM on purpose (Scott: "scenes
+// constantly changing"), so the EON "colors remain exactly constant" wording
+// would fight the arc. What must not happen is DRIFT — Seedance's slow
+// desaturation — so saturation is pinned while deliberate change stays free.
+const CONSTANCY_SPEC =
+  'Locked static camera; no zoom, no pan. ' +
+  'Saturation stays rich and maxed for the entire duration — colors may transform as the scene changes, ' +
+  'but they never fade, wash out, or drift toward grey.';
+
+// The frame rule for both spectacular acts: fixed, flush, inviolable.
+const FRAME_MOTION_RULE =
+  `The matte-black frame running along all four outer edges of the image stays perfectly fixed for the whole clip — ` +
+  `it never moves, bends, shrinks, detaches from the edges or fades, and nothing ever appears outside it: ` +
+  `the frame's outer edge remains the absolute boundary of the piece at all times. ` +
+  `Characters crossing the frame visibly occlude it, casting moving shadows onto it, yet always stop ` +
+  `short of the image's outer edge — every character, trail and effect stays fully inside the image bounds, ` +
+  `never touched or cropped by the outer boundary.`;
+
+/**
+ * One act of the spectacular's two-act motion (act 1 = segment A off the
+ * opening still; act 2 = segment B, chained from A's last frame and landing on
+ * the closing still via end_image_url). Pure; exported for the orchestrator.
+ * @param {{ specKey, option, weekOf, act: 1|2 }} job
+ */
+export function buildSpectacularAct({ specKey, option, weekOf, act }) {
+  const arc = arcFor({ specKey, option, weekOf });
+  const body = act === 2 ? arc.act2 : arc.act1;
+  const landing = act === 2
+    ? `In the final moments every character eases into its place in one grand settled formation — ` +
+      `the composition resolves into a majestic final scene and holds it as the clip ends. `
+    : '';
+  return `Trompe-l'oeil 3D pop-out motion, act ${act} of 2: ${body}. ` +
+    `${FRAME_MOTION_RULE} ` +
+    `Multiple characters are in motion at every moment — none of them ever freezes or hovers; the whole ` +
+    `environment moves with them, swirling, flowing and evolving continuously; every pixel is alive. ` +
+    `${landing}` +
+    `Smooth, premium, explosive high-energy movement — never static, never jittery. ${CONSTANCY_SPEC}`;
+}
+
+export { THEMES, CHOREOGRAPHIES, SOLO_MOTIONS, SPECTACULAR_FAMILIES, SPECTACULAR_ARCS };
+export default {
+  buildStillPrompt, buildClosingStillPrompt, buildMotionPrompt, buildSpectacularAct, sanitizeMotionPrompt,
+  travelFor, themeFor, choreographyFor, soloMotionFor, familyFor, arcFor, THEMES, SPECTACULAR_FAMILIES,
+};

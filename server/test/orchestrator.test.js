@@ -75,6 +75,16 @@ test('Phase 1: runWeek generates one still per surface/option (nothing animated)
     const probed = await ffmpeg.probe(store.localPath(spec.s3_key_final));
     assert.equal(probed.width, gen.width);
     assert.equal(probed.height, gen.height);
+
+    // Storyboard (Scott, 2026-08-05): the spectacular still ALSO carries a
+    // closing frame ("ends with") and a second motion act; EON stills don't.
+    assert.ok(spec.closing_prompt && spec.closing_key && spec.motion_prompt_act2, 'spectacular carries a storyboard');
+    assert.notEqual(spec.motion_prompt, spec.motion_prompt_act2, 'the two acts differ');
+    const closingProbed = await ffmpeg.probe(store.localPath(spec.closing_key));
+    assert.equal(closingProbed.width, gen.width);
+    for (const eon of stills.filter((a) => a.style !== 'frame_break')) {
+      assert.ok(!eon.closing_key && !eon.motion_prompt_act2, `${eon.style} has no storyboard`);
+    }
   } finally {
     await rm(base, { recursive: true, force: true });
   }
@@ -102,6 +112,11 @@ test('Phase 2: animateRun animates ONLY approved stills, conformed to spec, link
     const spec = motions.find((m) => m.style === 'frame_break');
     let p = await ffmpeg.probe(store.localPath(spec.s3_key_final));
     assert.equal(p.width, 3840); assert.equal(p.height, 1062);
+    // The spectacular is a TWO-SEGMENT chain (segments: 2 in the catalog):
+    // with duration=1s per segment the stitched deliverable runs ~2s, and the
+    // ledger records both Seedance jobs. EON clips stay single-segment (~1s).
+    assert.ok((p.duration ?? 0) > 1.5, `spectacular should be 2 chained segments, got ${p.duration}s`);
+    assert.equal(spec.duration_s, 2);
     // Every EON row is cut to its panel's spec and labelled with which panel
     // of which pod it drives — that label is what routes the file to Jeff.
     const eon = motions.filter((m) => m.surface === 'eon');

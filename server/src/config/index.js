@@ -72,7 +72,13 @@ const config = {
     seedanceModel: process.env.FAL_SEEDANCE_MODEL || 'bytedance/seedance-2.0/image-to-video',
     seedreamModel: process.env.FAL_SEEDREAM_MODEL || 'fal-ai/bytedance/seedream/v4/text-to-image',
     queueBase: process.env.FAL_QUEUE_BASE || 'https://queue.fal.run',
-    resolution: process.env.FAL_RESOLUTION || '1080p',
+    // fal REST base for storage uploads (the stitched 30s clip + the segment
+    // handoff frame must be fal-fetchable URLs before Topaz / Seedance B).
+    restBase: process.env.FAL_REST_BASE || 'https://rest.fal.ai',
+    // 720p tier (Shawn, 2026-08-05): the sign is 1692x468 native, so a 21:9
+    // 720p render already matches panel width; Topaz still delivers the
+    // 4K-class file. Revert with FAL_RESOLUTION=1080p if quality dips.
+    resolution: process.env.FAL_RESOLUTION || '720p',
     generateAudio: process.env.FAL_GENERATE_AUDIO === '1', // artwork is silent by default
     // AI upscale to 4K-class after Seedance (billboards need real sharpness —
     // a plain ffmpeg blow-up looks soft at street scale). Topaz runs on the
@@ -80,7 +86,11 @@ const config = {
     upscale: {
       enabled: process.env.FAL_UPSCALE === undefined ? true : ['1', 'true', 'yes', 'on'].includes(String(process.env.FAL_UPSCALE).toLowerCase()),
       model: process.env.FAL_UPSCALE_MODEL || 'fal-ai/topaz/upscale/video',
-      factor: num(process.env.FAL_UPSCALE_FACTOR, 2),
+      // 4x pairs with the 720p Seedance tier: 1680x720 → 6720x2880, conformed
+      // DOWN to the 3840-wide spec (2x left conform upscaling 1.14x in plain
+      // ffmpeg — soft). Topaz bills per output second tiered by resolution, so
+      // 4x costs the same as 2x at >1080p output.
+      factor: num(process.env.FAL_UPSCALE_FACTOR, 4),
     },
   },
   gemini: {

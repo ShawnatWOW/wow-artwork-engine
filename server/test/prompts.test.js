@@ -2,7 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  buildStillPrompt, buildMotionPrompt, sanitizeMotionPrompt, travelFor, themeFor, choreographyFor, THEMES, CHOREOGRAPHIES,
+  buildStillPrompt, buildClosingStillPrompt, buildMotionPrompt, buildSpectacularAct, sanitizeMotionPrompt,
+  travelFor, themeFor, choreographyFor, familyFor, arcFor, THEMES, CHOREOGRAPHIES, SPECTACULAR_FAMILIES,
 } from '../src/services/generation/prompts.js';
 import { checkPrompt } from '../src/services/guardrails.js';
 import { planJobs } from '../src/services/generation/catalog.js';
@@ -68,16 +69,108 @@ test('travelFor cycles the in-frame direction across options', () => {
   assert.equal(travelFor(1).start, 'right');
 });
 
-test('every prompt names a concrete non-human subject from the theme list', () => {
+test('every prompt names concrete non-human subjects (themes for EON, casts for spectacular)', () => {
   // Live finding: "a hero subject" alone rendered photoreal people 3/3, which
-  // Seedance refuses to animate. Subjects must be NAMED per theme.
+  // Seedance refuses to animate. Subjects must be NAMED — EON surfaces name
+  // their theme subject; the spectacular names its whole ensemble cast.
   const subjects = new Set(THEMES.map((t) => t.subject));
   for (const job of planJobs({ optionsPerSurface: 3 })) {
     const args = { style: job.style, specKey: job.specKey, option: job.option, weekOf: '2026-08-10' };
-    const t = themeFor(args);
-    assert.ok(subjects.has(t.subject));
-    assert.ok(buildStillPrompt(args).includes(t.subject), `still must name ${t.subject}`);
-    assert.ok(buildMotionPrompt(args).includes(t.subject), `motion must name ${t.subject}`);
+    if (job.style === 'frame_break') {
+      const f = familyFor(args);
+      const still = buildStillPrompt(args);
+      const closing = buildClosingStillPrompt(args);
+      for (const member of f.cast) {
+        assert.ok(still.includes(member), `opening still must name ${member}`);
+        assert.ok(closing.includes(member), `closing still must name ${member}`);
+      }
+      // Motion acts reference the cast through the arc's choreography.
+      const act1 = buildSpectacularAct({ ...args, act: 1 });
+      assert.ok(f.cast.some((m) => act1.includes(m)), 'act 1 must name the cast');
+    } else {
+      const t = themeFor(args);
+      assert.ok(subjects.has(t.subject));
+      assert.ok(buildStillPrompt(args).includes(t.subject), `still must name ${t.subject}`);
+      assert.ok(buildMotionPrompt(args).includes(t.subject), `motion must name ${t.subject}`);
+    }
+  }
+});
+
+// ---- Spectacular v2: storyboard, two acts, distinct families (Scott, 2026-08-05)
+
+test('spectacular options draw guaranteed-distinct style families', () => {
+  for (const weekOf of ['2026-08-10', '2026-08-17', '2026-08-24']) {
+    const fams = [1, 2, 3].map((option) => familyFor({ specKey: 'spectacular_wow1_8', option, weekOf }).key);
+    assert.equal(new Set(fams).size, 3, `options collided on a family: ${fams}`);
+  }
+});
+
+test('spectacular still is an ensemble: multiple named characters, verified frame geometry', () => {
+  const still = buildStillPrompt({ ...JOB, option: 1 });
+  const f = familyFor({ ...JOB, option: 1 });
+  assert.ok(f.cast.length >= 2, 'a cast has at least two characters');
+  // The verified geometry formula (live-tested 2026-08-04) must survive edits.
+  assert.match(still, /flush with the picture's edges on all sides/);
+  assert.match(still, /one-point perspective/);
+  assert.match(still, /never shown as an object/);
+  assert.match(still, /ensemble of characters/);
+});
+
+test('closing still: spectacular-only, same geometry + cast, reads as a finale', () => {
+  const closing = buildClosingStillPrompt({ ...JOB, option: 1 });
+  assert.match(closing, /flush with the picture's edges on all sides/);
+  assert.match(closing, /never shown as an object/);
+  assert.match(closing, /how the story ends/);
+  // Whitelist guard: the trailing SAFE blacklist alone let human statues and
+  // bystanders into the first live closing frame (2026-08-05).
+  assert.match(closing, /ONLY living things/);
+  assert.match(buildStillPrompt({ ...JOB, option: 1 }), /ONLY living things/);
+  assert.doesNotMatch(closing, /performance|finale|stage/i);
+  // The storyboard is a spectacular-only feature.
+  assert.equal(buildClosingStillPrompt({ style: 'eon_single', specKey: 'eon_master_pod', option: 1, weekOf: '2026-08-10' }), null);
+});
+
+test('two acts differ, act 2 lands the finale, both keep the frame fixed', () => {
+  const act1 = buildSpectacularAct({ ...JOB, option: 1, act: 1 });
+  const act2 = buildSpectacularAct({ ...JOB, option: 1, act: 2 });
+  assert.notEqual(act1, act2);
+  assert.match(act1, /act 1 of 2/);
+  assert.match(act2, /act 2 of 2/);
+  assert.match(act2, /resolves into a majestic final scene/); // segment B settles onto end_image_url
+  for (const p of [act1, act2]) {
+    assert.match(p, /stays perfectly fixed for the whole clip/);
+    assert.match(p, /Locked static camera/);
+    assert.match(p, /never fade, wash out, or drift/); // anti-drift without banning scene change
+    assert.doesNotMatch(p, DOMAIN_TERMS);
+    assert.doesNotMatch(p, META_TERMS);
+    assert.ok(checkPrompt(p).allowed);
+  }
+  // buildMotionPrompt for frame_break IS act 1 (stored as the still's motion_prompt).
+  assert.equal(buildMotionPrompt({ ...JOB, option: 1 }), act1);
+});
+
+test('closing still + acts rotate deterministically and vary across weeks', () => {
+  const args = { specKey: 'spectacular_wow1_8', style: 'frame_break', option: 1 };
+  assert.equal(
+    buildClosingStillPrompt({ ...args, weekOf: '2026-08-10' }),
+    buildClosingStillPrompt({ ...args, weekOf: '2026-08-10' }),
+  );
+  const weeks = ['2026-08-10', '2026-08-17', '2026-08-24', '2026-08-31', '2026-09-07', '2026-09-14', '2026-09-21', '2026-09-28'];
+  const fams = new Set(weeks.map((weekOf) => familyFor({ ...args, weekOf }).key));
+  assert.ok(fams.size >= 3, `expected ≥3 distinct families across 8 weeks, got ${fams.size}`);
+  const arcs = new Set(weeks.map((weekOf) => arcFor({ ...args, weekOf }).act1));
+  assert.ok(arcs.size >= 2, `expected ≥2 distinct arcs across 8 weeks, got ${arcs.size}`);
+});
+
+test('spectacular families are all colorful and every cast member is non-human-named', () => {
+  assert.ok(SPECTACULAR_FAMILIES.length >= 8, 'at least 8 style variations');
+  for (const f of SPECTACULAR_FAMILIES) {
+    assert.ok(f.cast.length >= 2 && f.cast.length <= 4, `${f.key}: 2-4 characters`);
+    for (const member of f.cast) {
+      // Named concrete creatures/objects — never a bare "creature"/"figure"
+      // (vague subjects render humanoid; Seedance moderation refuses those).
+      assert.doesNotMatch(member, /\b(figure|person|human|creature)\b/i, `${f.key}: "${member}" too vague`);
+    }
   }
 });
 

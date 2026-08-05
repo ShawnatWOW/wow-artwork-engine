@@ -86,6 +86,36 @@ export function buildCropArgs({ input, output, width, height, x = 0, y = 0, dura
 }
 
 /**
+ * Extract the LAST frame of a clip as a PNG — the segment-A → segment-B
+ * handoff of the 30s spectacular chain (B's image_url starts on A's literal
+ * final pixel, so the splice is invisible). -sseof seeks from the end; -update
+ * keeps overwriting so the final written image IS the last decoded frame.
+ */
+export function buildLastFrameArgs({ input, output, fromEndS = 0.5 }) {
+  return ['-y', '-sseof', `-${fromEndS}`, '-i', input, '-update', '1', '-q:v', '1', output];
+}
+
+/**
+ * Concatenate clips back to back into one file. filter-based concat with a
+ * re-encode (not the stream-copy demuxer): the two Seedance segments are
+ * separate encodes, and stream-copy across differing encoder params produces
+ * players that stall at the joint. One clean re-encode guarantees a seamless
+ * timeline — and it happens BEFORE the single Topaz pass, so the upscaler sees
+ * one continuous stream and synthesizes uniform grain across the seam.
+ */
+export function buildConcatArgs({ inputs, output, fps }) {
+  if (!inputs || inputs.length < 2) throw new Error('concat needs at least 2 inputs');
+  const args = ['-y'];
+  for (const i of inputs) args.push('-i', i);
+  const heads = inputs.map((_, i) => `[${i}:v]`).join('');
+  const filter = `${heads}concat=n=${inputs.length}:v=1:a=0[out]`;
+  args.push('-filter_complex', filter, '-map', '[out]');
+  if (fps) args.push('-r', String(fps));
+  args.push(...H264, output);
+  return args;
+}
+
+/**
  * LEGACY — no longer in the pipeline (2026-07-21). Compositing a border in
  * post clips the art BEHIND the frame, so nothing can ever pop out of it; the
  * 3D frame-break now lives in the generation prompts (trompe-l'oeil border
@@ -161,7 +191,11 @@ export function buildPingPongArgs({ input, output }) {
 export function buildThumbnailArgs({ input, output, width, height, atSeconds = 0 }) {
   return [
     '-y',
-    '-ss', String(atSeconds),
+    // -ss only when actually seeking: an input-side `-ss 0` on a single-image
+    // input (live Seedream stills are mjpeg) makes ffmpeg encode ZERO frames
+    // ("Output file is empty") — both storyboard thumbnails failed on the
+    // first live run. Plain video thumbnails at 0s never needed the seek.
+    ...(atSeconds > 0 ? ['-ss', String(atSeconds)] : []),
     '-i', input,
     '-frames:v', '1',
     '-vf', `scale=${width}:${height}:force_original_aspect_ratio=increase,crop=${width}:${height}`,
@@ -259,16 +293,30 @@ export async function pingpong(opts) {
   return { output: opts.output };
 }
 
+export async function extractLastFrame(opts) {
+  await run(buildLastFrameArgs(opts));
+  return { output: opts.output };
+}
+
+export async function concatClips(opts) {
+  await run(buildConcatArgs(opts));
+  return { output: opts.output };
+}
+
 export default {
   buildConformArgs,
   buildCropArgs,
   buildFrameBreakArgs,
   buildThumbnailArgs,
   buildPingPongArgs,
+  buildLastFrameArgs,
+  buildConcatArgs,
   conform,
   frameBreakComposite,
   thumbnail,
   cropColumn,
+  extractLastFrame,
+  concatClips,
   pingpong,
   probe,
   detectContentCrop,

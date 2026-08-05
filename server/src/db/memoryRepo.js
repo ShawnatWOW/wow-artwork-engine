@@ -147,6 +147,12 @@ export function createMemoryRepo({ persistPath = null } = {}) {
         fal_request_id: a.falRequestId ?? null,
         upscale_request_id: a.upscaleRequestId ?? null,
         cost_usd: a.costUsd ?? null,
+        // Storyboard + two-act spectacular (008_storyboard_30s.sql).
+        closing_prompt: a.closingPrompt ?? null,
+        closing_key: a.closingKey ?? null,
+        closing_thumb_key: a.closingThumbKey ?? null,
+        closing_remote_url: a.closingRemoteUrl ?? null,
+        motion_prompt_act2: a.motionPromptAct2 ?? null,
         created_at: new Date().toISOString(), // pg stamps this via DEFAULT now()
       };
       artworks.push(row);
@@ -164,6 +170,8 @@ export function createMemoryRepo({ persistPath = null } = {}) {
         stage: 'stage', motionPrompt: 'motion_prompt', remoteUrl: 'remote_url',
         falRequestId: 'fal_request_id', upscaleRequestId: 'upscale_request_id', costUsd: 'cost_usd',
         familyId: 'family_id', parentArtworkId: 'parent_artwork_id', changeNote: 'change_note',
+        closingPrompt: 'closing_prompt', closingKey: 'closing_key', closingThumbKey: 'closing_thumb_key',
+        closingRemoteUrl: 'closing_remote_url', motionPromptAct2: 'motion_prompt_act2',
       };
       for (const [key, col] of Object.entries(map)) {
         if (patch[key] !== undefined) row[col] = patch[key];

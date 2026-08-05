@@ -16,7 +16,7 @@ import { api } from './api.js';
 import {
   StatusBadge, Card, AnchorCard, VariationCard, PodSet, WrapLegend, PendingDesignCard,
   ModePill, SpendPill, Stepper, Spinner, SkeletonCard, Toasts, useToasts,
-  focusRing, progressLabel, latestPanels,
+  focusRing, progressLabel, latestPanels, dirtyDraftDesigns, saveDraft,
 } from './ui.jsx';
 import SendDialog from './SendDialog.jsx';
 import SentHistory from './SentHistory.jsx';
@@ -227,6 +227,27 @@ export function ReviewDashboard() {
   };
 
   const animate = async () => {
+    // Typed-but-unsaved video directions must never be silently ignored by a
+    // paid video run (UX review P0, 2026-08-05). Offer to save them first —
+    // OK saves every unsaved edit and continues; Cancel goes back to review.
+    const dirty = dirtyDraftDesigns(detail?.artworks);
+    if (dirty.length) {
+      const n = dirty.length;
+      const ok = window.confirm(
+        `You changed the video directions on ${n} design${n === 1 ? '' : 's'} but didn't save.\n\n`
+        + 'OK — save those changes and make the videos with them.\n'
+        + 'Cancel — go back and review first.',
+      );
+      if (!ok) return;
+      setBusy(true); setError(null);
+      try {
+        for (const a of dirty) await saveDraft(a);
+      } catch (e) {
+        setError(`Couldn't save your video directions — ${e.message}`);
+        setBusy(false);
+        return;
+      }
+    }
     setBusy(true); setError(null);
     try { await api.animate(runId); await loadDetail(runId); refreshSpend(); }
     catch (e) { setError(e.message); } finally { setBusy(false); }
@@ -719,6 +740,12 @@ function RunView({ detail, busy, running, pendingIds, onApprove, onReject, onSav
     return m;
   }, [artworks]);
 
+  // Design rows by id — the remake path needs the source design behind a video.
+  const stillById = useMemo(
+    () => new Map(artworks.filter((x) => x.stage === 'still').map((x) => [x.id, x])),
+    [artworks],
+  );
+
   // Per-card busy: only the clicked card's buttons disable while its call is
   // in flight; the global lock still applies during heavy actions/runs.
   const actionsFor = (a) => ({
@@ -729,6 +756,15 @@ function RunView({ detail, busy, running, pendingIds, onApprove, onReject, onSav
     // "qa:" notes are warnings, not failures — no retry needed.
     ...(a.stage === 'still' && a.status === 'approved' && a.error && !a.error.startsWith('qa:')
       ? { onRetry: () => onRetry(a.id) }
+      : {}),
+    // A passed (rejected) video gets a remake path: surface the source
+    // design's editable directions and re-render (UX review P1, 2026-08-05).
+    ...(a.stage === 'motion' && a.status === 'rejected' && stillById.get(a.source_still_id)
+      ? {
+        remakeStill: stillById.get(a.source_still_id),
+        remakeCost: mode === 'live' ? ' (~$12)' : ' (free)',
+        onRemake: () => onRetry(a.source_still_id),
+      }
       : {}),
     // Plain stills get "⭐ Keep & explore" — anchor a favourite, then spin off
     // variations (Scott: keep one he likes while re-rolling the rest, 2026-07-21).
@@ -893,7 +929,7 @@ function RunView({ detail, busy, running, pendingIds, onApprove, onReject, onSav
 
   return (
     <div className="space-y-10">
-      <Section title="Spectacular — big street billboard" subtitle={`${options(specChip)} · Approved designs become 4K videos.`} chip={specChip} action={sectionActions('spectacular')}>
+      <Section title="Spectacular — big street billboard" subtitle={`${options(specChip)} · Each design shows how it opens and how it ends. Approved designs become 30-second 4K videos.`} chip={specChip} action={sectionActions('spectacular')}>
         {renderAnchors(spectacularU.anchors, latestMotion)}
         <div className="space-y-4">
           {spectacularU.loners.map((still) => {
@@ -908,7 +944,7 @@ function RunView({ detail, busy, running, pendingIds, onApprove, onReject, onSav
 
       <Section
         title="EON — 3-pillar set"
-        subtitle={`${options(connChip)} · One wide design spread across all three pillars.`}
+        subtitle={`${options(connChip)} · One wide design spread across all three pillars. Approved designs become 15-second videos.`}
         chip={connChip} action={sectionActions('eon_connected')}
       >
         {renderAnchors(connectedU.anchors, noMotion)}
@@ -926,7 +962,7 @@ function RunView({ detail, busy, running, pendingIds, onApprove, onReject, onSav
 
       <Section
         title="EON — single pillar"
-        subtitle={`${options(singChip)} · Approved designs become a 4K pillar video — the face plus the side strip.`}
+        subtitle={`${options(singChip)} · Approved designs become a 15-second 4K pillar video — the face plus the side strip.`}
         chip={singChip} action={sectionActions('eon_single')}
       >
         {renderAnchors(singlesU.anchors, noMotion, 'max-w-md')}

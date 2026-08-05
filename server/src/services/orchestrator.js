@@ -25,7 +25,9 @@ import { sliceMaster } from './eonSlicer.js';
 import * as guardrailsModule from './guardrails.js';
 import * as qaModule from './qa.js';
 import { planJobs, POST, SURFACES, SPECS } from './generation/catalog.js';
-import { buildStillPrompt, buildMotionPrompt, sanitizeMotionPrompt } from './generation/prompts.js';
+import {
+  buildStillPrompt, buildClosingStillPrompt, buildMotionPrompt, buildSpectacularAct, sanitizeMotionPrompt,
+} from './generation/prompts.js';
 import { refineTweak } from './generation/tweak.js';
 import { resolveDesign } from './keeper.js';
 import falPricing from './generation/falPricing.js';
@@ -135,20 +137,31 @@ async function generateStill(job, ctx) {
   // variation stays attached to its family even if it fails.
   const prompt = ctx.promptOverride ?? buildStillPrompt({ style: job.style, specKey: job.specKey, option: job.option, weekOf: seed });
   const motionPrompt = ctx.motionPromptOverride ?? buildMotionPrompt({ style: job.style, specKey: job.specKey, option: job.option, weekOf: seed });
+  // Storyboard surfaces (the spectacular) get a CLOSING still — the "ends
+  // with" panel — plus a second motion act. Variations inherit their source's
+  // stored versions via the overrides; legacy rows without one rebuild from
+  // the template so re-rolls of old designs still gain the storyboard.
+  const isStoryboard = Boolean(job.storyboard);
+  const closingPrompt = isStoryboard
+    ? (ctx.closingPromptOverride ?? buildClosingStillPrompt({ style: job.style, specKey: job.specKey, option: job.option, weekOf: seed }))
+    : null;
+  const motionPromptAct2 = isStoryboard
+    ? (ctx.motionPromptAct2Override ?? buildSpectacularAct({ specKey: job.specKey, option: job.option, weekOf: seed, act: 2 }))
+    : null;
   const lineage = {
     familyId: ctx.familyId ?? null,
     parentArtworkId: ctx.parentArtworkId ?? null,
     changeNote: ctx.changeNote ?? null,
   };
 
-  // Guardrail BEFORE the (cheap) still spend.
-  const check = guardrails.checkPrompt(prompt);
+  // Guardrail BEFORE the (cheap) still spend — covers BOTH storyboard frames.
+  const check = guardrails.checkPrompt([prompt, closingPrompt].filter(Boolean).join(' '));
   if (!check.allowed) {
     const reason = `guardrail: ${check.reasons.join('; ')}`;
     await repo.insertArtwork({
       runId, surface: job.surface, style: job.style, mediaType: 'still', stage: 'still',
       specKey: job.specKey, width: job.spec.width, height: job.spec.height,
-      prompt, motionPrompt, status: 'failed', error: reason, ...lineage,
+      prompt, motionPrompt, closingPrompt, motionPromptAct2, status: 'failed', error: reason, ...lineage,
     });
     logger.warn({ runId, surface: job.key, option: job.option, reason }, 'Still prompt blocked before spend');
     return { ready: 0, failed: 0, blocked: 1 };
@@ -194,28 +207,73 @@ async function generateStill(job, ctx) {
       logger.warn({ runId, surface: job.key, err: err.message }, 'Still thumbnail failed; serving the full image');
     }
 
-    // The Seedream image was billed the moment it generated ($0.03 flat), even
-    // if it then fails QA — record the immutable cost. Fixtures are free.
-    const stillLive = !String(gen.model || '').startsWith('fixture');
-    const stillLedger = {
-      falRequestId: stillLive ? gen.jobId ?? null : null,
-      costUsd: stillLive ? falPricing.seedreamCostUsd({ count: 1 }) : 0,
-    };
-
     // QA gate BEFORE review: outdoor readability (art review 2026-07-10). The
     // file is stored either way so a failed card can still show what happened.
+    // Gate on the OPENING frame only — it's the piece's primary composition;
+    // the closing still is generated after the gate so a failed design never
+    // spends the second Seedream call.
+    const stillLive = !String(gen.model || '').startsWith('fixture');
     const gate = await qa.lumaGate(stillPath);
     if (!gate.ok) {
       await repo.insertArtwork({
         runId, surface: job.surface, style: job.style, mediaType: 'still', stage: 'still',
         specKey: job.specKey, width: job.gen.width, height: job.gen.height,
-        prompt, motionPrompt, model: gen.model, remoteUrl: gen.url ?? null,
+        prompt, motionPrompt, closingPrompt, motionPromptAct2, model: gen.model, remoteUrl: gen.url ?? null,
         s3KeyFinal: put.key, thumbnailKey: thumbKey,
-        status: 'failed', error: `qa: ${gate.reason}`, ...stillLedger, ...lineage,
+        status: 'failed', error: `qa: ${gate.reason}`,
+        falRequestId: stillLive ? gen.jobId ?? null : null,
+        costUsd: stillLive ? falPricing.seedreamCostUsd({ count: 1 }) : 0,
+        ...lineage,
       });
       logger.warn({ runId, surface: job.key, option: job.option, yavg: gate.yavg }, 'Still failed luma QA gate');
       return { ready: 0, failed: 1, blocked: 0 };
     }
+
+    // CLOSING still (storyboard surfaces): the frame the 30s piece must end
+    // on — reviewed as the second storyboard panel, enforced in Phase 2 as
+    // Seedance segment B's end_image_url. Best-effort: a failed closing still
+    // never sinks the design (the card degrades to a single opening panel).
+    let closingFields = { closingPrompt, motionPromptAct2 };
+    let stillCount = 1;
+    if (isStoryboard && closingPrompt) {
+      try {
+        const closingPath = path.join(dir, 'closing.png');
+        const cgen = await providers.still.generate({
+          width: job.gen.width, height: job.gen.height, ratio: job.gen.ratio, output: closingPath, prompt: closingPrompt,
+        });
+        const cput = await store.put({
+          key: artworkKey({ runId, surfaceKey: job.key, option: job.option, variant: `g${priorStills + 1}`, name: 'closing.png' }),
+          sourcePath: closingPath,
+        });
+        let cthumbKey = cput.key;
+        try {
+          const td = previewDims(job.gen.width, job.gen.height);
+          const cthumbPath = path.join(dir, 'closing_thumb.jpg');
+          await ffmpeg.thumbnail({ input: closingPath, output: cthumbPath, width: td.width, height: td.height });
+          const ctp = await store.put({
+            key: artworkKey({ runId, surfaceKey: job.key, option: job.option, variant: `g${priorStills + 1}`, name: 'closing_thumb.jpg' }),
+            sourcePath: cthumbPath,
+          });
+          cthumbKey = ctp.key;
+        } catch (err) {
+          logger.warn({ runId, surface: job.key, err: err.message }, 'Closing thumbnail failed; serving the full image');
+        }
+        closingFields = {
+          closingPrompt, motionPromptAct2,
+          closingKey: cput.key, closingThumbKey: cthumbKey, closingRemoteUrl: cgen.url ?? null,
+        };
+        stillCount = 2;
+      } catch (err) {
+        logger.warn({ runId, surface: job.key, option: job.option, err: err.message }, 'Closing still failed; storyboard shows the opening only');
+      }
+    }
+
+    // The Seedream images were billed the moment they generated ($0.03 flat
+    // each — opening + closing when the storyboard rendered). Fixtures free.
+    const stillLedger = {
+      falRequestId: stillLive ? gen.jobId ?? null : null,
+      costUsd: stillLive ? falPricing.seedreamCostUsd({ count: stillCount }) : 0,
+    };
 
     await repo.insertArtwork({
       runId, surface: job.surface, style: job.style, mediaType: 'still', stage: 'still',
@@ -227,7 +285,7 @@ async function generateStill(job, ctx) {
       s3KeyFinal: put.key, thumbnailKey: thumbKey, status: 'ready',
       // Borderline-dark scenes reach review with an amber note (emissive LED
       // signs handle dark backgrounds; the reviewer decides).
-      error: gate.warn ? `qa: ${gate.reason}` : null, ...stillLedger, ...lineage,
+      error: gate.warn ? `qa: ${gate.reason}` : null, ...stillLedger, ...closingFields, ...lineage,
     });
     return { ready: 1, failed: 0, blocked: 0 };
   } catch (err) {
@@ -235,7 +293,7 @@ async function generateStill(job, ctx) {
     await repo.insertArtwork({
       runId, surface: job.surface, style: job.style, mediaType: 'still', stage: 'still',
       specKey: job.specKey, width: job.spec.width, height: job.spec.height,
-      prompt, motionPrompt, status: 'failed', error: err.message, ...lineage,
+      prompt, motionPrompt, closingPrompt, motionPromptAct2, status: 'failed', error: err.message, ...lineage,
     });
     return { ready: 0, failed: 1, blocked: 0 };
   }
@@ -524,6 +582,12 @@ async function spawnVariation({ source, resolvePrompt, triggeredBy, onStart, dep
     const counts = await generateStill(job, {
       runId: run.id, weekOf: run.week_of, repo, store, providers, guardrails, qa, workDir,
       promptOverride, motionPromptOverride: source.motion_prompt,
+      // Variations inherit the source's storyboard (closing frame + act 2) so
+      // a re-roll/tweak explores the OPENING while the arc stays the design's.
+      // Legacy sources without one fall back to the template build inside
+      // generateStill (?? chain), so old designs gain a storyboard on re-roll.
+      closingPromptOverride: source.closing_prompt ?? undefined,
+      motionPromptAct2Override: source.motion_prompt_act2 ?? undefined,
       familyId, parentArtworkId: source.id, changeNote,
     });
     await repo.setRunProgress?.(run.id, { phase: 'designs', done: 1, total: 1 });
@@ -634,8 +698,11 @@ export async function animateRun({ runId, stillIds, triggeredBy = 'dashboard', o
     let done = 0;
     await repo.setRunProgress?.(runId, { phase: 'videos', done, total: toAnimate.length });
     for (const still of toAnimate) {
-      // Guardrail BEFORE the expensive motion spend.
-      const check = guardrails.checkPrompt(still.motion_prompt || '');
+      // Guardrail BEFORE the expensive motion spend — both acts when present
+      // (the reviewer can edit either act from the dashboard).
+      const check = guardrails.checkPrompt(
+        [still.motion_prompt, still.motion_prompt_act2].filter(Boolean).join(' ') || '',
+      );
       if (!check.allowed) {
         await repo.updateArtwork(still.id, { error: `motion guardrail: ${check.reasons.join('; ')}` });
         counts.blocked += 1;
@@ -687,22 +754,14 @@ async function animateStill(still, ctx) {
   const ref = path.join(dir, 'ref.png');
   await writeFile(ref, await store.getBuffer(still.s3_key_final));
 
-  const raw = path.join(dir, 'raw.mp4');
-  const gen = await providers.motion.generate({
-    width: surface.gen.width, height: surface.gen.height, ratio: surface.gen.ratio,
-    durationS: duration, fps, output: raw, prompt: motionPrompt,
-    referenceImage: ref,                       // local file — fixture mode
-    referenceImageUrl: still.remote_url ?? null, // fal-hosted URL — live Seedance
-  });
-
   // Video models return their own frame shape (e.g. a 960x960 square) with the
   // input art letterboxed/extended inside. The TRUE content aspect is known —
   // it's the approved still's — so recover it deterministically: center-crop
   // the model output to the still's aspect ratio (no fragile bar detection).
-  let content = raw;
-  if (!String(gen.model || '').startsWith('fixture') && still.width && still.height) {
+  const recoverContent = async (input, label, model) => {
+    if (String(model || '').startsWith('fixture') || !still.width || !still.height) return input;
     try {
-      const rawDims = await ffmpeg.probe(raw);
+      const rawDims = await ffmpeg.probe(input);
       const want = still.width / still.height;
       const got = rawDims.width / rawDims.height;
       if (rawDims.width && Math.abs(got - want) / want > 0.03) {
@@ -713,13 +772,94 @@ async function animateStill(still, ctx) {
         else ch = even(rawDims.width / want);
         const cx = even((rawDims.width - cw) / 2);
         const cy = even((rawDims.height - ch) / 2);
-        content = path.join(dir, 'content.mp4');
-        await ffmpeg.cropColumn({ input: raw, output: content, width: cw, height: ch, x: cx, y: cy });
+        const out = path.join(dir, `${label}_content.mp4`);
+        await ffmpeg.cropColumn({ input, output: out, width: cw, height: ch, x: cx, y: cy });
         logger.info({ stillId: still.id, raw: `${rawDims.width}x${rawDims.height}`, content: `${cw}x${ch}@${cx},${cy}` }, 'Recovered content band from model output');
+        return out;
       }
     } catch (err) {
       logger.warn({ stillId: still.id, err: err.message }, 'Content recovery failed; using raw output');
     }
+    return input;
+  };
+
+  const segments = surface.segments ?? 1;
+  let raw;      // the model output the QA + ledger read (stitched, for chains)
+  let content;  // aspect-recovered version of `raw`
+  let gen;      // provider result driving model/ledger fields
+  if (segments > 1) {
+    // ---- 30s TWO-SEGMENT CHAIN (Scott, 2026-08-05) ----------------------
+    // Segment A runs off the approved opening still; its literal last frame
+    // becomes segment B's first frame (invisible splice), and the approved
+    // CLOSING still is segment B's end_image_url, so the piece provably lands
+    // on the storyboard's second panel. Per-segment Topaz is deliberately
+    // skipped — ONE pass over the stitched clip keeps synthesized grain
+    // continuous across the seam (per-segment passes read as two videos).
+    const act2 = sanitizeMotionPrompt(still.motion_prompt_act2) || motionPrompt;
+    const segA = path.join(dir, 'segA.mp4');
+    const genA = await providers.motion.generate({
+      width: surface.gen.width, height: surface.gen.height, ratio: surface.gen.ratio,
+      durationS: duration, fps, output: segA, prompt: motionPrompt,
+      referenceImage: ref,
+      referenceImageUrl: still.remote_url ?? null,
+      skipUpscale: true,
+    });
+    const contentA = await recoverContent(segA, 'segA', genA.model);
+    const live = !String(genA.model || '').startsWith('fixture');
+
+    const handoff = path.join(dir, 'handoff.png');
+    await ffmpeg.extractLastFrame({ input: contentA, output: handoff });
+    let handoffUrl = null;
+    if (live) {
+      if (!providers.media?.upload) throw new Error('Live two-segment chain needs providers.media.upload (fal storage)');
+      handoffUrl = (await providers.media.upload({ sourcePath: handoff, contentType: 'image/png' })).url;
+    }
+
+    const segB = path.join(dir, 'segB.mp4');
+    const genB = await providers.motion.generate({
+      width: surface.gen.width, height: surface.gen.height, ratio: surface.gen.ratio,
+      durationS: duration, fps, output: segB, prompt: act2,
+      referenceImage: handoff,
+      referenceImageUrl: handoffUrl,
+      endImageUrl: still.closing_remote_url ?? null,
+      skipUpscale: true,
+    });
+    const contentB = await recoverContent(segB, 'segB', genB.model);
+
+    raw = path.join(dir, 'stitched.mp4');
+    await ffmpeg.concatClips({ inputs: [contentA, contentB], output: raw, fps });
+    gen = {
+      ...genB,
+      jobId: [genA.jobId, genB.jobId].filter(Boolean).join('+') || null,
+      upscaleJobId: null,
+    };
+
+    // ONE Topaz pass over the stitched 30s. Best-effort, like the single-clip
+    // path: a failed upscale delivers the un-upscaled stitch, never fails the
+    // (already paid) generations.
+    if (live && config.fal.upscale?.enabled && providers.media?.upscale) {
+      try {
+        const stitchedUrl = (await providers.media.upload({ sourcePath: raw, contentType: 'video/mp4' })).url;
+        const up = await providers.media.upscale({ videoUrl: stitchedUrl });
+        const upscaledPath = path.join(dir, 'stitched_4k.mp4');
+        await providers.media.download(up.url, upscaledPath);
+        raw = upscaledPath;
+        gen.model = `${genB.model}+topaz${up.factor}x`;
+        gen.upscaleJobId = up.requestId;
+      } catch (err) {
+        logger.warn({ stillId: still.id, err: err.message }, 'Stitched Topaz upscale failed — delivering the un-upscaled 30s clip');
+      }
+    }
+    content = raw; // per-segment recovery already ran before the stitch
+  } else {
+    raw = path.join(dir, 'raw.mp4');
+    gen = await providers.motion.generate({
+      width: surface.gen.width, height: surface.gen.height, ratio: surface.gen.ratio,
+      durationS: duration, fps, output: raw, prompt: motionPrompt,
+      referenceImage: ref,                       // local file — fixture mode
+      referenceImageUrl: still.remote_url ?? null, // fal-hosted URL — live Seedance
+    });
+    content = await recoverContent(raw, 'raw', gen.model);
   }
 
   // QA: measure saturation drift on the model's raw output (Seedance colors
@@ -733,7 +873,7 @@ async function animateStill(still, ctx) {
   // Ambient surfaces get a palindrome pass so the clip loops seamlessly on the
   // sign (art review: mismatched endpoints pop every cycle). Doubles duration.
   let srcVideo = content;
-  let effDuration = duration;
+  let effDuration = duration * segments;
   if (surface.loop === 'pingpong') {
     srcVideo = path.join(dir, 'raw_loop.mp4');
     await ffmpeg.pingpong({ input: content, output: srcVideo });
@@ -744,17 +884,21 @@ async function animateStill(still, ctx) {
   const key = (name) => `${keyBase}/${name}`;
   const rawPut = await store.put({ key: key('raw.mp4'), sourcePath: raw });
 
-  // Immutable cost ledger, computed here where BOTH the Seedance 1080p render
-  // dims and the 4K final dims are known. Billed on the RAW generation seconds
-  // (`duration`) — ping-pong doubles playback locally at no fal cost. Fixtures
-  // are free. See services/generation/falPricing.js for the rate book.
+  // Immutable cost ledger, computed here where BOTH the Seedance render dims
+  // and the 4K final dims are known. Billed on the RAW generation seconds —
+  // duration × segments (a chained 30s piece is two paid 15s Seedance calls;
+  // ping-pong doubles playback locally at no fal cost). Fixtures are free.
+  // See services/generation/falPricing.js for the rate book.
   const live = !String(gen.model || '').startsWith('fixture');
   const tier = falPricing.seedanceTier(gen.model);
   const aspect = finalSpec.width / finalSpec.height;
-  const render = falPricing.renderDimsForTier(aspect, tier);
-  const seedanceUsd = live ? falPricing.seedanceCostUsd({ ...render, durationS: duration, tier }) : 0;
+  // Price the RESOLUTION actually requested (fal bills pixels), with the tier
+  // supplying only the $/token rate — standard-at-720p must not be billed as
+  // 1080p (live validation 2026-08-05: ledger said $22.84 for a ~$12 run).
+  const render = falPricing.renderDimsForResolution(aspect, config.fal.resolution);
+  const seedanceUsd = live ? falPricing.seedanceCostUsd({ ...render, durationS: duration * segments, tier }) : 0;
   const topazUsd = live && falPricing.usedTopaz(gen.model)
-    ? falPricing.topazCostUsd({ width: finalSpec.width, height: finalSpec.height, durationS: duration, fps })
+    ? falPricing.topazCostUsd({ width: finalSpec.width, height: finalSpec.height, durationS: duration * segments, fps })
     : 0;
   const callCostUsd = Math.round((seedanceUsd + topazUsd) * 1e4) / 1e4;
   // One fal call = one bill. EON_SLICE stores a row per panel cut from that

@@ -16,6 +16,8 @@ import logger from '../config/logger.js';
 import { getRepo } from '../db/index.js';
 import { getStore } from '../services/storage/index.js';
 import { contentTypeFor } from '../services/storage/s3.js';
+import { checkPrompt } from '../services/guardrails.js';
+import { buildMotionPrompt, buildSpectacularAct } from '../services/generation/prompts.js';
 import { animateRun, regenerateStill, varyStill, tweakStill } from '../services/orchestrator.js';
 import { keepArtwork, unkeepArtwork, promoteArtwork, resolveDesign } from '../services/keeper.js';
 
@@ -187,6 +189,69 @@ router.post('/artworks/:id/promote', async (req, res, next) => {
   }
 });
 
+// ---- Video prompt editing (Scott, 2026-08-05) ------------------------------
+// The reviewer sees each design's video prompt(s) and can edit them BEFORE the
+// motion spend. act1 = motion_prompt (every surface); act2 = motion_prompt_act2
+// (spectacular's second segment). Guardrails run on save — a blocked edit is a
+// clean 422, nothing stored. Only stills carry editable prompts (the video is
+// a render OF a still).
+router.patch('/artworks/:id/motion-prompt', async (req, res, next) => {
+  try {
+    const artwork = await loadArtwork(req, res);
+    if (!artwork) return;
+    if (artwork.stage !== 'still') return res.status(400).json({ error: 'not_a_still', message: 'Video prompts live on the design, not the video.' });
+    if (artwork.status === 'superseded') return res.status(409).json({ error: 'already_replaced', message: 'This design was already replaced.' });
+
+    // Error copy is Scott-facing (it renders verbatim in the dashboard panel),
+    // so it speaks "directions", never "prompt"/"act1" (UX review, 2026-08-05).
+    const patch = {};
+    for (const [field, key, label] of [['act1', 'motionPrompt', 'first half'], ['act2', 'motionPromptAct2', 'second half']]) {
+      const value = req.body?.[field];
+      if (value === undefined) continue;
+      if (typeof value !== 'string' || !value.trim()) {
+        return res.status(400).json({ error: 'empty_prompt', message: `The ${label} directions can't be empty.` });
+      }
+      const check = checkPrompt(value);
+      if (!check.allowed) {
+        return res.status(422).json({ error: 'guardrail', message: `Those directions aren't allowed here: ${check.reasons.join('; ')}` });
+      }
+      patch[key] = value.trim();
+    }
+    if (!Object.keys(patch).length) return res.status(400).json({ error: 'nothing_to_update', message: 'Nothing to save yet — change the directions first.' });
+
+    const updated = await getRepo().updateArtwork(artwork.id, patch);
+    res.json({ artwork: updated });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Reset a design's video prompt(s) to the engine's generated versions —
+// rebuilt from the design's own recipe, so "Reset" after an edit gone wrong
+// always lands back on something known-good.
+router.post('/artworks/:id/motion-prompt/reset', async (req, res, next) => {
+  try {
+    const artwork = await loadArtwork(req, res);
+    if (!artwork) return;
+    if (artwork.stage !== 'still') return res.status(400).json({ error: 'not_a_still', message: 'Video prompts live on the design, not the video.' });
+
+    // Recover the option slot from the storage key (same recovery as the
+    // orchestrator's regenerate paths); the run supplies the week seed.
+    const run = await getRepo().getRun(artwork.run_id);
+    const optMatch = /\/opt(\d+)\//.exec(artwork.s3_key_final || artwork.thumbnail_key || '');
+    const option = optMatch ? Number(optMatch[1]) : 1;
+    const args = { style: artwork.style, specKey: artwork.spec_key, option, weekOf: run?.week_of };
+    const patch = { motionPrompt: buildMotionPrompt(args) };
+    if (artwork.style === 'frame_break') {
+      patch.motionPromptAct2 = buildSpectacularAct({ specKey: artwork.spec_key, option, weekOf: run?.week_of, act: 2 });
+    }
+    const updated = await getRepo().updateArtwork(artwork.id, patch);
+    res.json({ artwork: updated });
+  } catch (err) {
+    next(err);
+  }
+});
+
 for (const [action, status] of Object.entries(APPROVE)) {
   router.post(`/artworks/:id/${action}`, async (req, res, next) => {
     try {
@@ -215,6 +280,21 @@ router.get('/artworks/:id/thumbnail', async (req, res, next) => {
     const artwork = await loadArtwork(req, res);
     if (!artwork) return;
     await streamKey(artwork.thumbnail_key, res);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// The storyboard's second panel — the closing frame the 30s piece ends on.
+// Thumbnail by default (grid); ?full=1 streams the master for the lightbox.
+router.get('/artworks/:id/closing', async (req, res, next) => {
+  try {
+    const artwork = await loadArtwork(req, res);
+    if (!artwork) return;
+    const key = req.query.full === '1'
+      ? (artwork.closing_key || artwork.closing_thumb_key)
+      : (artwork.closing_thumb_key || artwork.closing_key);
+    await streamKey(key, res);
   } catch (err) {
     next(err);
   }

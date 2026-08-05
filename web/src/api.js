@@ -61,6 +61,12 @@ export const api = {
   deliveries: () => req('GET', '/deliveries'),
   mediaUrl: (id) => `${API}/artworks/${id}/media`,
   thumbUrl: (id) => `${API}/artworks/${id}/thumbnail`,
+  // Storyboard: the closing frame the 30s piece ends on (thumb by default,
+  // ?full=1 for the master — lightbox only, it's a multi-MB PNG).
+  closingUrl: (id, full) => `${API}/artworks/${id}/closing${full ? '?full=1' : ''}`,
+  // Video prompt editing (Scott: see + edit before the video spend).
+  setMotionPrompt: (id, acts) => req('PATCH', `/artworks/${id}/motion-prompt`, acts),
+  resetMotionPrompt: (id) => req('POST', `/artworks/${id}/motion-prompt/reset`),
 };
 
 export default api;

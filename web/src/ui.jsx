@@ -64,12 +64,12 @@ export function SpendPill({ spend }) {
     .toLocaleString('en-US', { month: 'long', timeZone: 'UTC' });
   const b = spend.breakdown;
   const lines = [
-    `Artwork-only estimate at fal's real prices:`,
+    `Artwork-only estimate at the AI provider's real prices:`,
     `• ${spend.stills.count} design${spend.stills.count === 1 ? '' : 's'} → $${spend.stills.usd.toFixed(2)}`,
     b && `• ${spend.videos.count} video${spend.videos.count === 1 ? '' : 's'} / ${b.seedance.seconds}s motion → $${b.seedance.usd.toFixed(2)}`,
     b && b.topaz.usd > 0 && `• 4K upscale / ${b.topaz.seconds}s → $${b.topaz.usd.toFixed(2)}`,
     ``,
-    `fal's account bill also covers Content Automation + Broken News — this is artwork only.`,
+    `The AI account's bill also covers other WOW tools — this figure is artwork only.`,
   ].filter(Boolean).join('\n');
   return (
     // A button, not a title-only span: tooltips never fire on touch, and the
@@ -363,7 +363,7 @@ export function WrapGuide({ pods }) {
 // pixels. Renders the MASTER (multi-MB) — on demand only, never in the grid.
 // The container pans; the browser's pinch-zoom does the rest (the viewport
 // meta deliberately allows scaling).
-function Lightbox({ artwork, onClose }) {
+function Lightbox({ artwork, onClose, src, label }) {
   useBodyScrollLock();
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose(); };
@@ -378,9 +378,12 @@ function Lightbox({ artwork, onClose }) {
       >
         ✕
       </button>
+      {label && (
+        <span className="pointer-events-none fixed left-3 top-3 z-10 rounded bg-neutral-900/80 px-2 py-1 text-[11px] font-medium text-white">{label}</span>
+      )}
       <div className="grid min-h-full place-items-center p-2">
         <img
-          src={api.mediaUrl(artwork.id)} alt={`${SURFACE_NAMES[artwork.style] || 'Artwork'} design, full size`}
+          src={src || api.mediaUrl(artwork.id)} alt={`${SURFACE_NAMES[artwork.style] || 'Artwork'} design, full size`}
           className="max-w-none"
           style={{ width: artwork.width && artwork.width > 2000 ? `${artwork.width / 2}px` : '100%', maxWidth: 'none' }}
           onClick={(e) => e.stopPropagation()}
@@ -424,6 +427,50 @@ export function Preview({ artwork }) {
     </div>
   );
 }
+
+// First/last-frame storyboard (Scott, 2026-08-05): a spectacular design is a
+// 30-second story, and its opening frame alone doesn't say where it goes. Two
+// labelled panels — how the video OPENS and the exact frame it ENDS on (the
+// engine steers the video to land on the closing frame, so approving the
+// storyboard is approving the ending too). Falls back to the plain Preview
+// when a design has no closing frame (EON surfaces, legacy designs).
+export function Storyboard({ artwork, animating }) {
+  const [zoom, setZoom] = useState(null); // null | 'opens' | 'ends'
+  const aspect = artwork.width && artwork.height ? `${artwork.width} / ${artwork.height}` : '16 / 9';
+  const panel = (which, src, label) => (
+    <div className="relative overflow-hidden rounded bg-black" style={{ aspectRatio: aspect }}>
+      <button type="button" onClick={() => setZoom(which)} className={`block h-full w-full ${focusRing}`} title="Tap to see it full size">
+        <FadeImg
+          className="h-full w-full object-cover"
+          src={src}
+          alt={`${SURFACE_NAMES[artwork.style] || 'Artwork'} design, ${label} frame — opens full size`}
+        />
+        <span aria-hidden="true" className="pointer-events-none absolute bottom-1 right-1 rounded bg-black/55 px-1.5 py-0.5 text-[10px] text-white/90">⤢</span>
+      </button>
+      <span className="pointer-events-none absolute left-1 top-1 rounded bg-black/65 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white/95">
+        {label}
+      </span>
+    </div>
+  );
+  return (
+    <div className="relative space-y-1">
+      {panel('opens', api.thumbUrl(artwork.id), 'Opens with')}
+      {/* The connector is what makes two panels read as ONE video's story
+          instead of two design options; it also carries the duration, which
+          tooltips can't (they never fire on touch). UX review P1, 2026-08-05. */}
+      <div aria-hidden="true" className="flex items-center justify-center gap-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-neutral-400">
+        <span>↓</span> one 30-second video <span>↓</span>
+      </div>
+      {panel('ends', api.closingUrl(artwork.id), 'Ends with')}
+      {animating && <GeneratingOverlay sub="about 5–10 minutes — it plays in two halves, then gets sharpened" />}
+      {zoom === 'opens' && <Lightbox artwork={artwork} label="Opens with" onClose={() => setZoom(null)} />}
+      {zoom === 'ends' && <Lightbox artwork={artwork} label="Ends with" src={api.closingUrl(artwork.id, true)} onClose={() => setZoom(null)} />}
+    </div>
+  );
+}
+
+/** True when a design card should render as a two-panel storyboard. Pure. */
+export const hasStoryboard = (artwork) => artwork.stage === 'still' && Boolean(artwork.closing_key);
 
 // The blue-band legend, shown once under an EON section rather than on every card.
 export function WrapLegend({ pods }) {
@@ -741,12 +788,15 @@ export function SourceStill({ stillId }) {
   if (!stillId) return null;
   return (
     <div className="mt-1.5 flex items-center gap-1.5 text-[10px] text-neutral-400">
-      <img src={api.thumbUrl(stillId)} alt="" className="h-8 w-12 rounded object-cover" loading="lazy" decoding="async" />
+      <img src={api.thumbUrl(stillId)} alt="The approved design this video was made from" className="h-8 w-12 rounded object-cover" loading="lazy" decoding="async" />
+      <span>From this design</span>
     </div>
   );
 }
 
-// Collapsible: exactly what the AI was told to make.
+// Collapsible: exactly what the AI was told to make. On DESIGN cards the video
+// prompt lives in the editable VideoPromptPanel instead, so it isn't repeated
+// here; finished-video cards still show the prompt that made them, read-only.
 export function Details({ artwork }) {
   const [open, setOpen] = useState(false);
   return (
@@ -763,13 +813,186 @@ export function Details({ artwork }) {
             <p className="mb-0.5 text-neutral-400">Design instructions</p>
             <p className="whitespace-pre-wrap break-words">{artwork.prompt || '—'}</p>
           </div>
-          {artwork.motion_prompt && (
+          {artwork.motion_prompt && artwork.stage !== 'still' && (
             <div>
               <p className="mb-0.5 text-neutral-400">Video motion instructions</p>
               <p className="whitespace-pre-wrap break-words">{artwork.motion_prompt}</p>
+              {artwork.motion_prompt_act2 && (
+                <p className="mt-1 whitespace-pre-wrap break-words">{artwork.motion_prompt_act2}</p>
+              )}
             </div>
           )}
           {artwork.duration_s ? <p className="text-neutral-400">{artwork.duration_s} seconds</p> : null}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Unsaved video-direction drafts, keyed by design id and sessionStorage-backed
+// so a draft survives EVERY remount path — the ~2s polling reloads, the
+// Keep/Promote family regrouping (Card → AnchorCard is a different element
+// type, React drops all local state), and the finished video swapping in over
+// its still (UX review P0, 2026-08-05). Cleared on save/reset; gone on a full
+// browser restart, which is the right lifespan for "typed but never saved".
+const DRAFT_KEY = 'wae-direction-drafts';
+function loadDrafts() {
+  try { return JSON.parse(sessionStorage.getItem(DRAFT_KEY)) || {}; } catch { return {}; }
+}
+function persistDrafts(d) {
+  try { sessionStorage.setItem(DRAFT_KEY, JSON.stringify(d)); } catch { /* private mode */ }
+}
+export const draftStore = {
+  get: (id) => loadDrafts()[id] || null,
+  set: (id, draft) => { const d = loadDrafts(); d[id] = draft; persistDrafts(d); },
+  clear: (id) => { const d = loadDrafts(); delete d[id]; persistDrafts(d); },
+};
+
+/** Designs whose stored draft still differs from the server text. Pure-ish. */
+export function dirtyDraftDesigns(artworks) {
+  return (artworks || []).filter((a) => {
+    if (a.stage !== 'still') return false;
+    const d = draftStore.get(a.id);
+    if (!d) return false;
+    return (d.act1 ?? '').trim() !== (a.motion_prompt || '').trim()
+      || (a.motion_prompt_act2 && (d.act2 ?? '').trim() !== (a.motion_prompt_act2 || '').trim());
+  });
+}
+
+/** Save one design's stored draft to the server, then drop the draft. */
+export async function saveDraft(a) {
+  const d = draftStore.get(a.id);
+  if (!d) return;
+  await api.setMotionPrompt(a.id, { act1: d.act1, ...(a.motion_prompt_act2 ? { act2: d.act2 } : {}) });
+  draftStore.clear(a.id);
+}
+
+// One editable act of a design's video prompt.
+function ActEditor({ label, value, onChange, busy }) {
+  return (
+    <label className="block">
+      <span className="mb-0.5 block text-neutral-400">{label}</span>
+      <textarea
+        value={value} disabled={busy} rows={5}
+        onChange={(e) => onChange(e.target.value)}
+        className={`w-full resize-y rounded border border-neutral-700 bg-neutral-950 p-2 text-base leading-snug text-neutral-100 disabled:opacity-50 sm:text-[11px] ${focusRing}`}
+      />
+    </label>
+  );
+}
+
+// The editable video prompt (Scott, 2026-08-05: "see the video prompt and be
+// able to edit it before video generation"). Collapsed by default; expanding
+// shows the act(s) as textareas. Save stores the edit (guardrail-checked
+// server-side); Reset rebuilds the engine's own version (two-step — it is
+// destructive and sits next to Save). Typed-but-unsaved text lives in
+// draftStore, so it survives remounts and the Make-videos flow can catch it
+// (UX review P0s, 2026-08-05). `designPrompt` folds the read-only design
+// instructions in here so a design card has ONE disclosure row, not two
+// identical-looking gray rows (UX review P1).
+export function VideoPromptPanel({ artwork, editable = true, designPrompt }) {
+  const [open, setOpen] = useState(false);
+  const draft = draftStore.get(artwork.id);
+  const [act1, setAct1Raw] = useState(draft?.act1 ?? (artwork.motion_prompt || ''));
+  const [act2, setAct2Raw] = useState(draft?.act2 ?? (artwork.motion_prompt_act2 || ''));
+  // Last-saved values (server canonical). Server trims on save, so all dirty
+  // comparisons are trimmed — an iPad trailing space must never leave the
+  // panel stuck on "unsaved" after a successful save (UX review P0-3).
+  const [savedAct1, setSavedAct1] = useState(artwork.motion_prompt || '');
+  const [savedAct2, setSavedAct2] = useState(artwork.motion_prompt_act2 || '');
+  const [state, setState] = useState({ kind: 'idle' }); // idle | saving | saved | reset | error
+  const [confirmReset, setConfirmReset] = useState(false);
+  const twoActs = Boolean(artwork.motion_prompt_act2);
+  const dirty = act1.trim() !== savedAct1.trim() || (twoActs && act2.trim() !== savedAct2.trim());
+  const busy = state.kind === 'saving';
+
+  const setAct1 = (v) => { setAct1Raw(v); draftStore.set(artwork.id, { act1: v, act2 }); };
+  const setAct2 = (v) => { setAct2Raw(v); draftStore.set(artwork.id, { act1, act2: v }); };
+  const syncTo = (updated) => {
+    setAct1Raw(updated.motion_prompt || '');
+    setAct2Raw(updated.motion_prompt_act2 || '');
+    setSavedAct1(updated.motion_prompt || '');
+    setSavedAct2(updated.motion_prompt_act2 || '');
+    draftStore.clear(artwork.id);
+  };
+
+  const save = async () => {
+    setState({ kind: 'saving' });
+    try {
+      const body = { act1, ...(twoActs ? { act2 } : {}) };
+      const { artwork: updated } = await api.setMotionPrompt(artwork.id, body);
+      syncTo(updated);
+      setState({ kind: 'saved' });
+    } catch (err) {
+      setState({ kind: 'error', message: err.message });
+    }
+  };
+  const reset = async () => {
+    if (!confirmReset) {
+      setConfirmReset(true);
+      setTimeout(() => setConfirmReset(false), 4000);
+      return;
+    }
+    setConfirmReset(false);
+    setState({ kind: 'saving' });
+    try {
+      const { artwork: updated } = await api.resetMotionPrompt(artwork.id);
+      syncTo(updated);
+      setState({ kind: 'reset' });
+    } catch (err) {
+      setState({ kind: 'error', message: err.message });
+    }
+  };
+
+  const btn = `inline-flex min-h-11 items-center gap-1 rounded border px-2.5 text-xs font-medium transition-colors disabled:opacity-40 ${focusRing}`;
+  return (
+    <div className="mt-1.5">
+      <button
+        type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open}
+        className={`mt-1 flex min-h-11 w-full items-center gap-1.5 rounded border border-neutral-700 bg-neutral-950/40 px-2 py-2 text-xs font-medium text-neutral-200 transition-colors hover:border-neutral-500 hover:text-white ${focusRing}`}
+      >
+        <span className={`transition-transform ${open ? 'rotate-90' : ''}`}>›</span>
+        ✎ Video directions{editable ? ' — tap to read or change' : ''}
+        {dirty && <span className="rounded bg-amber-950 px-1.5 py-0.5 text-[10px] font-medium text-amber-300">unsaved</span>}
+      </button>
+      {open && (
+        <div className="mt-1 space-y-2 rounded bg-neutral-950/60 p-2 text-[11px] leading-snug text-neutral-300">
+          <p className="text-neutral-400">
+            {twoActs
+              ? 'The video plays in two halves. These words steer each half — change them before making the video.'
+              : 'These words steer the video — change them before making the video.'}
+          </p>
+          <ActEditor label={twoActs ? 'First half (0–15 seconds)' : 'The full video (15 seconds)'} value={act1} onChange={setAct1} busy={busy || !editable} />
+          {twoActs && <ActEditor label="Second half (15–30 seconds)" value={act2} onChange={setAct2} busy={busy || !editable} />}
+          {editable && (
+            <div className="flex flex-wrap items-center gap-2 sm:gap-1.5">
+              <button
+                type="button" disabled={busy || !dirty} onClick={save}
+                title="Save these directions — the next video uses them"
+                className={`${btn} border-[#0247FE] bg-[#0247FE] text-white hover:bg-[#0235c9]`}
+              >
+                {busy ? <><Spinner className="h-3 w-3" /> Saving…</> : 'Save directions'}
+              </button>
+              <button
+                type="button" disabled={busy} onClick={reset}
+                title="Throw away edits and go back to the original directions"
+                className={`${btn} ${confirmReset
+                  ? 'border-rose-700 bg-rose-950 text-rose-200'
+                  : 'border-neutral-700 bg-transparent text-neutral-400 hover:bg-neutral-800'}`}
+              >
+                {confirmReset ? 'Tap again to throw away your edits' : '↺ Reset to original'}
+              </button>
+              {state.kind === 'saved' && !dirty && <span className="text-[10px] text-emerald-300">✓ Saved — the next video uses these</span>}
+              {state.kind === 'reset' && !dirty && <span className="text-[10px] text-neutral-300">↺ Back to the original directions</span>}
+              {state.kind === 'error' && <span className="text-[10px] text-rose-300">{state.message}</span>}
+            </div>
+          )}
+          {designPrompt && (
+            <div className="border-t border-neutral-800 pt-1.5">
+              <p className="mb-0.5 text-neutral-400">How the picture itself was described (not editable)</p>
+              <p className="whitespace-pre-wrap break-words text-neutral-400">{designPrompt}</p>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -781,12 +1004,18 @@ export function Details({ artwork }) {
 // the approve/pass buttons. `saved` marks a bookmarked design (violet ring +
 // badge) so it's obvious at a glance which cards a regeneration will skip.
 export function Card({ artwork, actions, animating, saved }) {
+  const storyboard = hasStoryboard(artwork);
+  const editable = artwork.stage === 'still' && !['superseded', 'sent'].includes(artwork.status);
   return (
     <div className={`card-in rounded-lg border border-neutral-800 bg-neutral-900 p-2 transition-colors${saved ? ' ring-1 ring-violet-500/60' : ''}`}>
-      <div className="relative">
-        <Preview artwork={artwork} />
-        {animating && <GeneratingOverlay />}
-      </div>
+      {storyboard ? (
+        <Storyboard artwork={artwork} animating={animating} />
+      ) : (
+        <div className="relative">
+          <Preview artwork={artwork} />
+          {animating && <GeneratingOverlay />}
+        </div>
+      )}
       <div className="mt-2 flex items-center justify-between px-0.5">
         <span className="flex items-center gap-1.5 text-[11px] text-neutral-400">
           {saved && <span className="rounded bg-violet-950 px-1 py-0.5 text-[10px] font-medium text-violet-300">🔖 Saved</span>}
@@ -799,7 +1028,26 @@ export function Card({ artwork, actions, animating, saved }) {
         {animating
           ? <p className="mt-2 flex items-center gap-1.5 text-[11px] text-amber-300"><Spinner className="h-3 w-3" /> Making the video…</p>
           : <Actions {...actions} stage={artwork.stage} />}
-        <Details artwork={artwork} />
+        {artwork.stage === 'still' && artwork.motion_prompt && (
+          <VideoPromptPanel key={artwork.id} artwork={artwork} editable={editable && !animating} designPrompt={artwork.prompt} />
+        )}
+        {/* Passed on the video, not the design? The natural next move is
+            "change the directions and remake" — surface the source design's
+            editable directions right here with a remake button (UX review P1). */}
+        {!animating && artwork.stage === 'motion' && artwork.status === 'rejected' && actions.remakeStill && (
+          <div className="mt-1.5 rounded border border-neutral-800 bg-neutral-950/40 p-1.5">
+            <p className="mb-1 text-[11px] text-neutral-400">Didn’t like this video? Change the directions and remake it — the design stays the same.</p>
+            <VideoPromptPanel key={`remake-${actions.remakeStill.id}`} artwork={actions.remakeStill} editable />
+            <button
+              type="button" disabled={actions.busy} onClick={actions.onRemake}
+              title="Make the video again using the saved directions"
+              className={`mt-1.5 inline-flex min-h-11 items-center gap-1 rounded border border-amber-600 bg-amber-600 px-2.5 text-xs font-medium text-white transition-colors hover:bg-amber-500 disabled:opacity-40 ${focusRing}`}
+            >
+              ↻ Remake video{actions.remakeCost || ''}
+            </button>
+          </div>
+        )}
+        {artwork.stage !== 'still' && <Details artwork={artwork} />}
       </div>
     </div>
   );
@@ -855,10 +1103,14 @@ export function AnchorCard({ artwork, animating, busy, onApprove, onReject, onVa
       <div className="mb-2 flex items-center justify-between gap-2">
         <span className="inline-flex items-center gap-1 rounded-full bg-amber-950 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-300">⭐ Kept — exploring</span>
       </div>
-      <div className="relative">
-        <Preview artwork={artwork} />
-        {animating && <GeneratingOverlay />}
-      </div>
+      {hasStoryboard(artwork) ? (
+        <Storyboard artwork={artwork} animating={animating} />
+      ) : (
+        <div className="relative">
+          <Preview artwork={artwork} />
+          {animating && <GeneratingOverlay />}
+        </div>
+      )}
       <div className="mt-2 flex items-center justify-end px-0.5">
         <StatusBadge status={animating ? 'generating' : artwork.status} stage={artwork.stage} />
       </div>
@@ -923,7 +1175,10 @@ export function AnchorCard({ artwork, animating, busy, onApprove, onReject, onVa
             )}
           </>
         )}
-        <Details artwork={artwork} />
+        {artwork.stage === 'still' && artwork.motion_prompt && (
+          <VideoPromptPanel key={artwork.id} artwork={artwork} editable={!sent && !animating} designPrompt={artwork.prompt} />
+        )}
+        {artwork.stage !== 'still' && <Details artwork={artwork} />}
       </div>
     </div>
   );

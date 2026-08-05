@@ -63,13 +63,58 @@ function videoUrlOf(result, label) {
   return url;
 }
 
+/**
+ * Upload a local file to fal storage so downstream fal models can fetch it —
+ * needed for the segment-B handoff frame (extracted locally by ffmpeg) and the
+ * stitched 30s clip Topaz upscales. Two-step: initiate → PUT the bytes.
+ * @returns {Promise<{ url: string }>} the fal-hosted file URL
+ */
+export async function uploadToFalStorage({ sourcePath, contentType = 'application/octet-stream' }) {
+  if (!config.fal.key) throw new Error('FAL_KEY not set.');
+  const { readFile } = await import('node:fs/promises');
+  const base = config.fal.restBase.replace(/\/$/, '');
+  const fileName = sourcePath.split('/').at(-1);
+  const initiate = await fetch(`${base}/storage/upload/initiate`, {
+    method: 'POST', headers: auth(),
+    body: JSON.stringify({ content_type: contentType, file_name: fileName }),
+  });
+  if (!initiate.ok) throw new Error(`fal storage initiate failed: ${initiate.status} ${await initiate.text()}`);
+  const { upload_url: uploadUrl, file_url: fileUrl } = await initiate.json();
+  if (!uploadUrl || !fileUrl) throw new Error('fal storage initiate returned no upload_url/file_url');
+  const put = await fetch(uploadUrl, {
+    method: 'PUT', headers: { 'Content-Type': contentType }, body: await readFile(sourcePath),
+  });
+  if (!put.ok) throw new Error(`fal storage upload failed: ${put.status} ${await put.text()}`);
+  return { url: fileUrl };
+}
+
+/**
+ * Topaz-upscale a fal-hosted video URL. Split out of generate() so the 30s
+ * two-segment chain can upscale ONCE over the stitched clip — per-segment
+ * passes synthesize different grain on each half, which reads as a splice
+ * (Shawn, 2026-08-05). @returns {Promise<{ url, requestId, factor }>}
+ */
+export async function upscaleVideo({ videoUrl, pollMs = 6000, timeoutMs = 900000 }) {
+  const up = config.fal.upscale;
+  const upscaled = await queueRun({
+    model: up.model, label: 'Topaz upscale', pollMs, timeoutMs,
+    body: { video_url: videoUrl, upscale_factor: up.factor },
+  });
+  return { url: videoUrlOf(upscaled.result, 'Topaz upscale'), requestId: upscaled.requestId, factor: up.factor };
+}
+
 export const motionProvider = {
   model: MODEL_MOTION,
   /**
    * @param referenceImageUrl a URL fal can fetch (the Seedream still). REQUIRED —
    *        Seedance is image-to-video. fal-hosted Seedream URLs work directly.
+   * @param endImageUrl optional fal-fetchable URL of the LAST frame — Seedance
+   *        transitions the clip to land exactly on it (the approved closing
+   *        still of the storyboard).
+   * @param skipUpscale skip the per-clip Topaz pass — used by the two-segment
+   *        chain, which upscales once over the stitched result instead.
    */
-  async generate({ prompt, durationS = 6, output, referenceImageUrl, pollMs = 6000, timeoutMs = 900000 }) {
+  async generate({ prompt, durationS = 6, output, referenceImageUrl, endImageUrl, skipUpscale = false, pollMs = 6000, timeoutMs = 900000 }) {
     if (!config.fal.key) throw new Error('FAL_KEY not set. Live motion generation is disabled until the key is configured.');
     if (!referenceImageUrl) throw new Error('Seedance needs referenceImageUrl (image-to-video) — generate/approve a Seedream still first.');
 
@@ -81,6 +126,7 @@ export const motionProvider = {
       body: {
         prompt,
         image_url: referenceImageUrl,
+        ...(endImageUrl ? { end_image_url: endImageUrl } : {}),
         resolution: config.fal.resolution,
         generate_audio: config.fal.generateAudio,
         duration: Math.min(15, Math.max(4, Math.round(durationS))),
@@ -93,16 +139,10 @@ export const motionProvider = {
     // 4K pass: upscale the fal-hosted clip before download. Best-effort — a
     // refused/failed upscale must never cost us the (already paid) generation.
     const up = config.fal.upscale;
-    if (up?.enabled) {
+    if (up?.enabled && !skipUpscale) {
       try {
-        const upscaled = await queueRun({
-          model: up.model,
-          label: 'Topaz upscale',
-          pollMs,
-          timeoutMs,
-          body: { video_url: videoUrl, upscale_factor: up.factor },
-        });
-        videoUrl = videoUrlOf(upscaled.result, 'Topaz upscale');
+        const upscaled = await upscaleVideo({ videoUrl, pollMs, timeoutMs });
+        videoUrl = upscaled.url;
         model = `${MODEL_MOTION}+topaz${up.factor}x`;
         upscaleJobId = upscaled.requestId;
       } catch (err) {
@@ -111,8 +151,11 @@ export const motionProvider = {
     }
 
     await downloadTo(videoUrl, output);
-    return { path: output, model, durationS, jobId: requestId, upscaleJobId };
+    // remoteUrl: the fal-hosted result — the chain feeds it onward (Topaz over
+    // the stitched clip) without a re-upload when only one segment is raw.
+    return { path: output, model, durationS, jobId: requestId, upscaleJobId, url: videoUrl };
   },
 };
 
-export default { motionProvider };
+export { downloadTo };
+export default { motionProvider, uploadToFalStorage, upscaleVideo };
