@@ -277,6 +277,17 @@ const FRAME_GEOMETRY =
   `distance. The frame is never shown as an object: no outside of it, no top or sides of any box, no ` +
   `ground it sits on, no room around it, no tilt or angle — the viewpoint is exactly perpendicular, ` +
   `centered, and cropped precisely at the frame's outer edge.`;
+// Frame STYLE pin, appended after FRAME_GEOMETRY in BOTH still builders.
+// The opening and closing stills are independent Seedream samples, and
+// "matte-black frame" alone left the molding to chance: production video 124
+// opened on a flat modern frame and ended (via the closing still it was
+// anchored to) on ornate stepped molding — the model invented a different
+// frame per still (forensics, 2026-08-07). Positive description first;
+// negation kept short (drawable nouns inside negations can literalize —
+// lesson of 2026-07-31/08-05).
+const FRAME_STYLE =
+  `The black frame is perfectly plain and flat: uniform width on all four sides, sharp square ` +
+  `corners, a smooth matte surface — no molding, no ornament.`;
 const FRAME_CONTAINMENT =
   `Every element stays well inside the picture's borders: nothing but the black frame itself ever ` +
   `touches the picture's edge, and nothing is cropped by the picture's boundary — every character ` +
@@ -329,7 +340,7 @@ export function buildStillPrompt({ style, specKey, option, weekOf }) {
     const cast = joinCast(f.cast);
     return `An ultra-wide trompe-l'oeil deep-relief composition in perfectly frontal, dead-centered, ` +
       `symmetrical one-point perspective. Style: ${f.style}. ` +
-      `${FRAME_GEOMETRY} ` +
+      `${FRAME_GEOMETRY} ${FRAME_STYLE} ` +
       `The scene is home to an ensemble of characters: ${cast}. ${ONLY_CAST(cast)} They are placed at clearly ` +
       `different depths — some deep in the distance, some mid-ground, and at least one bursting forward through the ` +
       `opening toward the viewer: its body and trailing light cross the frame's inner edge and overlap the ` +
@@ -361,7 +372,7 @@ export function buildClosingStillPrompt({ style, specKey, option, weekOf }) {
   const arc = arcFor({ specKey, option, weekOf });
   return `An ultra-wide trompe-l'oeil deep-relief composition in perfectly frontal, dead-centered, ` +
     `symmetrical one-point perspective. Style: ${f.style}. ` +
-    `${FRAME_GEOMETRY} ` +
+    `${FRAME_GEOMETRY} ${FRAME_STYLE} ` +
     `The scene is home to an ensemble of characters: ${cast}. ${ONLY_CAST(cast)} ` +
     // "grand finale"/"closing pose of a performance" wording literalized into a
     // STAGE SHOW — human statues and a central performer (live QA, 2026-08-05);
@@ -478,7 +489,10 @@ const FRAME_MOTION_RULE =
   `short of the image's outer edge — every character, trail and effect stays fully inside the image bounds, ` +
   `never touched or cropped by the outer boundary. ` +
   `The four black strips remain flush with the four edges of the image in every single frame, ` +
-  `the same width from the first frame to the last.`;
+  `the same width from the first frame to the last. ` +
+  `The viewpoint stays outside the frame, in front of the black border, for the entire clip — ` +
+  `it never travels through the opening into the scene. The scene transforms and the characters ` +
+  `perform inside the opening and burst out toward the frame plane, always watched from outside.`;
 
 /**
  * One act of the spectacular's two-act motion (act 1 = segment A off the
