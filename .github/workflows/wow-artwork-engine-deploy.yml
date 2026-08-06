@@ -16,7 +16,10 @@ name: Deploy Artwork Engine to EC2
 on:
   workflow_dispatch:
   push:
-    branches: [master, dev]
+    # main is this repo's trunk — [master, dev] alone meant NO push ever
+    # deployed (found 2026-08-05: production ran a stale build for weeks
+    # while every fix landed on main and only CI fired).
+    branches: [main, master, dev]
     paths: ['server/**', 'web/**', 'migrations/**', 'infra/**', '.github/workflows/wow-artwork-engine-deploy.yml']
 
 env:
@@ -33,7 +36,8 @@ jobs:
       - name: Resolve target host
         id: target
         run: |
-          if [ "${{ github.ref_name }}" = "master" ]; then
+          # main (the trunk) and master both mean production; dev means staging.
+          if [ "${{ github.ref_name }}" = "master" ] || [ "${{ github.ref_name }}" = "main" ]; then
             echo "host=${{ secrets.PROD_EC2_HOST }}" >> "$GITHUB_OUTPUT"
             echo "pm2_env=production" >> "$GITHUB_OUTPUT"
           else
