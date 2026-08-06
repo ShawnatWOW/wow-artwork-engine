@@ -922,7 +922,9 @@ async function animateStill(still, ctx) {
     // corner onto the spine instead of the spine being a separate afterthought.
     const pods = surface.pods ?? 3;
     const master = path.join(dir, 'master.mp4');
-    await ffmpeg.conform({ input: srcVideo, output: master, width: finalSpec.width, height: finalSpec.height, duration: effDuration, fps });
+    // fit 'exact': the master's edges ARE content (fold alignment for the
+    // panel cuts), so aspect error must cost a hair of squash, never a crop.
+    await ffmpeg.conform({ input: srcVideo, output: master, width: finalSpec.width, height: finalSpec.height, duration: effDuration, fps, fit: 'exact' });
     const masterPut = await store.put({ key: key('master.mp4'), sourcePath: master });
     const panels = await sliceMaster({ masterPath: master, outDir: dir, pods, duration: effDuration });
 
@@ -967,7 +969,10 @@ async function animateStill(still, ctx) {
   // and in front — so the pop-out is real pixels, model-rendered. Here we just
   // conform full-bleed to spec like every other surface.
   const final = path.join(dir, 'final.mp4');
-  await ffmpeg.conform({ input: srcVideo, output: final, width: finalSpec.width, height: finalSpec.height, duration: effDuration, fps });
+  // fit 'exact': the spectacular's painted frame lives in the outermost
+  // pixels — cover's center-crop paid for any aspect error with exactly those
+  // pixels, visibly thinning the frame even with a locked camera.
+  await ffmpeg.conform({ input: srcVideo, output: final, width: finalSpec.width, height: finalSpec.height, duration: effDuration, fps, fit: 'exact' });
   const td = thumbDims(finalSpec);
   const thumb = path.join(dir, 'thumb.jpg');
   await ffmpeg.thumbnail({ input: final, output: thumb, width: td.width, height: td.height, atSeconds: Math.min(2, effDuration / 2) });

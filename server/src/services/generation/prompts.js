@@ -137,7 +137,7 @@ const SPECTACULAR_FAMILIES = [
 // through the frame; the finale reads as a settled, poster-worthy composition.
 const SPECTACULAR_ARCS = [
   (cast) => ({
-    act1: `The scene erupts to life: ${cast} chase each other in sweeping interlocking loops, diving deep into the distance and lunging forward through the opening, each taking a turn bursting over the black frame while the environment churns with streaming color trails`,
+    act1: `The scene erupts to life: ${cast} chase each other in sweeping interlocking loops, diving deep into the distance and lunging out through the opening, each taking a turn bursting over the black frame while the environment churns with streaming color trails`,
     act2: `The environment transforms around them — the deep space blooms into a completely new landscape of the same vivid palette; the characters regroup and spiral together into one grand formation, weaving between foreground and deep background as the new scenery surges with kinetic light`,
     finale: 'the full cast gathered in one dramatic settled formation, the largest character front and center bursting through the opening over the black frame, the others arranged at staggered depths behind it in the transformed scenery',
   }),
@@ -150,8 +150,8 @@ const SPECTACULAR_ARCS = [
     finale: 'the full cast caught mid-leap in the reformed dreamscape, two characters bursting through the opening over the black frame from opposite sides, the rest fanned out at depth between them',
   }),
   (cast) => ({
-    act1: `The scene breathes like one organism: ${cast} orbit a blazing center of light, plunging toward the viewer and back into the depths in rolling waves, each pass sending one of them through the opening and across the black frame`,
-    act2: `The center of light blossoms and swallows the scene — an entirely new environment unfurls from it in the same palette; the characters ride the expanding wave outward and regroup in the fresh scenery, weaving figure-eights between depth layers as everything pulses with light`,
+    act1: `The scene breathes like one organism: ${cast} orbit a blazing center of light, swelling huge in the near foreground and shrinking back into the depths in rolling waves, each pass sending one of them through the opening and across the black frame`,
+    act2: `The center of light blossoms and swallows the scene — an entirely new environment unfurls from it in the same palette; the characters ride the blossoming light and regroup in the fresh scenery, weaving figure-eights between depth layers as everything pulses with light`,
     finale: 'the full cast arranged in a sweeping arc around the blossomed center of light in the new environment, the nearest character surging through the opening over the black frame, the scene at maximum brilliance',
   }),
   (cast) => ({
@@ -189,7 +189,7 @@ export function arcFor({ specKey, option, weekOf }) {
 // the frame with continuous motion (a stalled subject reads as a frozen loop).
 const CHOREOGRAPHIES = [
   (s, tr) =>
-    `Scene is in perpetual motion: the entire background swirls and morphs continuously; ${s} performs a violent vertical loop-the-loop in the ${tr.start} third diving and soaring while the scene around it churns with streaming color trails, then barrel-rolls through the middle third with the environment rippling in sync, finally explodes toward viewer landing at the ${tr.end} edge as the entire frame crackles with kinetic energy`,
+    `Scene is in perpetual motion: the entire background swirls and morphs continuously; ${s} performs a violent vertical loop-the-loop in the ${tr.start} third diving and soaring while the scene around it churns with streaming color trails, then barrel-rolls through the middle third with the environment rippling in sync, finally swells huge in the near foreground, landing at the ${tr.end} edge as the entire frame crackles with kinetic energy`,
   (s, tr) =>
     `Background is alive and turbulent: shapes pulse and undulate across the full frame; ${s} fractures into spinning particles from the ${tr.start} third as the scene around it fragments, particles and environment swirl chaotically through the middle third in aggressive eddies, then snap back together merging with the dynamic background as ${s} rockets to the ${tr.end} edge in a wave of cascading color`,
   (s, tr) =>
@@ -203,13 +203,13 @@ const CHOREOGRAPHIES = [
   (s, tr) =>
     `Background swirls in aggressive figure-eights: the entire space is defined by continuous motion; ${s} hurls itself through the ${tr.start} third in a violent barrel-roll leaving trails as the background streams and twists around it, carves a massive figure-eight across the center of the frame with the entire scene rotating through the motion, momentum builds with each loop as the environment crescendos, then explodes forward in an arc to the ${tr.end} edge through waves of kinetic color`,
   (s, tr) =>
-    `Entire scene detonates and reforms: the background fractalizes and blooms explosively; ${s} erupts upward from the ${tr.start} third with explosive force spiraling and surging as the scene around it explodes outward in fractals, blossoms into massive radiating patterns at the center of the frame with the entire composition expanding with kinetic light, then collapses and rockets backward with the environment imploding inward before streaking to the ${tr.end} edge as one unified detonation`,
+    `Entire scene detonates and reforms: the background fractalizes and blooms explosively; ${s} erupts upward from the ${tr.start} third with explosive force spiraling and surging as the scene around it explodes outward in fractals, blossoms into massive radiating patterns at the center of the frame with the entire composition expanding with kinetic light, then collapses and shrinks deep into the distance as the environment swirls back inward before streaking to the ${tr.end} edge as one unified detonation`,
 ];
 
 // Dynamic motion for standalone surfaces — entire SCENE in constant motion, not just the subject.
 // Seedance responds to scene-wide activity descriptions better than subject-only prompts.
 const SOLO_MOTIONS = [
-  (s) => `Intense scene: the entire background is rippling and swirling with dynamic color shifts; ${s} surges directly toward the viewer growing massive, while the scene around it churns with streaming light trails and vibrant motion across every pixel of the frame`,
+  (s) => `Intense scene: the entire background is rippling and swirling with dynamic color shifts; ${s} swells to fill the near foreground, growing massive in place, while the scene around it churns with streaming light trails and vibrant motion across every pixel of the frame`,
   (s) => `Hyperactive scene: kaleidoscopic patterns pulse and rotate continuously across the entire background; ${s} spirals chaotically through the center at high speed while the surrounding environment explodes with color bursts and kinetic light effects`,
   (s) => `Explosive scene: the full background is alive with blooming fractals and radiating waves of color; ${s} unfolds dramatically in layers while the entire frame crackles with electric movement and cascading light`,
   (s) => `Turbulent scene: swirling vortexes of color consume the full frame in constant motion; ${s} spins with violent rotational energy at the center while waves of light ripple outward to the edges, engulfing the entire composition`,
@@ -400,16 +400,38 @@ const LEGACY_BAND_SENTENCES = [
 ];
 
 /**
- * Strip the legacy "vertical band" sentences from a stored motion prompt.
- * Seedance literalized them into painted white lines at the named positions
- * (Scott's pillar videos, 2026-07-31). Pure; a no-op on current prompts.
+ * Repair a STORED motion prompt at animate time. Two legacy defects, both
+ * fixed here (the one place the motion spend happens) so already-approved
+ * designs animate correctly without a data migration:
+ * - the "vertical band" sentences Seedance literalized into painted white
+ *   lines (Scott's pillar videos, 2026-07-31);
+ * - the buried tail-position camera clause, replaced by CAMERA_LOCK up front —
+ *   the tail clause never named dolly/push-in, and Seedance's push-in was
+ *   eating the painted frame (Scott, 2026-08-07).
+ * Pure; a no-op on prompts built after 2026-08-07.
  */
 export function sanitizeMotionPrompt(prompt) {
   if (!prompt) return prompt;
   let out = prompt;
   for (const sentence of LEGACY_BAND_SENTENCES) out = out.split(sentence).join('');
+  // Both mid-prompt (trailing space) and end-of-prompt occurrences.
+  out = out.split('Locked static camera; no zoom, no pan. ').join('');
+  out = out.split('Locked static camera; no zoom, no pan.').join('').trimEnd();
+  if (!out.startsWith(CAMERA_LOCK)) out = `${CAMERA_LOCK} ${out}`;
   return out;
 }
+
+// Camera lock — ALWAYS the first sentence of every motion prompt. Seedance 2.0
+// has no camera_fixed parameter (v1 had one; the 2.0 schema does not), so the
+// prompt is the only lever, and ByteDance's own guidance is: ONE primary
+// camera instruction, placed early, in "fixed framing" vocabulary. The old
+// clause sat dead last in a ~150-word prompt and named only zoom/pan — not
+// dolly or push-in, which is exactly the drift that was eating the painted
+// frame (Scott, 2026-08-07).
+const CAMERA_LOCK =
+  'Fixed camera, locked-off shot: the camera holds fixed framing for the entire clip — ' +
+  'no dolly, no push-in, no pull-back, no zoom, no pan, no reframing. ' +
+  'The framing of the first frame is exactly the framing of the last frame.';
 
 /**
  * The motion prompt for one option — how the art moves within the frame.
@@ -418,12 +440,11 @@ export function sanitizeMotionPrompt(prompt) {
 export function buildMotionPrompt({ style, specKey, option, weekOf }) {
   const t = themeFor({ specKey, option, weekOf });
   const CONSTANCY =
-    'Locked static camera; no zoom, no pan. ' +
     'Colors, saturation and lighting remain exactly constant for the entire duration; no fading, no color drift.';
   if (style === 'eon_connected') {
     const tr = travelFor(option);
     const acts = choreographyFor({ specKey, option, weekOf })(t.subject, tr);
-    return `Choreographed whole-scene motion: ${acts}. ` +
+    return `${CAMERA_LOCK} Choreographed whole-scene motion: ${acts}. ` +
       `The journey starts in the ${tr.start} third of the frame in the very first frame and finishes at the ` +
       `${tr.end} edge of the frame only in the final frame; the subject stays inside the frame and keeps ` +
       `fluid, continuous motion the whole time — it never stops or hovers in place. ` +
@@ -436,7 +457,7 @@ export function buildMotionPrompt({ style, specKey, option, weekOf }) {
     return buildSpectacularAct({ specKey, option, weekOf, act: 1 });
   }
   const solo = soloMotionFor({ specKey, option, weekOf })(t.subject);
-  return `Vivid ambient motion: ${solo}. ` +
+  return `${CAMERA_LOCK} Vivid ambient motion: ${solo}. ` +
     `${NO_SEAMS} Smooth and hypnotic, never chaotic or jittery. ${CONSTANCY}`;
 }
 
@@ -445,7 +466,6 @@ export function buildMotionPrompt({ style, specKey, option, weekOf }) {
 // would fight the arc. What must not happen is DRIFT — Seedance's slow
 // desaturation — so saturation is pinned while deliberate change stays free.
 const CONSTANCY_SPEC =
-  'Locked static camera; no zoom, no pan. ' +
   'Saturation stays rich and maxed for the entire duration — colors may transform as the scene changes, ' +
   'but they never fade, wash out, or drift toward grey.';
 
@@ -456,7 +476,9 @@ const FRAME_MOTION_RULE =
   `the frame's outer edge remains the absolute boundary of the piece at all times. ` +
   `Characters crossing the frame visibly occlude it, casting moving shadows onto it, yet always stop ` +
   `short of the image's outer edge — every character, trail and effect stays fully inside the image bounds, ` +
-  `never touched or cropped by the outer boundary.`;
+  `never touched or cropped by the outer boundary. ` +
+  `The four black strips remain flush with the four edges of the image in every single frame, ` +
+  `the same width from the first frame to the last.`;
 
 /**
  * One act of the spectacular's two-act motion (act 1 = segment A off the
@@ -471,7 +493,7 @@ export function buildSpectacularAct({ specKey, option, weekOf, act }) {
     ? `In the final moments every character eases into its place in one grand settled formation — ` +
       `the composition resolves into a majestic final scene and holds it as the clip ends. `
     : '';
-  return `Trompe-l'oeil 3D pop-out motion, act ${act} of 2: ${body}. ` +
+  return `${CAMERA_LOCK} Trompe-l'oeil 3D pop-out motion, act ${act} of 2: ${body}. ` +
     `${FRAME_MOTION_RULE} ` +
     `Multiple characters are in motion at every moment — none of them ever freezes or hovers; the whole ` +
     `environment moves with them, swirling, flowing and evolving continuously; every pixel is alive. ` +

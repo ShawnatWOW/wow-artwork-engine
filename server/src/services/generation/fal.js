@@ -130,6 +130,13 @@ export const motionProvider = {
         resolution: config.fal.resolution,
         generate_audio: config.fal.generateAudio,
         duration: Math.min(15, Math.max(4, Math.round(durationS))),
+        // 'auto' = infer the ratio from the input image (our stills are 3.62:1
+        // spectaculars / 2.5:1 EON masters — none of the fixed choices fit).
+        // It is the documented default, pinned here against default drift: a
+        // fixed-ratio output would fill-crop the input and destroy the painted
+        // frame before any motion happened. No `seed` on purpose — re-rolls
+        // (vary) rely on the model being stochastic for the same prompt.
+        aspect_ratio: 'auto',
       },
     });
     let videoUrl = videoUrlOf(result, 'Seedance');

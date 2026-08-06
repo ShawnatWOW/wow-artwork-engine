@@ -43,6 +43,11 @@ function assertEven(width, height) {
  * Conform an input to exactly width x height.
  *   fit="cover"   → fill the frame, crop the overflow (default; no distortion)
  *   fit="contain" → fit inside the frame, pad the remainder black
+ *   fit="exact"   → plain scale to the target (≤ a few % of squash, zero
+ *                   cropping) — for outputs whose EDGES are content: the
+ *                   spectacular's painted frame and the EON masters' fold
+ *                   alignment. cover's crop always paid for aspect error with
+ *                   edge pixels, i.e. exactly the frame (found 2026-08-07).
  * Optional duration (seconds) trims the spot; optional fps sets frame rate.
  */
 export function buildConformArgs({
@@ -57,7 +62,9 @@ export function buildConformArgs({
 }) {
   assertEven(width, height);
   let vf;
-  if (fit === 'contain') {
+  if (fit === 'exact') {
+    vf = `scale=${width}:${height},setsar=1`;
+  } else if (fit === 'contain') {
     vf = `scale=${width}:${height}:force_original_aspect_ratio=decrease,` +
       `pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:color=black`;
   } else {

@@ -33,7 +33,10 @@ test('EON connected motion: 3-act choreography, full traversal, color constancy'
   assert.match(p1, /never stops or hovers/);
   assert.match(p1, /middle third|center of the frame/); // a distinct middle-screen act
   assert.match(p1, /saturation and lighting remain exactly constant/); // anti-drift
-  assert.match(p1, /Locked static camera/);
+  // ONE camera instruction, FIRST sentence (Seedance 2.0 has no camera_fixed
+  // param; position is where the model weights it — 2026-08-07).
+  assert.ok(p1.startsWith('Fixed camera, locked-off shot:'), `camera lock must lead: ${p1.slice(0, 60)}`);
+  assert.doesNotMatch(p1, /Locked static camera/);
   assert.doesNotMatch(p1, DOMAIN_TERMS);
 
   const p2 = buildMotionPrompt({ style: 'eon_connected', specKey: 'eon_master_3pod', option: 2, weekOf: '2026-08-10' });
@@ -57,7 +60,8 @@ test('choreography rotates across weeks and stays deterministic', () => {
 test('standalone motion prompts are dynamic and camera-locked', () => {
   for (const style of ['frame_break', 'eon_single']) {
     const p = buildMotionPrompt({ style, specKey: 'spectacular_wow1_8', option: 1, weekOf: '2026-08-10' });
-    assert.match(p, /Locked static camera/);
+    assert.ok(p.startsWith('Fixed camera, locked-off shot:'), `camera lock must lead: ${p.slice(0, 60)}`);
+    assert.doesNotMatch(p, /Locked static camera/);
     assert.match(p, /never jittery|never chaotic/);
     assert.doesNotMatch(p, DOMAIN_TERMS);
   }
@@ -139,7 +143,8 @@ test('two acts differ, act 2 lands the finale, both keep the frame fixed', () =>
   assert.match(act2, /resolves into a majestic final scene/); // segment B settles onto end_image_url
   for (const p of [act1, act2]) {
     assert.match(p, /stays perfectly fixed for the whole clip/);
-    assert.match(p, /Locked static camera/);
+    assert.ok(p.startsWith('Fixed camera, locked-off shot:'), `camera lock must lead: ${p.slice(0, 60)}`);
+    assert.doesNotMatch(p, /Locked static camera/);
     assert.match(p, /never fade, wash out, or drift/); // anti-drift without banning scene change
     assert.doesNotMatch(p, DOMAIN_TERMS);
     assert.doesNotMatch(p, META_TERMS);
@@ -217,7 +222,10 @@ test('sanitizeMotionPrompt strips the legacy band sentences from stored prompts'
   const clean = sanitizeMotionPrompt(legacy);
   assert.doesNotMatch(clean, /band/i);
   assert.match(clean, /Choreographed whole-scene motion/);
-  assert.match(clean, /Locked static camera/);
+  // The buried tail camera clause is replaced by the up-front lock, so
+  // re-animating an old approved design gets the fix too (2026-08-07).
+  assert.doesNotMatch(clean, /Locked static camera/);
+  assert.ok(clean.startsWith('Fixed camera, locked-off shot:'), 'stored prompts gain the leading lock');
 
   // Current prompts pass through untouched, and null is safe.
   const current = buildMotionPrompt({ style: 'eon_connected', specKey: 'eon_master_3pod', option: 1, weekOf: '2026-08-10' });
