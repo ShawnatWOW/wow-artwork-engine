@@ -16,20 +16,23 @@ module.exports = {
       env: {
         NODE_ENV: 'development',
       },
-      // Production: enable the weekly scheduler; provide DATABASE_URL, storage,
-      // and keys via the environment / Secrets Manager (never committed).
+      // SCHEDULER_ENABLED deliberately does NOT live here: PM2 env overrides
+      // server/.env (dotenv never clobbers existing vars), and the deployed
+      // env file is the single source of truth — it keeps the weekly scheduler
+      // OFF until launch sign-off (generation is human-triggered). Flipping it
+      // to 'true' here once armed a Monday auto-run in LIVE mode unnoticed
+      // (caught during the 2026-08-05 bootstrap deploy).
       env_production: {
         NODE_ENV: 'production',
-        SCHEDULER_ENABLED: 'true',
       },
-      // Staging mirrors production but leaves the scheduler off so it never
-      // auto-fires a run; trigger manually via POST /api/runs.
       env_staging: {
         NODE_ENV: 'production',
-        SCHEDULER_ENABLED: 'false',
       },
-      out_file: '/var/log/wow-artwork-engine/out.log',
-      error_file: '/var/log/wow-artwork-engine/error.log',
+      // Under the app dir (writable by the deploy user). /var/log/... needed
+      // root to create and broke `pm2 startOrReload` with "Could not create
+      // folder" on a fresh box.
+      out_file: '/home/ubuntu/artwork-engine/logs/out.log',
+      error_file: '/home/ubuntu/artwork-engine/logs/error.log',
       time: true,
     },
   ],
