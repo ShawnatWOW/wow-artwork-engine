@@ -6,7 +6,11 @@
 module.exports = {
   apps: [
     {
-      name: 'wow-artwork-engine',
+      // 'artwork-engine' — MUST match the app name wow-contract-query's
+      // production deploy manages (it git-clones this repo and runs
+      // `pm2 restart artwork-engine`). The old 'wow-artwork-engine' name here
+      // created a SECOND app that fought over port 4000 (2026-08-05).
+      name: 'artwork-engine',
       cwd: './server',
       script: 'src/index.js',
       interpreter: 'node',
