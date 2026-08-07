@@ -33,6 +33,7 @@ import { resolveDesign } from './keeper.js';
 import falPricing from './generation/falPricing.js';
 import { getProviders } from './generation/index.js';
 import { getStore, artworkKey } from './storage/index.js';
+import { uploadToFalStorage } from './generation/fal.js';
 import { getRepo } from '../db/index.js';
 import { weekOfFor } from './dates.js';
 
@@ -47,6 +48,22 @@ const thumbDims = (spec) => ({ width: even(spec.width / 2), height: even(spec.he
 // Review-grid preview size. Nothing on the dashboard renders a design wider
 // than ~1400 CSS px, so a 4096px master is ~50x more bytes than the screen can
 // use. Caps the long edge and keeps the aspect exactly.
+// The spectacular frame plate: exact-perimeter black band + stepped black
+// depth, composited onto the still (what Scott reviews AND what Seedance
+// animates from) and onto every final video frame. See ffmpeg.buildFramePlateArgs
+// for the full rationale (Scott, 2026-08-07: the model paints frames as
+// scenery INSIDE the picture, so the true perimeter never matched the
+// billboard's physical bezel).
+const even2 = (n) => Math.max(2, Math.floor(n / 2) * 2);
+async function compositeFramePlate({ input, output, width, height }) {
+  await ffmpeg.applyFramePlate({
+    input, output, width, height,
+    band: even2(height * config.generation.frameBandFrac),
+    still: /\.(png|jpe?g)$/i.test(output),
+  });
+  return output;
+}
+
 const PREVIEW_MAX_EDGE = 1280;
 function previewDims(width, height, maxEdge = PREVIEW_MAX_EDGE) {
   const scale = Math.min(1, maxEdge / Math.max(width, height));
@@ -174,6 +191,26 @@ async function generateStill(job, ctx) {
     const gen = await providers.still.generate({
       width: job.gen.width, height: job.gen.height, ratio: job.gen.ratio, output: stillPath, prompt,
     });
+    // FRAME PLATE (spectacular only): the reviewed still, the stored file and
+    // the Seedance reference all carry the exact-perimeter band. If the fal
+    // upload fails we fall back to the raw Seedream URL — a soft frame beats
+    // a lost design.
+    let finalStillPath = stillPath;
+    let referenceUrl = gen.url ?? null;
+    const isFrameBreak = job.post === POST.FRAME_BREAK;
+    const live = !String(gen.model || '').startsWith('fixture');
+    if (isFrameBreak) {
+      finalStillPath = path.join(dir, 'still_framed.png');
+      await compositeFramePlate({ input: stillPath, output: finalStillPath, width: job.gen.width, height: job.gen.height });
+      if (live) {
+        try {
+          referenceUrl = (await uploadToFalStorage({ sourcePath: finalStillPath, contentType: 'image/png' })).url;
+        } catch (err) {
+          logger.warn({ runId, surface: job.key, err: err.message }, 'Framed-still upload failed; Seedance will reference the unframed still');
+        }
+      }
+    }
+
     // Every generation gets its own file. Keying on (run, surface, option slot)
     // alone meant a variation, a re-roll or a per-design regenerate silently
     // overwrote the design it was spawned from — the kept "original" was still
@@ -184,7 +221,7 @@ async function generateStill(job, ctx) {
     const key = artworkKey({
       runId, surfaceKey: job.key, option: job.option, variant: `g${priorStills + 1}`, name: 'still.png',
     });
-    const put = await store.put({ key, sourcePath: stillPath });
+    const put = await store.put({ key, sourcePath: finalStillPath });
 
     // A REAL thumbnail. The design-review grid used to point at this key for
     // both the full image and the "thumbnail", so opening a week downloaded
@@ -197,7 +234,7 @@ async function generateStill(job, ctx) {
     try {
       const td = previewDims(job.gen.width, job.gen.height);
       const thumbPath = path.join(dir, 'still_thumb.jpg');
-      await ffmpeg.thumbnail({ input: stillPath, output: thumbPath, width: td.width, height: td.height });
+      await ffmpeg.thumbnail({ input: finalStillPath, output: thumbPath, width: td.width, height: td.height });
       const thumbPut = await store.put({
         key: artworkKey({ runId, surfaceKey: job.key, option: job.option, variant: `g${priorStills + 1}`, name: 'still_thumb.jpg' }),
         sourcePath: thumbPath,
@@ -212,13 +249,15 @@ async function generateStill(job, ctx) {
     // Gate on the OPENING frame only — it's the piece's primary composition;
     // the closing still is generated after the gate so a failed design never
     // spends the second Seedream call.
-    const stillLive = !String(gen.model || '').startsWith('fixture');
+    const stillLive = live;
+    // Gate on the RAW art: readability is about the scene, and the plate's
+    // black band would drag the average luma down artificially.
     const gate = await qa.lumaGate(stillPath);
     if (!gate.ok) {
       await repo.insertArtwork({
         runId, surface: job.surface, style: job.style, mediaType: 'still', stage: 'still',
         specKey: job.specKey, width: job.gen.width, height: job.gen.height,
-        prompt, motionPrompt, closingPrompt, motionPromptAct2, model: gen.model, remoteUrl: gen.url ?? null,
+        prompt, motionPrompt, closingPrompt, motionPromptAct2, model: gen.model, remoteUrl: referenceUrl,
         s3KeyFinal: put.key, thumbnailKey: thumbKey,
         status: 'failed', error: `qa: ${gate.reason}`,
         falRequestId: stillLive ? gen.jobId ?? null : null,
@@ -241,15 +280,27 @@ async function generateStill(job, ctx) {
         const cgen = await providers.still.generate({
           width: job.gen.width, height: job.gen.height, ratio: job.gen.ratio, output: closingPath, prompt: closingPrompt,
         });
+        // Same plate as the opening: segment B interpolates toward this image,
+        // so the 30s piece ENDS on the exact perimeter band too.
+        const closingFramed = path.join(dir, 'closing_framed.png');
+        await compositeFramePlate({ input: closingPath, output: closingFramed, width: job.gen.width, height: job.gen.height });
+        let closingUrl = cgen.url ?? null;
+        if (live) {
+          try {
+            closingUrl = (await uploadToFalStorage({ sourcePath: closingFramed, contentType: 'image/png' })).url;
+          } catch (err) {
+            logger.warn({ runId, surface: job.key, err: err.message }, 'Framed closing upload failed; segment B will anchor on the unframed closing');
+          }
+        }
         const cput = await store.put({
           key: artworkKey({ runId, surfaceKey: job.key, option: job.option, variant: `g${priorStills + 1}`, name: 'closing.png' }),
-          sourcePath: closingPath,
+          sourcePath: closingFramed,
         });
         let cthumbKey = cput.key;
         try {
           const td = previewDims(job.gen.width, job.gen.height);
           const cthumbPath = path.join(dir, 'closing_thumb.jpg');
-          await ffmpeg.thumbnail({ input: closingPath, output: cthumbPath, width: td.width, height: td.height });
+          await ffmpeg.thumbnail({ input: closingFramed, output: cthumbPath, width: td.width, height: td.height });
           const ctp = await store.put({
             key: artworkKey({ runId, surfaceKey: job.key, option: job.option, variant: `g${priorStills + 1}`, name: 'closing_thumb.jpg' }),
             sourcePath: cthumbPath,
@@ -260,7 +311,7 @@ async function generateStill(job, ctx) {
         }
         closingFields = {
           closingPrompt, motionPromptAct2,
-          closingKey: cput.key, closingThumbKey: cthumbKey, closingRemoteUrl: cgen.url ?? null,
+          closingKey: cput.key, closingThumbKey: cthumbKey, closingRemoteUrl: closingUrl,
         };
         stillCount = 2;
       } catch (err) {
@@ -279,9 +330,10 @@ async function generateStill(job, ctx) {
       runId, surface: job.surface, style: job.style, mediaType: 'still', stage: 'still',
       specKey: job.specKey, width: job.gen.width, height: job.gen.height,
       prompt, motionPrompt, model: gen.model,
-      // Live providers return the fal-hosted URL; Phase 2 hands it to Seedance
-      // as the image-to-video first frame (fixture mode has no URL).
-      remoteUrl: gen.url ?? null,
+      // Phase 2 hands this to Seedance as the image-to-video first frame. For
+      // the spectacular it is the FRAMED still (plate composited), so the
+      // model animates from the exact-perimeter band (fixture mode: no URL).
+      remoteUrl: referenceUrl,
       s3KeyFinal: put.key, thumbnailKey: thumbKey, status: 'ready',
       // Borderline-dark scenes reach review with an amber note (emissive LED
       // signs handle dark backgrounds; the reviewer decides).
@@ -973,12 +1025,23 @@ async function animateStill(still, ctx) {
   // pixels — cover's center-crop paid for any aspect error with exactly those
   // pixels, visibly thinning the frame even with a locked camera.
   await ffmpeg.conform({ input: srcVideo, output: final, width: finalSpec.width, height: finalSpec.height, duration: effDuration, fps, fit: 'exact' });
+  // FRAME PLATE on every delivered frame: whatever Seedance did, the outermost
+  // band is exact black so the piece sits flush against the billboard's bezel.
+  // Composited AFTER conform, at delivery dims, so the band is pixel-exact on
+  // the file Jeff receives. Subjects popping over the painted band survive:
+  // the plate's solid part is only the outermost strip, which the containment
+  // prompt keeps them clear of (Scott, 2026-08-07).
+  let deliverable = final;
+  if (surface.post === POST.FRAME_BREAK) {
+    deliverable = path.join(dir, 'final_framed.mp4');
+    await compositeFramePlate({ input: final, output: deliverable, width: finalSpec.width, height: finalSpec.height });
+  }
   const td = thumbDims(finalSpec);
   const thumb = path.join(dir, 'thumb.jpg');
-  await ffmpeg.thumbnail({ input: final, output: thumb, width: td.width, height: td.height, atSeconds: Math.min(2, effDuration / 2) });
-  const finalPut = await store.put({ key: key('final.mp4'), sourcePath: final });
+  await ffmpeg.thumbnail({ input: deliverable, output: thumb, width: td.width, height: td.height, atSeconds: Math.min(2, effDuration / 2) });
+  const finalPut = await store.put({ key: key('final.mp4'), sourcePath: deliverable });
   const thumbPut = await store.put({ key: key('thumb.jpg'), sourcePath: thumb });
-  const probed = await ffmpeg.probe(final);
+  const probed = await ffmpeg.probe(deliverable);
   await insertMotion({
     specKey: surface.specKey, width: finalSpec.width, height: finalSpec.height,
     durationS: Math.round(probed.duration ?? effDuration),

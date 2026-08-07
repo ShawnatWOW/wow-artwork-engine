@@ -46,6 +46,12 @@ const config = {
   generation: {
     durationS: num(process.env.GEN_DURATION_S, 15),
     fps: num(process.env.GEN_FPS, 30),
+    // Solid black band width of the spectacular's composited frame plate, as a
+    // fraction of image height (~53px at 1062). The perimeter band must be
+    // EXACT so it merges with the billboard structure's own bezel — models
+    // paint frames as scenery, so the band is composited, never generated
+    // (Scott, 2026-08-07).
+    frameBandFrac: num(process.env.FRAME_BAND_FRAC, 0.05),
   },
 
   // fixture | live  — see .env.example. `live` requires explicit opt-in so a

@@ -83,6 +83,55 @@ export function buildConformArgs({
   return args;
 }
 
+/**
+ * The deterministic FRAME PLATE filter for the spectacular: a solid black band
+ * hugging the exact perimeter plus stepped translucent inner bands (the black
+ * "depth" falloff into the scene). Applied DIRECTLY to the still/video via
+ * drawbox — no intermediate RGBA overlay (drawbox fills color but not alpha,
+ * so a transparent-canvas plate silently composites as a no-op; found
+ * empirically 2026-08-07).
+ *
+ * Why this exists (Scott, 2026-08-07): generative models paint the frame as
+ * SCENERY — niches, doorways, moldings somewhere inside the picture — so the
+ * true perimeter ends up being water or floor, and the artwork can never sit
+ * flush against the billboard structure's own bezel. Exact geometry is not a
+ * model skill; it is compositing. The band guarantees the outermost pixels
+ * are black on every still and every video frame, while the model keeps
+ * ownership of everything inside — including subjects bursting OVER the
+ * painted band (the solid part is only the outermost strip, and the
+ * containment prompt keeps subjects short of the true edge).
+ * Pure; unit-tested.
+ */
+export function buildFramePlateFilter({ width, height, band, stepAlphas = [0.55, 0.3, 0.15] }) {
+  assertEven(width, height);
+  const b = Math.max(2, Math.round(band));
+  const step = Math.max(2, Math.round(b * 0.3));
+  const boxes = [`drawbox=x=0:y=0:w=${width}:h=${height}:t=${b}:color=black@1`];
+  stepAlphas.forEach((alpha, i) => {
+    const inset = b + i * step;
+    boxes.push(`drawbox=x=${inset}:y=${inset}:w=${width - 2 * inset}:h=${height - 2 * inset}:t=${step}:color=black@${alpha}`);
+  });
+  return boxes.join(',');
+}
+
+/** Apply the frame plate to a still (png/jpg output) or a video. */
+export function buildFramePlateArgs({ input, output, width, height, band, still = false, duration, fps }) {
+  const args = ['-y', '-i', input, '-vf', buildFramePlateFilter({ width, height, band })];
+  if (still) {
+    args.push('-frames:v', '1', output);
+    return args;
+  }
+  if (fps) args.push('-r', String(fps));
+  if (duration) args.push('-t', String(duration));
+  args.push(...H264, output);
+  return args;
+}
+
+export async function applyFramePlate(opts) {
+  await run(buildFramePlateArgs(opts));
+  return { output: opts.output };
+}
+
 /** Crop a single column/region: width x height at offset (x, y). */
 export function buildCropArgs({ input, output, width, height, x = 0, y = 0, duration }) {
   assertEven(width, height);
@@ -319,6 +368,9 @@ export default {
   buildLastFrameArgs,
   buildConcatArgs,
   conform,
+  applyFramePlate,
+  buildFramePlateArgs,
+  buildFramePlateFilter,
   frameBreakComposite,
   thumbnail,
   cropColumn,

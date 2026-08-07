@@ -8,6 +8,9 @@ import path from 'node:path';
 
 import ffmpeg, {
   buildConformArgs,
+  buildFramePlateArgs,
+  buildFramePlateFilter,
+  applyFramePlate,
   buildCropArgs,
   buildFrameBreakArgs,
   buildThumbnailArgs,
@@ -17,6 +20,9 @@ import ffmpeg, {
 import { motionProvider, stillProvider } from '../src/services/generation/fixture.js';
 
 const execFileP = promisify(execFile);
+// Run ffmpeg directly (fixtures for the plate tests); capture stderr for probes.
+const run = (args) => execFileP('ffmpeg', args, { maxBuffer: 1024 * 1024 * 64 });
+const runCapture = (args) => execFileP('ffmpeg', args, { maxBuffer: 1024 * 1024 * 64 }).catch((e) => e);
 async function hasFfmpeg() {
   try {
     await execFileP('ffmpeg', ['-version']);
@@ -134,6 +140,61 @@ test('thumbnail produces a sized still', async (t) => {
     const probed = await ffmpeg.probe(out);
     assert.equal(probed.width, 256);
     assert.equal(probed.height, 384);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Frame plate (Scott, 2026-08-07): the spectacular's perimeter band is
+// COMPOSITED, never generated — models paint frames as scenery inside the
+// picture, so only compositing guarantees the outermost pixels are black and
+// the piece sits flush against the billboard structure's bezel.
+
+test('buildFramePlateFilter: solid perimeter band + stepped depth, exact dims', () => {
+  const vf = buildFramePlateFilter({ width: 3840, height: 1062, band: 52 });
+  const boxes = vf.split(',');
+  assert.equal(boxes.length, 4); // solid band + 3 depth steps
+  assert.match(boxes[0], /^drawbox=x=0:y=0:w=3840:h=1062:t=52:color=black@1$/);
+  // depth steps sit INSIDE the band and fade
+  assert.match(boxes[1], /color=black@0\.55/);
+  assert.match(boxes[3], /color=black@0\.15/);
+});
+
+test('frame plate: outer band probes pure black on a bright still and a video', async (t) => {
+  if (!(await hasFfmpeg())) return t.skip('ffmpeg not installed');
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'wae-plate-'));
+  try {
+    const W = 1280; const H = 354; const BAND = 18;
+
+    const stripLuma = async (input, crop) => {
+      // signalstats emits per-frame metadata on stderr via metadata=print
+      // (same probe qa.js uses); average across frames.
+      const { stderr } = await runCapture(['-i', input, '-vf', `crop=${crop},signalstats,metadata=print:key=lavfi.signalstats.YAVG`, '-f', 'null', '-']);
+      const m = [...String(stderr).matchAll(/lavfi\.signalstats\.YAVG=([0-9.]+)/g)];
+      assert.ok(m.length, 'probe produced YAVG');
+      return m.reduce((sum, x) => sum + Number(x[1]), 0) / m.length;
+    };
+
+    // A worst-case WHITE canvas: any perimeter leak shows up as luma.
+    const white = path.join(dir, 'white.png');
+    await run(['-y', '-f', 'lavfi', '-i', `color=c=white:s=${W}x${H}`, '-frames:v', '1', white]);
+    const framed = path.join(dir, 'framed.png');
+    await applyFramePlate({ input: white, output: framed, width: W, height: H, band: BAND, still: true });
+
+    // Outermost half-band strips: pure black (allow codec noise).
+    assert.ok(await stripLuma(framed, `${W}:${BAND / 2}:0:0`) < 20, 'top band black');
+    assert.ok(await stripLuma(framed, `${W}:${BAND / 2}:0:${H - BAND / 2}`) < 20, 'bottom band black');
+    assert.ok(await stripLuma(framed, `${BAND / 2}:${H}:0:0`) < 22, 'left band black');
+    // Center untouched: still white.
+    assert.ok(await stripLuma(framed, `100:100:${W / 2 - 50}:${H / 2 - 50}`) > 200, 'center untouched');
+
+    // Video: band present on first AND last frame of a bright clip.
+    const clip = path.join(dir, 'clip.mp4');
+    await run(['-y', '-f', 'lavfi', '-i', `color=c=white:s=${W}x${H}:d=1:r=10`, '-pix_fmt', 'yuv420p', clip]);
+    const framedClip = path.join(dir, 'framed.mp4');
+    await applyFramePlate({ input: clip, output: framedClip, width: W, height: H, band: BAND });
+    assert.ok(await stripLuma(framedClip, `${W}:${BAND / 2}:0:0`) < 22, 'video band black across frames');
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

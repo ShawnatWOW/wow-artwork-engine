@@ -263,17 +263,21 @@ const ENERGY =
   'explosive blooms of saturated color detonate around it, with layered depth suggesting ' +
   'the subject is moving through 3D space at high velocity.';
 
-// The VERIFIED spectacular frame geometry (3 live Seedream tests, 2026-08-04).
-// The picture's border IS the frame, flush on all four sides, interior niche
-// walls in one-point perspective, never depicted as an object in a room.
-// Byte-stable: opening AND closing stills share these so the two storyboard
-// frames agree on geometry. Do not reword without a live re-test.
+// The spectacular frame geometry. Reworded 2026-08-07 (was the 2026-08-04
+// "recessed niche with interior walls" text): live still 125 turned the niche
+// walls into literal ROOM ARCHITECTURE — an aquarium hall with a doorway —
+// leaving the true perimeter as water and floor, so the art could never sit
+// flush against the billboard structure's bezel (Scott). The depth is now
+// described as pure black inner shadow, and the EXACT perimeter band is
+// guaranteed by the composited frame plate (ffmpeg.buildFramePlateFilter)
+// regardless of what the model paints. Byte-stable: opening AND closing
+// stills share these so the two storyboard frames agree on geometry.
 const FRAME_GEOMETRY =
   `Composition: the picture's border IS a thick matte-black frame — flat matte-black strips run along ` +
   `the top edge, bottom edge, left edge and right edge of the picture, meeting at the four corners, ` +
-  `flush with the picture's edges on all sides. Just inside those black strips the frame's interior ` +
-  `walls recede inward in one-point perspective — a ceiling, a floor and two side walls, like looking ` +
-  `straight into a deep recessed niche — and through the opening the scene recedes into deep vivid ` +
+  `flush with the picture's edges on all sides. Just inside those black strips the image darkens into ` +
+  `pure matte-black depth on all four sides — a soft black inner shadow, as if the scene sits deep ` +
+  `behind the black border — and through the opening the scene recedes into deep vivid ` +
   `distance. The frame is never shown as an object: no outside of it, no top or sides of any box, no ` +
   `ground it sits on, no room around it, no tilt or angle — the viewpoint is exactly perpendicular, ` +
   `centered, and cropped precisely at the frame's outer edge.`;
