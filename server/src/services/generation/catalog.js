@@ -67,12 +67,14 @@ export const SURFACES = [
     post: POST.FRAME_BREAK,
     // Scott's notes 2026-08-05: the spectacular is a 30s two-act piece.
     //   storyboard — Phase 1 also generates a CLOSING still (the "ends with"
-    //                panel Scott reviews; Seedance segment B's end_image_url).
-    //   segments  — Phase 2 chains this many Seedance clips (config duration
-    //               each): B starts on A's literal last frame, concat, then ONE
-    //               Topaz pass over the stitched clip (per-segment upscale
-    //               would give each half different synthesized grain).
-    // Seedance 2.5 (announced: 30s single-pass) collapses segments back to 1.
+    //                panel Scott reviews; the video call's end_image_url).
+    //   segments  — how many ACTS long the piece is: total runtime is config
+    //               duration × segments (2 × 15s = 30s). Seedance 2.5 renders
+    //               the whole thing in ONE native call (Shawn, 2026-08-10);
+    //               only when the configured model caps clips shorter (a 2.0
+    //               revert) does the orchestrator fall back to chaining
+    //               `segments` clips — B off A's literal last frame, concat,
+    //               ONE Topaz pass over the stitch.
     storyboard: true,
     segments: 2,
     // No ping-pong: continuous kinetic motion throughout (user: "whole scene active")

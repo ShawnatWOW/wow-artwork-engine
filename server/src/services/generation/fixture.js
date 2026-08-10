@@ -60,6 +60,9 @@ export const stillProvider = {
 
 export const motionProvider = {
   model: MODEL_MOTION,
+  // ffmpeg synthesizes any length in one go — the orchestrator's single-pass
+  // vs chain decision (see animateStill) never needs to chain fixtures.
+  maxClipS: Infinity,
   /** @returns {Promise<{path, model, width, height, durationS, jobId}>} */
   async generate({ width, height, durationS = 6, fps = 30, output, prompt, referenceImage }) {
     const box = Math.round(Math.min(width, height) * 0.35);

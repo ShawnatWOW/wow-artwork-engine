@@ -5,7 +5,7 @@
 // the real paid providers and REQUIRES explicit opt-in plus configured keys,
 // so a run can never spend credits by accident (Build Plan §8).
 //
-// Providers: motion = Seedance 2.0 via fal.ai, stills = Seedream via fal.ai.
+// Providers: motion = Seedance (2.5) via fal.ai, stills = Seedream via fal.ai.
 // (Seedream replaced Nano Banana Pro — its stills feed Seedance image-to-video.)
 import config from '../../config/index.js';
 import logger from '../../config/logger.js';
@@ -26,10 +26,12 @@ export function getProviders(mode = config.generationMode) {
       mode,
       still: seedream.stillProvider,
       motion: fal.motionProvider,
-      // Chain plumbing for the 30s two-segment spectacular: upload local files
-      // (handoff frame, stitched clip) to fal storage, one Topaz pass over the
-      // stitched result, and download it back. null in fixture mode — the
-      // orchestrator chains via local files and skips the upscale.
+      // Chain plumbing for the two-segment FALLBACK (only runs when the model
+      // caps clips below the piece's total length — i.e. a 2.0 revert; 2.5
+      // does 30s in one pass): upload local files (handoff frame, stitched
+      // clip) to fal storage, one Topaz pass over the stitched result, and
+      // download it back. null in fixture mode — the orchestrator chains via
+      // local files and skips the upscale.
       media: { upload: fal.uploadToFalStorage, upscale: fal.upscaleVideo, download: fal.downloadTo },
     };
   }

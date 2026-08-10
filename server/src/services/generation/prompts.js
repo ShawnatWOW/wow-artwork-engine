@@ -519,8 +519,24 @@ export function buildSpectacularAct({ specKey, option, weekOf, act }) {
     `Smooth, premium, explosive high-energy movement — never static, never jittery. ${CONSTANCY_SPEC}`;
 }
 
+/**
+ * The two stored act prompts as ONE single-pass prompt — for Seedance 2.5's
+ * native 30s clips, where the whole two-act spectacular is one call (the
+ * closing still rides along as end_image_url). Joins the STORED strings rather
+ * than rebuilding from templates so reviewer edits to either act (the
+ * dashboard exposes both) survive into the render. Each act carries its own
+ * camera/frame boilerplate; repeated verbatim it reads as reinforcement, and
+ * the "act N of 2" labels become the piece's narrative sequencing. Pure.
+ */
+export function combineSpectacularActs(act1, act2) {
+  if (!act2) return act1;
+  if (!act1) return act2;
+  return `${act1} Then, flowing on continuously with no cut or pause, the second act follows. ${act2}`;
+}
+
 export { THEMES, CHOREOGRAPHIES, SOLO_MOTIONS, SPECTACULAR_FAMILIES, SPECTACULAR_ARCS };
 export default {
-  buildStillPrompt, buildClosingStillPrompt, buildMotionPrompt, buildSpectacularAct, sanitizeMotionPrompt,
+  buildStillPrompt, buildClosingStillPrompt, buildMotionPrompt, buildSpectacularAct,
+  combineSpectacularActs, sanitizeMotionPrompt,
   travelFor, themeFor, choreographyFor, soloMotionFor, familyFor, arcFor, THEMES, SPECTACULAR_FAMILIES,
 };

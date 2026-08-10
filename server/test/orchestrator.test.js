@@ -112,10 +112,11 @@ test('Phase 2: animateRun animates ONLY approved stills, conformed to spec, link
     const spec = motions.find((m) => m.style === 'frame_break');
     let p = await ffmpeg.probe(store.localPath(spec.s3_key_final));
     assert.equal(p.width, 3840); assert.equal(p.height, 1062);
-    // The spectacular is a TWO-SEGMENT chain (segments: 2 in the catalog):
-    // with duration=1s per segment the stitched deliverable runs ~2s, and the
-    // ledger records both Seedance jobs. EON clips stay single-segment (~1s).
-    assert.ok((p.duration ?? 0) > 1.5, `spectacular should be 2 chained segments, got ${p.duration}s`);
+    // The spectacular is a two-act piece (segments: 2 in the catalog) rendered
+    // in a SINGLE pass — duration × segments seconds in one call (Seedance
+    // 2.5's native 30s; fixtures synthesize any length). With duration=1 the
+    // deliverable runs ~2s. EON clips stay single-act (~1s).
+    assert.ok((p.duration ?? 0) > 1.5, `spectacular should run both acts (2s), got ${p.duration}s`);
     assert.equal(spec.duration_s, 2);
     // Every EON row is cut to its panel's spec and labelled with which panel
     // of which pod it drives — that label is what routes the file to Jeff.
@@ -149,6 +150,64 @@ test('Phase 2: animateRun animates ONLY approved stills, conformed to spec, link
     // Idempotent: re-animating produces nothing new.
     const again = await animateRun({ runId, deps: { repo, store, providers, duration: 1 } });
     assert.equal(again.counts.ready, 0);
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
+});
+
+test('spectacular single pass: ONE call for both acts, combined prompt, closing still as end frame', async (t) => {
+  if (!(await hasFfmpeg())) return t.skip('ffmpeg not installed');
+  const { base, repo, store } = await harness();
+  const calls = [];
+  const spying = {
+    mode: 'fixture',
+    still: stillProvider,
+    motion: { ...motionProvider, generate: (args) => { calls.push(args); return motionProvider.generate(args); } },
+  };
+  const spectacularOnly = SURFACES.filter((s) => s.key === 'spectacular');
+  try {
+    const { runId } = await runWeek({ weekOf: '2026-08-10', triggeredBy: 'test', deps: { repo, store, providers: spying, surfaces: spectacularOnly, optionsPerSurface: 1, duration: 1 } });
+    const [still] = await repo.listArtworks(runId);
+    // Fixture stills carry no fal URL; pin one so the end-frame handoff is observable.
+    await repo.updateArtwork(still.id, { status: 'approved', closingRemoteUrl: 'https://fal.example/closing.png' });
+
+    await animateRun({ runId, deps: { repo, store, providers: spying, duration: 1 } });
+    assert.equal(calls.length, 1, 'both acts must render in a single Seedance call');
+    const [call] = calls;
+    assert.equal(call.durationS, 2, 'single pass runs duration x segments');
+    assert.match(call.prompt, /act 1 of 2/);
+    assert.match(call.prompt, /act 2 of 2/, 'the stored act-2 prompt must ride along');
+    assert.equal(call.endImageUrl, 'https://fal.example/closing.png', 'the approved closing still anchors the finale');
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
+});
+
+test('spectacular chain fallback: a 15s-capped model (2.0 revert) chains two segments', async (t) => {
+  if (!(await hasFfmpeg())) return t.skip('ffmpeg not installed');
+  const { base, repo, store } = await harness();
+  const calls = [];
+  const capped = {
+    mode: 'fixture',
+    still: stillProvider,
+    // A model that cannot fit duration x segments in one clip — the 2.0 case.
+    motion: { ...motionProvider, maxClipS: 1, generate: (args) => { calls.push(args); return motionProvider.generate(args); } },
+  };
+  const spectacularOnly = SURFACES.filter((s) => s.key === 'spectacular');
+  try {
+    const { runId } = await runWeek({ weekOf: '2026-08-10', triggeredBy: 'test', deps: { repo, store, providers: capped, surfaces: spectacularOnly, optionsPerSurface: 1, duration: 1 } });
+    const [still] = await repo.listArtworks(runId);
+    await repo.updateArtwork(still.id, { status: 'approved' });
+
+    await animateRun({ runId, deps: { repo, store, providers: capped, duration: 1 } });
+    assert.equal(calls.length, 2, 'a capped model must chain one call per segment');
+    assert.ok(calls.every((c) => c.durationS === 1), 'each segment runs the base duration');
+    assert.match(calls[0].prompt, /act 1 of 2/);
+    assert.match(calls[1].prompt, /act 2 of 2/, 'segment B runs the act-2 prompt');
+    const motions = (await repo.listArtworks(runId)).filter((a) => a.stage === 'motion');
+    assert.equal(motions.length, 1);
+    const p = await ffmpeg.probe(store.localPath(motions[0].s3_key_final));
+    assert.ok((p.duration ?? 0) > 1.5, `stitched deliverable should run ~2s, got ${p.duration}s`);
   } finally {
     await rm(base, { recursive: true, force: true });
   }

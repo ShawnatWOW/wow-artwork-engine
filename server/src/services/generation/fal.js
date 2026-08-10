@@ -1,4 +1,4 @@
-// Seedance 2.0 motion provider (LIVE — spends credits) + Topaz 4K upscale.
+// Seedance motion provider (LIVE — spends credits) + Topaz 4K upscale.
 //
 // Image-to-video via fal.ai's queue API — the exact integration proven live in
 // WOW Content Automation (server/modules/video-studio/falai.js):
@@ -8,10 +8,17 @@
 // Always uses the status_url fal returns (its status path uses the app id, not
 // the full sub-path). Requires an `image_url` (the approved Seedream still).
 //
-// 4K pipeline (2026-07-14): Seedance runs at the Standard 1080p tier, then the
-// fal-HOSTED result URL is fed to Topaz Video Upscale before download — real
-// added sharpness for billboard scale, no round-trip re-upload. If the upscale
-// fails we fall back to the 1080p clip rather than losing the generation.
+// 4K pipeline: Seedance renders at config.fal.resolution (720p since
+// 2026-08-05), then the fal-HOSTED result URL is fed to Topaz Video Upscale
+// before download — real added sharpness for billboard scale, no round-trip
+// re-upload. If the upscale fails we fall back to the un-upscaled clip rather
+// than losing the generation.
+//
+// Seedance 2.5 (default since 2026-08-10): native single-pass clips up to 30s,
+// end_image_url supported, aspect_ratio 'auto' only, 480p/720p only (no 1080p
+// tier on fal — the "4K" in ByteDance's marketing is Jimeng-only). Reverting
+// FAL_SEEDANCE_MODEL to a 2.0 slug re-caps clips at 15s, which automatically
+// re-enables the orchestrator's two-segment chain for the 30s spectacular.
 
 import { createWriteStream } from 'node:fs';
 import { pipeline } from 'node:stream/promises';
@@ -19,7 +26,26 @@ import { Readable } from 'node:stream';
 import config from '../../config/index.js';
 import logger from '../../config/logger.js';
 
-export const MODEL_MOTION = 'seedance-2.0@fal';
+// Ledger label, derived from the configured slug so the recorded model (and
+// the price book's tier detection) always names what actually generated:
+// 'bytedance/seedance-2.5/image-to-video' -> 'seedance-2.5@fal'.
+export const MODEL_MOTION = `${(config.fal.seedanceModel || '').split('/')[1] || 'seedance'}@fal`;
+
+// Longest clip one Seedance call can produce: 2.5 does a native 30s; every
+// 2.x slug before it clamps at 15s. The orchestrator reads this off the
+// provider to decide single-pass vs the two-segment chain.
+export const MAX_CLIP_S = /2[.-]5/.test(config.fal.seedanceModel || '') ? 30 : 15;
+
+// Seedance 2.5 has no 1080p tier — if the env still carries the pre-2.5
+// FAL_RESOLUTION=1080p override, request 720p instead of letting fal reject.
+function motionResolution() {
+  const res = config.fal.resolution;
+  if (MAX_CLIP_S === 30 && res === '1080p') {
+    logger.warn('FAL_RESOLUTION=1080p is not available on Seedance 2.5 — requesting 720p');
+    return '720p';
+  }
+  return res;
+}
 
 const auth = () => ({ Authorization: `Key ${config.fal.key}`, 'Content-Type': 'application/json', Accept: 'application/json' });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -105,6 +131,7 @@ export async function upscaleVideo({ videoUrl, pollMs = 6000, timeoutMs = 900000
 
 export const motionProvider = {
   model: MODEL_MOTION,
+  maxClipS: MAX_CLIP_S,
   /**
    * @param referenceImageUrl a URL fal can fetch (the Seedream still). REQUIRED —
    *        Seedance is image-to-video. fal-hosted Seedream URLs work directly.
@@ -127,9 +154,9 @@ export const motionProvider = {
         prompt,
         image_url: referenceImageUrl,
         ...(endImageUrl ? { end_image_url: endImageUrl } : {}),
-        resolution: config.fal.resolution,
+        resolution: motionResolution(),
         generate_audio: config.fal.generateAudio,
-        duration: Math.min(15, Math.max(4, Math.round(durationS))),
+        duration: Math.min(MAX_CLIP_S, Math.max(4, Math.round(durationS))),
         // 'auto' = infer the ratio from the input image (our stills are 3.62:1
         // spectaculars / 2.5:1 EON masters — none of the fixed choices fit).
         // It is the documented default, pinned here against default drift: a
