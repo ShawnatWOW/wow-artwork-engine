@@ -26,17 +26,10 @@ export function getProviders(mode = config.generationMode) {
       mode,
       still: seedream.stillProvider,
       motion: fal.motionProvider,
-      // Chain plumbing for the two-segment FALLBACK (only runs when the model
-      // caps clips below the piece's total length — i.e. a 2.0 revert; 2.5
-      // does 30s in one pass): upload local files (handoff frame, stitched
-      // clip) to fal storage, one Topaz pass over the stitched result, and
-      // download it back. null in fixture mode — the orchestrator chains via
-      // local files and skips the upscale.
-      media: { upload: fal.uploadToFalStorage, upscale: fal.upscaleVideo, download: fal.downloadTo },
     };
   }
   logger.info('Generation mode: fixture — synthesizing media locally (no cost).');
-  return { mode: 'fixture', still: fixture.stillProvider, motion: fixture.motionProvider, media: null };
+  return { mode: 'fixture', still: fixture.stillProvider, motion: fixture.motionProvider };
 }
 
 export default { getProviders };

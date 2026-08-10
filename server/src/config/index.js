@@ -47,6 +47,12 @@ const config = {
   // short", 2026-07-14.)
   generation: {
     durationS: num(process.env.GEN_DURATION_S, 15),
+    // Optional EON override: set GEN_EON_DURATION_S=30 to render EON pieces at
+    // Seedance 2.5's native 30s (halves visible loop repetition on the
+    // pillars; ~2x the gen cost). Unset -> EON uses the base duration (15s).
+    eonDurationS: process.env.GEN_EON_DURATION_S === undefined || process.env.GEN_EON_DURATION_S === ''
+      ? undefined
+      : Number(process.env.GEN_EON_DURATION_S),
     fps: num(process.env.GEN_FPS, 30),
     // Solid black band width of the spectacular's composited frame plate, as a
     // fraction of image height (~53px at 1062). The perimeter band must be

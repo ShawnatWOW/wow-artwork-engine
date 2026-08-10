@@ -16,9 +16,9 @@
 //
 // Seedance 2.5 (default since 2026-08-10): native single-pass clips up to 30s,
 // end_image_url supported, aspect_ratio 'auto' only, 480p/720p only (no 1080p
-// tier on fal — the "4K" in ByteDance's marketing is Jimeng-only). Reverting
-// FAL_SEEDANCE_MODEL to a 2.0 slug re-caps clips at 15s, which automatically
-// re-enables the orchestrator's two-segment chain for the 30s spectacular.
+// tier on fal — the "4K" in ByteDance's marketing is Jimeng-only). The
+// chain-era stitching is gone; reverting FAL_SEEDANCE_MODEL to a 2.0 slug
+// simply clamps clips to 15s (a shorter piece, never a spliced one).
 
 import { createWriteStream } from 'node:fs';
 import { pipeline } from 'node:stream/promises';
@@ -32,8 +32,7 @@ import logger from '../../config/logger.js';
 export const MODEL_MOTION = `${(config.fal.seedanceModel || '').split('/')[1] || 'seedance'}@fal`;
 
 // Longest clip one Seedance call can produce: 2.5 does a native 30s; every
-// 2.x slug before it clamps at 15s. The orchestrator reads this off the
-// provider to decide single-pass vs the two-segment chain.
+// 2.x slug before it clamps at 15s. Used to clamp the duration request.
 export const MAX_CLIP_S = /2[.-]5/.test(config.fal.seedanceModel || '') ? 30 : 15;
 
 // Seedance 2.5 has no 1080p tier — if the env still carries the pre-2.5
@@ -91,8 +90,8 @@ function videoUrlOf(result, label) {
 
 /**
  * Upload a local file to fal storage so downstream fal models can fetch it —
- * needed for the segment-B handoff frame (extracted locally by ffmpeg) and the
- * stitched 30s clip Topaz upscales. Two-step: initiate → PUT the bytes.
+ * used for the framed CLOSING still (composited locally, then handed to
+ * Seedance as end_image_url). Two-step: initiate → PUT the bytes.
  * @returns {Promise<{ url: string }>} the fal-hosted file URL
  */
 export async function uploadToFalStorage({ sourcePath, contentType = 'application/octet-stream' }) {
@@ -115,10 +114,9 @@ export async function uploadToFalStorage({ sourcePath, contentType = 'applicatio
 }
 
 /**
- * Topaz-upscale a fal-hosted video URL. Split out of generate() so the 30s
- * two-segment chain can upscale ONCE over the stitched clip — per-segment
- * passes synthesize different grain on each half, which reads as a splice
- * (Shawn, 2026-08-05). @returns {Promise<{ url, requestId, factor }>}
+ * Topaz-upscale a fal-hosted video URL. Split out of generate() so one-off
+ * scripts can upscale an existing clip without re-generating it.
+ * @returns {Promise<{ url, requestId, factor }>}
  */
 export async function upscaleVideo({ videoUrl, pollMs = 6000, timeoutMs = 900000 }) {
   const up = config.fal.upscale;
@@ -131,15 +129,14 @@ export async function upscaleVideo({ videoUrl, pollMs = 6000, timeoutMs = 900000
 
 export const motionProvider = {
   model: MODEL_MOTION,
-  maxClipS: MAX_CLIP_S,
   /**
    * @param referenceImageUrl a URL fal can fetch (the Seedream still). REQUIRED —
    *        Seedance is image-to-video. fal-hosted Seedream URLs work directly.
    * @param endImageUrl optional fal-fetchable URL of the LAST frame — Seedance
    *        transitions the clip to land exactly on it (the approved closing
    *        still of the storyboard).
-   * @param skipUpscale skip the per-clip Topaz pass — used by the two-segment
-   *        chain, which upscales once over the stitched result instead.
+   * @param skipUpscale skip the per-clip Topaz pass (no current caller sets
+   *        it; kept for one-off scripts that want the raw clip).
    */
   async generate({ prompt, durationS = 6, output, referenceImageUrl, endImageUrl, skipUpscale = false, pollMs = 6000, timeoutMs = 900000 }) {
     if (!config.fal.key) throw new Error('FAL_KEY not set. Live motion generation is disabled until the key is configured.');
@@ -185,8 +182,8 @@ export const motionProvider = {
     }
 
     await downloadTo(videoUrl, output);
-    // remoteUrl: the fal-hosted result — the chain feeds it onward (Topaz over
-    // the stitched clip) without a re-upload when only one segment is raw.
+    // url: the fal-hosted result, kept so callers can feed it to another fal
+    // model without a re-upload.
     return { path: output, model, durationS, jobId: requestId, upscaleJobId, url: videoUrl };
   },
 };
