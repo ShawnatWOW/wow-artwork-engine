@@ -31,7 +31,7 @@ export function Spinner({ className = '' }) {
 }
 
 // Overlay shown on a card while its video is being generated.
-export function GeneratingOverlay({ label = 'Making video…', sub = 'about 2–4 minutes' }) {
+export function GeneratingOverlay({ label = 'Making video…', sub = 'about 5–10 minutes' }) {
   return (
     <div className="absolute inset-0 z-10 grid place-items-center overflow-hidden rounded bg-black/70 backdrop-blur-sm">
       {/* Row layout below sm: a 3.6:1 card is only ~90px tall on a phone, and
@@ -428,12 +428,12 @@ export function Preview({ artwork }) {
   );
 }
 
-// First/last-frame storyboard (Scott, 2026-08-05): a spectacular design is a
-// 30-second story, and its opening frame alone doesn't say where it goes. Two
-// labelled panels — how the video OPENS and the exact frame it ENDS on (the
-// engine steers the video to land on the closing frame, so approving the
-// storyboard is approving the ending too). Falls back to the plain Preview
-// when a design has no closing frame (EON surfaces, legacy designs).
+// First/last-frame storyboard — LEGACY display only. Since 2026-08-10 new
+// designs generate no closing still and the video is never anchored on an
+// end frame (Shawn: the anchor made motion feel obligated; the ending now
+// lives in the motion prompt and moves freely), so this renders only for
+// pre-2.5 rows that still carry a closing frame. Falls back to the plain
+// Preview everywhere else (EON surfaces + all new designs).
 export function Storyboard({ artwork, animating }) {
   const [zoom, setZoom] = useState(null); // null | 'opens' | 'ends'
   const aspect = artwork.width && artwork.height ? `${artwork.width} / ${artwork.height}` : '16 / 9';
@@ -462,7 +462,7 @@ export function Storyboard({ artwork, animating }) {
         <span>↓</span> one 30-second video <span>↓</span>
       </div>
       {panel('ends', api.closingUrl(artwork.id), 'Ends with')}
-      {animating && <GeneratingOverlay sub="about 5–10 minutes — it plays in two halves, then gets sharpened" />}
+      {animating && <GeneratingOverlay sub="about 5–10 minutes — one continuous take, then sharpened to 4K" />}
       {zoom === 'opens' && <Lightbox artwork={artwork} label="Opens with" onClose={() => setZoom(null)} />}
       {zoom === 'ends' && <Lightbox artwork={artwork} label="Ends with" src={api.closingUrl(artwork.id, true)} onClose={() => setZoom(null)} />}
     </div>
@@ -779,7 +779,7 @@ export function Actions({ status, busy, stage, saved, onApprove, onReject, onRet
 export function progressLabel(run) {
   const p = run?.progress;
   if (!p || !p.total) return null;
-  if (p.phase === 'videos') return `Making videos… ${p.done}/${p.total} (a few minutes each)`;
+  if (p.phase === 'videos') return `Making videos… ${p.done}/${p.total} (about 5–10 min each)`;
   return `Creating designs… ${p.done}/${p.total}`;
 }
 

@@ -842,9 +842,10 @@ async function animateStill(still, ctx) {
   // stitching (2×15s + handoff frame + concat) was removed 2026-08-10; 2.5
   // renders duration × acts (30s for the spectacular) natively. New designs
   // store the full three-movement arc as their motion prompt; pre-2.5 rows
-  // store act 1 + act 2, which combineSpectacularActs joins here. The
-  // approved CLOSING still is the call's end_image_url, so the piece provably
-  // lands on the storyboard's second panel.
+  // store act 1 + act 2, which combineSpectacularActs joins here. NO end
+  // frame is sent — deliberately, even for legacy rows that stored a closing
+  // still (live QA 2026-08-10, Shawn: anchoring on a target frame made the
+  // motion feel obligated instead of free) — the ending lives in the prompt.
   const acts = surface.acts ?? 1;
   const totalS = (surface.durationS ?? duration) * acts;
   const singlePrompt = combineSpectacularActs(motionPrompt, sanitizeMotionPrompt(still.motion_prompt_act2));
@@ -854,7 +855,6 @@ async function animateStill(still, ctx) {
     durationS: totalS, fps, output: raw0, prompt: singlePrompt,
     referenceImage: ref,                       // local file — fixture mode
     referenceImageUrl: still.remote_url ?? null, // fal-hosted URL — live Seedance
-    endImageUrl: still.closing_remote_url ?? null,
   });
   const raw = raw0; // the model output the QA + ledger read
   const content = await recoverContent(raw, 'raw', gen.model);

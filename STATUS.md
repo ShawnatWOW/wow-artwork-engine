@@ -66,6 +66,20 @@ at a time, "N of 3 reviewed" progress per sign.
 
 ## Changelog (this delivery arc)
 
+- **2026-08-10 (evening) — Free endings + story-driven movement.** First live 2.5
+  creative reviewed subpar (Shawn): the end-frame anchor made the motion feel
+  obligated to reach a target frame, and the characters circled in the center.
+  Both causes removed. (1) The video is no longer anchored on a closing still —
+  no end frame is sent (even for older designs that have one), and new designs
+  skip generating the closing still entirely; the ending is described in the
+  prompt and left free to move. (2) The four scene arcs were rewritten as
+  stories told through movement — pursuits, meetings of forces, awakenings,
+  rivalries — that travel the full width and depth of the canvas, with the
+  circling vocabulary ("orbit", "vortex", "figure-eights") banned and an
+  explicit no-circling rule in every prompt. Designs generated BEFORE this
+  change keep their stored circling-era prompts — generate fresh designs to
+  get the new arcs. Dashboard copy updated (honest ~5–10 min per video,
+  one-take 30s wording).
 - **2026-08-10 (later) — Stitching deleted + three-movement aggressive motion.**
   The dormant two-segment chain code is gone entirely — every piece is one
   Seedance call, full stop (a 2.0 revert now just yields a 15s piece). The
@@ -154,8 +168,8 @@ at a time, "N of 3 reviewed" progress per sign.
   lives inside `wow-contract-query` (React + Vite + Tailwind), which proxies to the engine.
 - **Generation.** Stills = Seedream v4; motion = Seedance 2.5 (720p, native 30s single
   pass) → Topaz 4× upscale to 4K-class; all on fal.ai. The 30s spectacular is one call —
-  a three-movement time-beat prompt with the closing still as its end frame; the chain-era
-  stitching code was removed 2026-08-10. Prompts are deterministic templates; the **tweak** feature adds an OpenAI prompt-editor
+  a three-movement story arc prompt, free-moving with no end-frame anchor (and no closing
+  still generated); the chain-era stitching code was removed 2026-08-10. Prompts are deterministic templates; the **tweak** feature adds an OpenAI prompt-editor
   (`services/generation/tweak.js`) that never throws (falls back to a re-roll with no key).
 - **EON geometry.** A pillar slab is spine (320) + face (1280) = 1600 wide, so the 3-pillar
   master is 4800×1920 and a single pillar is its own 1600×1920 master. Because a slab is

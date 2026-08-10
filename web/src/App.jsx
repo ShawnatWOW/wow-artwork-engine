@@ -601,7 +601,7 @@ function Header({ runs, runId, onSelectRun, onGenerate, onAnimate, pendingAnimat
         {running ? (
           <span role="status" aria-live="polite" className="flex items-center gap-2 rounded-md bg-amber-950 px-3 py-1.5 text-sm font-medium text-amber-200">
             <Spinner className="border-amber-700 border-t-amber-300" />
-            {progressLabel(run) || (makingVideos ? 'Making videos… (a few minutes each)' : 'Creating designs… (about 1 min)')}
+            {progressLabel(run) || (makingVideos ? 'Making videos… (about 5–10 min each)' : 'Creating designs… (about 1 min)')}
           </span>
         ) : (
           <>
@@ -929,7 +929,7 @@ function RunView({ detail, busy, running, pendingIds, onApprove, onReject, onSav
 
   return (
     <div className="space-y-10">
-      <Section title="Spectacular — big street billboard" subtitle={`${options(specChip)} · Each design shows how it opens and how it ends. Approved designs become 30-second 4K videos.`} chip={specChip} action={sectionActions('spectacular')}>
+      <Section title="Spectacular — big street billboard" subtitle={`${options(specChip)} · Approved designs become one-take 30-second 4K videos that tell a story in motion.`} chip={specChip} action={sectionActions('spectacular')}>
         {renderAnchors(spectacularU.anchors, latestMotion)}
         <div className="space-y-4">
           {spectacularU.loners.map((still) => {

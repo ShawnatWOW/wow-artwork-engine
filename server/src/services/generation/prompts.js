@@ -130,34 +130,38 @@ const SPECTACULAR_FAMILIES = [
   },
 ];
 
-// Two-act scene arcs. Each template takes the joined cast string and returns
-// act 1 (segment A motion), act 2 (segment B motion — the scene TRANSFORMS),
-// and the finale (the closing still's scene — segment B's end_image target).
-// Every act keeps multiple characters moving at once and takes turns punching
-// through the frame; the finale reads as a settled, poster-worthy composition.
+// Two-act scene arcs — each one a STORY told through movement, not a motion
+// texture. Live QA 2026-08-10 (Shawn): the old vocabulary ("orbit", "vortex",
+// "figure-eights", "interlocking loops") literalized into characters circling
+// in the center of the frame. Every arc now stages a narrative journey that
+// TRAVELS — entrances, pursuits, encounters, escalation — claiming the full
+// ultra-wide canvas edge to edge and front to deep. Each template takes the
+// joined cast string and returns act 1 (setup + inciting motion), act 2 (the
+// scene TRANSFORMS as the story escalates), and the finale (a closing-frame
+// description, kept for legacy storyboard rows).
+// Vocabulary guardrails from live QA 2026-08-05: no "celebration" (pulled
+// CROWDS of neon human runners), no "frozen" (pulled stone statues + a museum
+// room) — beats are described purely as the cast + light + scenery.
 const SPECTACULAR_ARCS = [
   (cast) => ({
-    act1: `The scene erupts to life: ${cast} chase each other in sweeping interlocking loops, diving deep into the distance and lunging out through the opening, each taking a turn bursting over the black frame while the environment churns with streaming color trails`,
-    act2: `The environment transforms around them — the deep space blooms into a completely new landscape of the same vivid palette; the characters regroup and spiral together into one grand formation, weaving between foreground and deep background as the new scenery surges with kinetic light`,
-    finale: 'the full cast gathered in one dramatic settled formation, the largest character front and center bursting through the opening over the black frame, the others arranged at staggered depths behind it in the transformed scenery',
+    act1: `A pursuit tears across the whole scene: ${cast} burst in one after another from the deep distance, and the chase sweeps from the far left edge to the far right — hugging the near foreground, plunging deep, veering back — each character seizing the lead in turn and punching out through the opening as the race passes`,
+    act2: `The chase transforms the world — every region the characters cross erupts into a new landscape of the same vivid palette, until the pursuit becomes a triumphant charge storming back across the full width, gathering light with every stride`,
+    finale: 'the full cast mid-charge in a line spanning the whole width of the transformed scenery, the leader bursting through the opening over the black frame',
   }),
   (cast) => ({
-    act1: `A playful high-speed pursuit: ${cast} ricochet between the deep interior and the near foreground, colliding into bursts of color, one after another punching out through the opening and over the frame while the scene ripples in their wake`,
-    // "celebration" pulled CROWDS of neon human runners into the walls, and
-    // "frozen" pulled stone statues + a museum room (live QA, 2026-08-05).
-    // Keep this arc's beats described purely as the cast + light.
-    act2: `The chase erupts into a blaze of shared light — the environment fractures and reforms into a brighter, denser dreamscape; the characters swirl in a shared vortex, trading places between front and back, throwing cascades of light against the transformed scenery`,
-    finale: 'the full cast caught mid-leap in the reformed dreamscape, two characters bursting through the opening over the black frame from opposite sides, the rest fanned out at depth between them',
+    act1: `A meeting of forces: from opposite far edges of the scene, ${cast} advance toward each other through the deep space, carving glowing paths through erupting scenery, until they meet head-on in a blinding collision of light that hurls them past each other into the near foreground and out through the opening`,
+    act2: `The collision births a new world — the environment reforms brighter and denser, and the characters now move as allies, carving long crisscrossing paths that span the full width and depth, trading the near foreground in explosive turns`,
+    finale: 'the full cast caught mid-leap in the reborn dreamscape, two characters bursting through the opening over the black frame from opposite sides, the rest streaking at depth between them',
   }),
   (cast) => ({
-    act1: `The scene breathes like one organism: ${cast} orbit a blazing center of light, swelling huge in the near foreground and shrinking back into the depths in rolling waves, each pass sending one of them through the opening and across the black frame`,
-    act2: `The center of light blossoms and swallows the scene — an entirely new environment unfurls from it in the same palette; the characters ride the blossoming light and regroup in the fresh scenery, weaving figure-eights between depth layers as everything pulses with light`,
-    finale: 'the full cast arranged in a sweeping arc around the blossomed center of light in the new environment, the nearest character surging through the opening over the black frame, the scene at maximum brilliance',
+    act1: `One spark wakes the world: the first of ${cast} erupts from the deep distance and rushes the near foreground, and everywhere it travels the scenery ignites — it races the full width of the scene waking the others, each new character joining the run at full speed and bursting through the opening as it enters`,
+    act2: `The awakened world surges — region by region the environment blooms into a completely new landscape as the characters fan out to claim it, streaking to the far edges and diving through the depths, every path a new stroke of light`,
+    finale: 'the full cast fanned across the fully awakened landscape at every depth, the nearest character surging through the opening over the black frame, the scene at maximum brilliance',
   }),
   (cast) => ({
-    act1: `Duelling energies: ${cast} split the space and spar in flamboyant bursts, whipping the environment into spirals, lunging past each other through the opening and over the frame in alternating waves`,
-    act2: `The duel resolves into harmony — the churning environment recomposes into a majestic new vista of the same colors; the characters merge their trails into one braided stream of light that sweeps through the deep space and out over the frame`,
-    finale: 'the full cast aligned along one braided stream of light flowing from deep in the vista out through the opening and across the black frame, every character distinct and glowing',
+    act1: `A rivalry splits the scene: ${cast} clash from opposite ends, trading charges across the full width — each impact detonating color through the scenery — and lunging past each other through the opening in alternating raids`,
+    act2: `The rivalry breaks into alliance — the warring halves of the environment fuse into one majestic new vista, and the characters charge together, sweeping edge to edge through the near foreground and the deep background as one blazing front`,
+    finale: 'the full cast charging as one blazing front across the fused vista, the foremost character bursting through the opening over the black frame, every character distinct and glowing',
   }),
 ];
 
@@ -501,21 +505,26 @@ const FRAME_MOTION_RULE =
 
 /**
  * The spectacular's full 30-second motion as ONE single-pass prompt — three
- * time-beat movements (ignition → metamorphosis → crescendo) built from the
+ * time-beat movements (ignition → metamorphosis → climax) built from the
  * week's arc, with every rule stated exactly once. Written for Seedance 2.5,
- * which follows temporal structure in a single prompt; the approved closing
- * still rides along as end_image_url, so the crescendo can arrive at full
- * speed — the end frame guarantees WHERE the clip lands, the prompt keeps the
- * arrival explosive instead of a slow settle. Pure.
+ * which follows temporal structure in a single prompt. NO end frame is sent
+ * with it (live QA 2026-08-10, Shawn: anchoring the clip on a target frame
+ * made the motion feel obligated to reach it instead of moving freely) — the
+ * ending is described in words and left free to move. Pure.
  * @param {{ specKey, option, weekOf }} job
  */
 export function buildSpectacularArcPrompt({ specKey, option, weekOf }) {
   const arc = arcFor({ specKey, option, weekOf });
-  return `${CAMERA_LOCK} Trompe-l'oeil 3D pop-out spectacle in three continuous movements — one unbroken shot, no cuts. ` +
+  return `${CAMERA_LOCK} Trompe-l'oeil 3D pop-out spectacle in three continuous movements — one unbroken shot, no cuts, ` +
+    `a story told entirely through where the characters go. ` +
     `First movement (opening ~10 seconds) — ignition: ${arc.act1}. ` +
     `Second movement (middle ~12 seconds) — metamorphosis: ${arc.act2}. ` +
-    `Third movement (final ~8 seconds) — crescendo: the characters slam into their grand final formation at full speed, ` +
-    `arriving in a surge of light that is still blazing as the clip ends — the arrival is explosive, never a slow settle. ` +
+    `Third movement (final ~8 seconds) — climax: the story pays off in the grandest surge yet — the whole cast ` +
+    `sweeps across the full scene in one climactic charge, light detonating in their wake, still at maximum ` +
+    `speed and brilliance as the clip ends — the ending is a peak, never a slow settle. ` +
+    `Movement tells the story: every character travels with PURPOSE, crossing the full width and the full depth ` +
+    `of the ultra-wide scene and claiming new ground with every beat — no character ever circles in place, ` +
+    `orbits the center, or hovers in the middle of the frame; the middle is ground they pass through, not where they live. ` +
     `At every moment of all three movements at least one character is mid-burst through the opening, ` +
     `crossing the frame plane toward the viewer — near-camera flybys and sudden scale surges from deep in the ` +
     `scene to huge in the foreground are the signature moves. ` +

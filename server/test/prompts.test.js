@@ -176,8 +176,19 @@ test('the spectacular motion prompt is ONE three-movement arc — boilerplate on
   // arrival (never the old "eases into place and holds").
   assert.match(arc, /at least one character is mid-burst through the opening/);
   assert.match(arc, /no corner of the frame ever goes still/);
+  assert.match(arc, /climax/);
   assert.match(arc, /never a slow settle/);
   assert.doesNotMatch(arc, /eases into its place/);
+  // Story-through-movement (Shawn, 2026-08-10): the anti-circling rule is
+  // stated, and the circling vocabulary that literalized into characters
+  // orbiting the center is banned from every arc body.
+  assert.match(arc, /no character ever circles in place/);
+  for (let option = 1; option <= 4; option += 1) {
+    const a = arcFor({ ...JOB, option });
+    for (const body of [a.act1, a.act2]) {
+      assert.doesNotMatch(body, /orbit|vortex|figure-eight|interlocking|spiral|swirl/i, `arc option ${option} must travel, not circle`);
+    }
+  }
   assert.doesNotMatch(arc, DOMAIN_TERMS);
   assert.doesNotMatch(arc, META_TERMS);
   assert.ok(checkPrompt(arc).allowed);
