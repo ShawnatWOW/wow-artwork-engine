@@ -462,18 +462,19 @@ export function buildMotionPrompt({ style, specKey, option, weekOf }) {
     return `${CAMERA_LOCK} Choreographed whole-scene motion: ${acts}. ` +
       `The journey starts in the ${tr.start} third of the frame in the very first frame and finishes at the ` +
       `${tr.end} edge of the frame only in the final frame; the subject stays inside the frame and keeps ` +
-      `fluid, continuous motion the whole time — it never stops or hovers in place. ` +
+      `fluid, continuous motion the whole time — it never stops or hovers in place, and the journey ` +
+      `accelerates in surges, each act more kinetic than the one before. ` +
       `Critically: the entire background is in constant motion at all times — not calm or steady. ` +
       `The background environment swirls, ripples, flows, shifts, and evolves continuously in sync with the subject's journey; ` +
       `every pixel of the composition is active. The entire scene is kinetic and alive, never static or passive. ` +
       `${NO_SEAMS} ${CONSTANCY}`;
   }
   if (style === 'frame_break') {
-    return buildSpectacularAct({ specKey, option, weekOf, act: 1 });
+    return buildSpectacularArcPrompt({ specKey, option, weekOf });
   }
   const solo = soloMotionFor({ specKey, option, weekOf })(t.subject);
   return `${CAMERA_LOCK} Vivid ambient motion: ${solo}. ` +
-    `${NO_SEAMS} Smooth and hypnotic, never chaotic or jittery. ${CONSTANCY}`;
+    `${NO_SEAMS} Relentless, high-velocity, premium movement — never static, never jittery. ${CONSTANCY}`;
 }
 
 // Spectacular color rule: scenes TRANSFORM on purpose (Scott: "scenes
@@ -499,9 +500,39 @@ const FRAME_MOTION_RULE =
   `perform inside the opening and burst out toward the frame plane, always watched from outside.`;
 
 /**
- * One act of the spectacular's two-act motion (act 1 = segment A off the
- * opening still; act 2 = segment B, chained from A's last frame and landing on
- * the closing still via end_image_url). Pure; exported for the orchestrator.
+ * The spectacular's full 30-second motion as ONE single-pass prompt — three
+ * time-beat movements (ignition → metamorphosis → crescendo) built from the
+ * week's arc, with every rule stated exactly once. Written for Seedance 2.5,
+ * which follows temporal structure in a single prompt; the approved closing
+ * still rides along as end_image_url, so the crescendo can arrive at full
+ * speed — the end frame guarantees WHERE the clip lands, the prompt keeps the
+ * arrival explosive instead of a slow settle. Pure.
+ * @param {{ specKey, option, weekOf }} job
+ */
+export function buildSpectacularArcPrompt({ specKey, option, weekOf }) {
+  const arc = arcFor({ specKey, option, weekOf });
+  return `${CAMERA_LOCK} Trompe-l'oeil 3D pop-out spectacle in three continuous movements — one unbroken shot, no cuts. ` +
+    `First movement (opening ~10 seconds) — ignition: ${arc.act1}. ` +
+    `Second movement (middle ~12 seconds) — metamorphosis: ${arc.act2}. ` +
+    `Third movement (final ~8 seconds) — crescendo: the characters slam into their grand final formation at full speed, ` +
+    `arriving in a surge of light that is still blazing as the clip ends — the arrival is explosive, never a slow settle. ` +
+    `At every moment of all three movements at least one character is mid-burst through the opening, ` +
+    `crossing the frame plane toward the viewer — near-camera flybys and sudden scale surges from deep in the ` +
+    `scene to huge in the foreground are the signature moves. ` +
+    `A living ambient layer — swarms of glowing particles, schools of small luminous shapes, ricocheting light ` +
+    `trails — keeps every region of the composition in motion at all times; no corner of the frame ever goes still. ` +
+    `${FRAME_MOTION_RULE} ` +
+    `Multiple characters are in motion at every moment — none of them ever freezes or hovers; the whole ` +
+    `environment moves with them, swirling, flowing and evolving continuously; every pixel is alive. ` +
+    `The energy climbs in waves from the first movement to the last. ` +
+    `Smooth, premium, explosive high-energy movement — never static, never jittery. ${CONSTANCY_SPEC}`;
+}
+
+/**
+ * LEGACY — one act of the chain-era two-act motion. No longer stored on new
+ * designs (they get buildSpectacularArcPrompt as their single motion prompt);
+ * kept because pre-2.5 rows still carry an act-2 prompt that
+ * combineSpectacularActs appends at animation time.
  * @param {{ specKey, option, weekOf, act: 1|2 }} job
  */
 export function buildSpectacularAct({ specKey, option, weekOf, act }) {
@@ -520,13 +551,11 @@ export function buildSpectacularAct({ specKey, option, weekOf, act }) {
 }
 
 /**
- * The two stored act prompts as ONE single-pass prompt — for Seedance 2.5's
- * native 30s clips, where the whole two-act spectacular is one call (the
- * closing still rides along as end_image_url). Joins the STORED strings rather
- * than rebuilding from templates so reviewer edits to either act (the
- * dashboard exposes both) survive into the render. Each act carries its own
- * camera/frame boilerplate; repeated verbatim it reads as reinforcement, and
- * the "act N of 2" labels become the piece's narrative sequencing. Pure.
+ * A stored motion prompt + optional LEGACY act-2 prompt as one single-pass
+ * prompt. New designs store the full arc as their only motion prompt (act2 is
+ * null → passthrough); pre-2.5 rows store act 1 + act 2 separately, and this
+ * joins the STORED strings — not a template rebuild — so reviewer edits
+ * survive into the render. Pure.
  */
 export function combineSpectacularActs(act1, act2) {
   if (!act2) return act1;
@@ -536,7 +565,7 @@ export function combineSpectacularActs(act1, act2) {
 
 export { THEMES, CHOREOGRAPHIES, SOLO_MOTIONS, SPECTACULAR_FAMILIES, SPECTACULAR_ARCS };
 export default {
-  buildStillPrompt, buildClosingStillPrompt, buildMotionPrompt, buildSpectacularAct,
-  combineSpectacularActs, sanitizeMotionPrompt,
+  buildStillPrompt, buildClosingStillPrompt, buildMotionPrompt, buildSpectacularArcPrompt,
+  buildSpectacularAct, combineSpectacularActs, sanitizeMotionPrompt,
   travelFor, themeFor, choreographyFor, soloMotionFor, familyFor, arcFor, THEMES, SPECTACULAR_FAMILIES,
 };

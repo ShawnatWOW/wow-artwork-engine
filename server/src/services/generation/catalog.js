@@ -65,18 +65,17 @@ export const SURFACES = [
     // band; no center-crop lottery (art review, 2026-07-10). Seedream max 4096.
     gen: { kind: 'motion', width: 4096, height: 1132, ratio: '21:9' },
     post: POST.FRAME_BREAK,
-    // Scott's notes 2026-08-05: the spectacular is a 30s two-act piece.
+    // Scott's notes 2026-08-05: the spectacular is a 30s multi-act piece.
     //   storyboard — Phase 1 also generates a CLOSING still (the "ends with"
     //                panel Scott reviews; the video call's end_image_url).
-    //   segments  — how many ACTS long the piece is: total runtime is config
-    //               duration × segments (2 × 15s = 30s). Seedance 2.5 renders
-    //               the whole thing in ONE native call (Shawn, 2026-08-10);
-    //               only when the configured model caps clips shorter (a 2.0
-    //               revert) does the orchestrator fall back to chaining
-    //               `segments` clips — B off A's literal last frame, concat,
-    //               ONE Topaz pass over the stitch.
+    //   acts      — how many acts long the piece is: total runtime is config
+    //               duration × acts (2 × 15s = 30s), always rendered as ONE
+    //               native Seedance 2.5 call — the chain-era stitching was
+    //               removed 2026-08-10 (Shawn: "remove stitching"). A revert
+    //               to a 15s-capped 2.0 slug now just yields a 15s piece
+    //               (fal.js clamps the duration), not a chained 30s one.
     storyboard: true,
-    segments: 2,
+    acts: 2,
     // No ping-pong: continuous kinetic motion throughout (user: "whole scene active")
     // makes seamless looping less critical than full-frame activity.
   },
@@ -93,6 +92,9 @@ export const SURFACES = [
     gen: { kind: 'motion', width: 4096, height: 1638, ratio: '5:2' },
     post: POST.EON_SLICE,
     // Directional travel: no ping-pong. Loop policy = enter/exit clip.
+    // GEN_EON_DURATION_S=30 opts EON pieces into Seedance 2.5's native 30s
+    // (halves visible loop repetition on the pillars; ~2x the gen cost).
+    durationS: config.generation.eonDurationS,
   },
   {
     key: 'eon_single',
@@ -108,6 +110,7 @@ export const SURFACES = [
     post: POST.EON_SLICE,
     // No ping-pong: continuous kinetic motion throughout (user: "whole scene active")
     // makes seamless looping less critical than full-frame activity.
+    durationS: config.generation.eonDurationS,
   },
 ];
 

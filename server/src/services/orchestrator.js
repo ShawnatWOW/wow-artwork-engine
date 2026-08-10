@@ -26,7 +26,7 @@ import * as guardrailsModule from './guardrails.js';
 import * as qaModule from './qa.js';
 import { planJobs, POST, SURFACES, SPECS } from './generation/catalog.js';
 import {
-  buildStillPrompt, buildClosingStillPrompt, buildMotionPrompt, buildSpectacularAct,
+  buildStillPrompt, buildClosingStillPrompt, buildMotionPrompt,
   combineSpectacularActs, sanitizeMotionPrompt,
 } from './generation/prompts.js';
 import { refineTweak } from './generation/tweak.js';
@@ -156,16 +156,17 @@ async function generateStill(job, ctx) {
   const prompt = ctx.promptOverride ?? buildStillPrompt({ style: job.style, specKey: job.specKey, option: job.option, weekOf: seed });
   const motionPrompt = ctx.motionPromptOverride ?? buildMotionPrompt({ style: job.style, specKey: job.specKey, option: job.option, weekOf: seed });
   // Storyboard surfaces (the spectacular) get a CLOSING still — the "ends
-  // with" panel — plus a second motion act. Variations inherit their source's
-  // stored versions via the overrides; legacy rows without one rebuild from
-  // the template so re-rolls of old designs still gain the storyboard.
+  // with" panel. Variations inherit their source's stored version via the
+  // override; legacy rows without one rebuild from the template so re-rolls
+  // of old designs still gain the storyboard. NO separate act-2 prompt is
+  // stored on new designs — the motion prompt IS the full three-movement arc
+  // (single-pass Seedance 2.5); the act2 override only carries a LEGACY
+  // source's stored act 2 forward through vary/tweak.
   const isStoryboard = Boolean(job.storyboard);
   const closingPrompt = isStoryboard
     ? (ctx.closingPromptOverride ?? buildClosingStillPrompt({ style: job.style, specKey: job.specKey, option: job.option, weekOf: seed }))
     : null;
-  const motionPromptAct2 = isStoryboard
-    ? (ctx.motionPromptAct2Override ?? buildSpectacularAct({ specKey: job.specKey, option: job.option, weekOf: seed, act: 2 }))
-    : null;
+  const motionPromptAct2 = isStoryboard ? (ctx.motionPromptAct2Override ?? null) : null;
   const lineage = {
     familyId: ctx.familyId ?? null,
     parentArtworkId: ctx.parentArtworkId ?? null,
@@ -271,7 +272,7 @@ async function generateStill(job, ctx) {
 
     // CLOSING still (storyboard surfaces): the frame the 30s piece must end
     // on — reviewed as the second storyboard panel, enforced in Phase 2 as
-    // Seedance segment B's end_image_url. Best-effort: a failed closing still
+    // the Seedance call's end_image_url. Best-effort: a failed closing still
     // never sinks the design (the card degrades to a single opening panel).
     let closingFields = { closingPrompt, motionPromptAct2 };
     let stillCount = 1;
@@ -281,7 +282,7 @@ async function generateStill(job, ctx) {
         const cgen = await providers.still.generate({
           width: job.gen.width, height: job.gen.height, ratio: job.gen.ratio, output: closingPath, prompt: closingPrompt,
         });
-        // Same plate as the opening: segment B interpolates toward this image,
+        // Same plate as the opening: the clip interpolates toward this image,
         // so the 30s piece ENDS on the exact perimeter band too.
         const closingFramed = path.join(dir, 'closing_framed.png');
         await compositeFramePlate({ input: closingPath, output: closingFramed, width: job.gen.width, height: job.gen.height });
@@ -290,7 +291,7 @@ async function generateStill(job, ctx) {
           try {
             closingUrl = (await uploadToFalStorage({ sourcePath: closingFramed, contentType: 'image/png' })).url;
           } catch (err) {
-            logger.warn({ runId, surface: job.key, err: err.message }, 'Framed closing upload failed; segment B will anchor on the unframed closing');
+            logger.warn({ runId, surface: job.key, err: err.message }, 'Framed closing upload failed; the clip will anchor on the unframed closing');
           }
         }
         const cput = await store.put({
@@ -635,10 +636,11 @@ async function spawnVariation({ source, resolvePrompt, triggeredBy, onStart, dep
     const counts = await generateStill(job, {
       runId: run.id, weekOf: run.week_of, repo, store, providers, guardrails, qa, workDir,
       promptOverride, motionPromptOverride: source.motion_prompt,
-      // Variations inherit the source's storyboard (closing frame + act 2) so
-      // a re-roll/tweak explores the OPENING while the arc stays the design's.
-      // Legacy sources without one fall back to the template build inside
-      // generateStill (?? chain), so old designs gain a storyboard on re-roll.
+      // Variations inherit the source's storyboard (closing frame, plus a
+      // LEGACY act 2 where one is stored) so a re-roll/tweak explores the
+      // OPENING while the arc stays the design's. Legacy sources without a
+      // closing prompt fall back to the template build inside generateStill,
+      // so old designs gain a storyboard on re-roll.
       closingPromptOverride: source.closing_prompt ?? undefined,
       motionPromptAct2Override: source.motion_prompt_act2 ?? undefined,
       familyId, parentArtworkId: source.id, changeNote,
@@ -836,99 +838,26 @@ async function animateStill(still, ctx) {
     return input;
   };
 
-  // `segments` = how many acts long the piece is (total = duration × segments;
-  // the spectacular is 2 × 15s = 30s). HOW it renders depends on the model:
-  // Seedance 2.5 does the whole 30s in ONE call (no stitch, no seam), so the
-  // chain below only runs when the provider's max clip is too short for the
-  // total — i.e. automatically, on a revert to a 15s-capped 2.0 slug.
-  const segments = surface.segments ?? 1;
-  const totalS = duration * segments;
-  const maxClipS = providers.motion.maxClipS ?? 15;
-  let raw;      // the model output the QA + ledger read (stitched, for chains)
-  let content;  // aspect-recovered version of `raw`
-  let gen;      // provider result driving model/ledger fields
-  if (totalS > maxClipS) {
-    // ---- 30s TWO-SEGMENT CHAIN (Scott, 2026-08-05) — fallback path -------
-    // Segment A runs off the approved opening still; its literal last frame
-    // becomes segment B's first frame (invisible splice), and the approved
-    // CLOSING still is segment B's end_image_url, so the piece provably lands
-    // on the storyboard's second panel. Per-segment Topaz is deliberately
-    // skipped — ONE pass over the stitched clip keeps synthesized grain
-    // continuous across the seam (per-segment passes read as two videos).
-    const act2 = sanitizeMotionPrompt(still.motion_prompt_act2) || motionPrompt;
-    const segA = path.join(dir, 'segA.mp4');
-    const genA = await providers.motion.generate({
-      width: surface.gen.width, height: surface.gen.height, ratio: surface.gen.ratio,
-      durationS: duration, fps, output: segA, prompt: motionPrompt,
-      referenceImage: ref,
-      referenceImageUrl: still.remote_url ?? null,
-      skipUpscale: true,
-    });
-    const contentA = await recoverContent(segA, 'segA', genA.model);
-    const live = !String(genA.model || '').startsWith('fixture');
-
-    const handoff = path.join(dir, 'handoff.png');
-    await ffmpeg.extractLastFrame({ input: contentA, output: handoff });
-    let handoffUrl = null;
-    if (live) {
-      if (!providers.media?.upload) throw new Error('Live two-segment chain needs providers.media.upload (fal storage)');
-      handoffUrl = (await providers.media.upload({ sourcePath: handoff, contentType: 'image/png' })).url;
-    }
-
-    const segB = path.join(dir, 'segB.mp4');
-    const genB = await providers.motion.generate({
-      width: surface.gen.width, height: surface.gen.height, ratio: surface.gen.ratio,
-      durationS: duration, fps, output: segB, prompt: act2,
-      referenceImage: handoff,
-      referenceImageUrl: handoffUrl,
-      endImageUrl: still.closing_remote_url ?? null,
-      skipUpscale: true,
-    });
-    const contentB = await recoverContent(segB, 'segB', genB.model);
-
-    raw = path.join(dir, 'stitched.mp4');
-    await ffmpeg.concatClips({ inputs: [contentA, contentB], output: raw, fps });
-    gen = {
-      ...genB,
-      jobId: [genA.jobId, genB.jobId].filter(Boolean).join('+') || null,
-      upscaleJobId: null,
-    };
-
-    // ONE Topaz pass over the stitched 30s. Best-effort, like the single-clip
-    // path: a failed upscale delivers the un-upscaled stitch, never fails the
-    // (already paid) generations.
-    if (live && config.fal.upscale?.enabled && providers.media?.upscale) {
-      try {
-        const stitchedUrl = (await providers.media.upload({ sourcePath: raw, contentType: 'video/mp4' })).url;
-        const up = await providers.media.upscale({ videoUrl: stitchedUrl });
-        const upscaledPath = path.join(dir, 'stitched_4k.mp4');
-        await providers.media.download(up.url, upscaledPath);
-        raw = upscaledPath;
-        gen.model = `${genB.model}+topaz${up.factor}x`;
-        gen.upscaleJobId = up.requestId;
-      } catch (err) {
-        logger.warn({ stillId: still.id, err: err.message }, 'Stitched Topaz upscale failed — delivering the un-upscaled 30s clip');
-      }
-    }
-    content = raw; // per-segment recovery already ran before the stitch
-  } else {
-    // Single pass — the whole piece (both acts, for the spectacular) in one
-    // Seedance call: both stored act prompts drive it, and the approved
-    // CLOSING still is the call's end_image_url so the piece still provably
-    // lands on the storyboard's second panel.
-    const singlePrompt = segments > 1
-      ? combineSpectacularActs(motionPrompt, sanitizeMotionPrompt(still.motion_prompt_act2))
-      : motionPrompt;
-    raw = path.join(dir, 'raw.mp4');
-    gen = await providers.motion.generate({
-      width: surface.gen.width, height: surface.gen.height, ratio: surface.gen.ratio,
-      durationS: totalS, fps, output: raw, prompt: singlePrompt,
-      referenceImage: ref,                       // local file — fixture mode
-      referenceImageUrl: still.remote_url ?? null, // fal-hosted URL — live Seedance
-      endImageUrl: still.closing_remote_url ?? null,
-    });
-    content = await recoverContent(raw, 'raw', gen.model);
-  }
+  // The whole piece — every act — in ONE Seedance call. The chain-era
+  // stitching (2×15s + handoff frame + concat) was removed 2026-08-10; 2.5
+  // renders duration × acts (30s for the spectacular) natively. New designs
+  // store the full three-movement arc as their motion prompt; pre-2.5 rows
+  // store act 1 + act 2, which combineSpectacularActs joins here. The
+  // approved CLOSING still is the call's end_image_url, so the piece provably
+  // lands on the storyboard's second panel.
+  const acts = surface.acts ?? 1;
+  const totalS = (surface.durationS ?? duration) * acts;
+  const singlePrompt = combineSpectacularActs(motionPrompt, sanitizeMotionPrompt(still.motion_prompt_act2));
+  const raw0 = path.join(dir, 'raw.mp4');
+  const gen = await providers.motion.generate({
+    width: surface.gen.width, height: surface.gen.height, ratio: surface.gen.ratio,
+    durationS: totalS, fps, output: raw0, prompt: singlePrompt,
+    referenceImage: ref,                       // local file — fixture mode
+    referenceImageUrl: still.remote_url ?? null, // fal-hosted URL — live Seedance
+    endImageUrl: still.closing_remote_url ?? null,
+  });
+  const raw = raw0; // the model output the QA + ledger read
+  const content = await recoverContent(raw, 'raw', gen.model);
 
   // QA: measure saturation drift on the model's raw output (Seedance colors
   // drain over a clip). Warning only — stored on the motion rows.
@@ -945,7 +874,7 @@ async function animateStill(still, ctx) {
   if (surface.loop === 'pingpong') {
     srcVideo = path.join(dir, 'raw_loop.mp4');
     await ffmpeg.pingpong({ input: content, output: srcVideo });
-    effDuration = duration * 2;
+    effDuration = totalS * 2;
   }
 
   const keyBase = `runs/${runId}/motion/still${still.id}`;
@@ -953,10 +882,9 @@ async function animateStill(still, ctx) {
   const rawPut = await store.put({ key: key('raw.mp4'), sourcePath: raw });
 
   // Immutable cost ledger, computed here where BOTH the Seedance render dims
-  // and the 4K final dims are known. Billed on the RAW generation seconds —
-  // duration × segments, identical whether that ran as one 30s call (2.5) or
-  // two chained 15s calls (2.0 fallback); ping-pong doubles playback locally
-  // at no fal cost. Fixtures are free. See falPricing.js for the rate book.
+  // and the 4K final dims are known. Billed on the RAW generation seconds
+  // (duration × acts, one call); ping-pong doubles playback locally at no fal
+  // cost. Fixtures are free. See falPricing.js for the rate book.
   const live = !String(gen.model || '').startsWith('fixture');
   const tier = falPricing.seedanceTier(gen.model);
   const aspect = finalSpec.width / finalSpec.height;

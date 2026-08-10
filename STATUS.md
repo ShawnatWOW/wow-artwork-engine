@@ -44,7 +44,7 @@ carries around the corner instead of the spine being a separate afterthought.
    - **✎ Tweak…** — type a plain-language change ("more electric blue, calmer background");
      an LLM edits *only that* into the prompt and regenerates, with a note on what changed
    - **⭐ Make keeper** — promote a variation; the original is never lost
-4. **Make videos** from approved designs (4K, ~$11.40 each) — with a live progress counter.
+4. **Make videos** from approved designs (4K, ~$8–16 each) — with a live progress counter.
 5. **Approve videos**, then **✉ Send to Jeff** (Google Drive + Gmail).
 6. **📤 Sent history** — every delivery ever made to Jeff, with Drive links.
 
@@ -66,6 +66,19 @@ at a time, "N of 3 reviewed" progress per sign.
 
 ## Changelog (this delivery arc)
 
+- **2026-08-10 (later) — Stitching deleted + three-movement aggressive motion.**
+  The dormant two-segment chain code is gone entirely — every piece is one
+  Seedance call, full stop (a 2.0 revert now just yields a 15s piece). The
+  spectacular's motion prompt was rebuilt for single-pass 2.5: one prompt,
+  three explicit time-beat movements (ignition → metamorphosis → crescendo),
+  every camera/frame rule stated once instead of twice. Aggression turned up
+  across the board: constant frame-breaking (at every moment a character is
+  mid-burst through the opening), near-camera flybys and scale surges, a
+  living ambient particle layer so no corner idles, an explosive slam-into-
+  formation ending (the closing still still anchors WHERE it lands), EON
+  journeys that accelerate in surges, and the EON single's "smooth and
+  hypnotic" brake replaced with relentless high-velocity motion. New knob:
+  `GEN_EON_DURATION_S=30` renders EON pieces at a native 30s (off by default).
 - **2026-08-10 — Seedance 2.5: native 30s, no more stitching.** Motion moved to
   Seedance 2.5 on fal (Shawn: "go directly into using 2.5"). The 30s spectacular
   is now ONE generation call — no more chaining two 15s clips through a handoff
@@ -140,10 +153,9 @@ at a time, "N of 3 reviewed" progress per sign.
   scheduler, local/S3 store) running as its own PM2 app on :4000. The **Artwork Engine tab**
   lives inside `wow-contract-query` (React + Vite + Tailwind), which proxies to the engine.
 - **Generation.** Stills = Seedream v4; motion = Seedance 2.5 (720p, native 30s single
-  pass) → Topaz 4× upscale to 4K-class; all on fal.ai. The 30s spectacular is one call
-  with the closing still as its end frame; the old two-segment chain (2×15s + stitch)
-  remains as an automatic fallback for 15s-capped models. Prompts are deterministic
-  templates; the **tweak** feature adds an OpenAI prompt-editor
+  pass) → Topaz 4× upscale to 4K-class; all on fal.ai. The 30s spectacular is one call —
+  a three-movement time-beat prompt with the closing still as its end frame; the chain-era
+  stitching code was removed 2026-08-10. Prompts are deterministic templates; the **tweak** feature adds an OpenAI prompt-editor
   (`services/generation/tweak.js`) that never throws (falls back to a re-roll with no key).
 - **EON geometry.** A pillar slab is spine (320) + face (1280) = 1600 wide, so the 3-pillar
   master is 4800×1920 and a single pillar is its own 1600×1920 master. Because a slab is

@@ -2,8 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  buildStillPrompt, buildClosingStillPrompt, buildMotionPrompt, buildSpectacularAct,
-  combineSpectacularActs, sanitizeMotionPrompt,
+  buildStillPrompt, buildClosingStillPrompt, buildMotionPrompt, buildSpectacularArcPrompt,
+  buildSpectacularAct, combineSpectacularActs, sanitizeMotionPrompt,
   travelFor, themeFor, choreographyFor, familyFor, arcFor, THEMES, CHOREOGRAPHIES, SPECTACULAR_FAMILIES,
 } from '../src/services/generation/prompts.js';
 import { checkPrompt } from '../src/services/guardrails.js';
@@ -151,8 +151,39 @@ test('two acts differ, act 2 lands the finale, both keep the frame fixed', () =>
     assert.doesNotMatch(p, META_TERMS);
     assert.ok(checkPrompt(p).allowed);
   }
-  // buildMotionPrompt for frame_break IS act 1 (stored as the still's motion_prompt).
-  assert.equal(buildMotionPrompt({ ...JOB, option: 1 }), act1);
+});
+
+test('the spectacular motion prompt is ONE three-movement arc — boilerplate once, aggressive finish', () => {
+  const arc = buildSpectacularArcPrompt({ ...JOB, option: 1 });
+  // buildMotionPrompt for frame_break IS the arc (stored as the still's motion_prompt).
+  assert.equal(buildMotionPrompt({ ...JOB, option: 1 }), arc);
+  // Three explicit time beats, in order.
+  const beats = ['First movement', 'Second movement', 'Third movement'];
+  let at = -1;
+  for (const b of beats) {
+    const i = arc.indexOf(b);
+    assert.ok(i > at, `${b} present and in order`);
+    at = i;
+  }
+  // Every rule exactly ONCE — no chain-era duplicated boilerplate.
+  const count = (re) => (arc.match(re) || []).length;
+  assert.equal(count(/Fixed camera, locked-off shot/g), 1, 'camera lock stated once');
+  assert.equal(count(/stays perfectly fixed for the whole clip/g), 1, 'frame rule stated once');
+  assert.equal(count(/never fade, wash out, or drift/g), 1, 'anti-drift stated once');
+  assert.ok(arc.startsWith('Fixed camera, locked-off shot:'), 'camera lock must lead');
+  assert.doesNotMatch(arc, /act 1 of 2|act 2 of 2/, 'no chain-era act labels');
+  // The aggression rules: constant frame-breaking, ambient density, explosive
+  // arrival (never the old "eases into place and holds").
+  assert.match(arc, /at least one character is mid-burst through the opening/);
+  assert.match(arc, /no corner of the frame ever goes still/);
+  assert.match(arc, /never a slow settle/);
+  assert.doesNotMatch(arc, /eases into its place/);
+  assert.doesNotMatch(arc, DOMAIN_TERMS);
+  assert.doesNotMatch(arc, META_TERMS);
+  assert.ok(checkPrompt(arc).allowed);
+  // Deterministic, and distinct across options.
+  assert.equal(arc, buildSpectacularArcPrompt({ ...JOB, option: 1 }));
+  assert.notEqual(arc, buildSpectacularArcPrompt({ ...JOB, option: 2 }));
 });
 
 test('combineSpectacularActs joins the stored acts for a single 30s pass', () => {
