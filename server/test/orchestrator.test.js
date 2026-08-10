@@ -76,15 +76,12 @@ test('Phase 1: runWeek generates one still per surface/option (nothing animated)
     assert.equal(probed.width, gen.width);
     assert.equal(probed.height, gen.height);
 
-    // Storyboard (Scott, 2026-08-05): the spectacular still ALSO carries a
-    // closing frame ("ends with"); EON stills don't. Since the 2.5 single-pass
-    // overhaul the motion prompt IS the full three-movement arc — no separate
-    // act-2 prompt is stored on new designs (legacy rows may still carry one).
-    assert.ok(spec.closing_prompt && spec.closing_key, 'spectacular carries a storyboard');
+    // Storyboard OFF (Shawn, 2026-08-10): no closing still is generated and
+    // no end frame anchors the video — the motion prompt IS the full
+    // three-movement arc, stored as the design's single motion prompt.
+    assert.ok(!spec.closing_prompt && !spec.closing_key, 'no closing still on new designs');
     assert.equal(spec.motion_prompt_act2, null, 'new designs store the whole arc in one motion prompt');
     assert.match(spec.motion_prompt, /three continuous movements/);
-    const closingProbed = await ffmpeg.probe(store.localPath(spec.closing_key));
-    assert.equal(closingProbed.width, gen.width);
     for (const eon of stills.filter((a) => a.style !== 'frame_break')) {
       assert.ok(!eon.closing_key && !eon.motion_prompt_act2, `${eon.style} has no storyboard`);
     }
@@ -158,7 +155,7 @@ test('Phase 2: animateRun animates ONLY approved stills, conformed to spec, link
   }
 });
 
-test('spectacular single pass: ONE call, full arc prompt, closing still as end frame', async (t) => {
+test('spectacular single pass: ONE call, full arc prompt, NO end-frame anchor', async (t) => {
   if (!(await hasFfmpeg())) return t.skip('ffmpeg not installed');
   const { base, repo, store } = await harness();
   const calls = [];
@@ -171,7 +168,8 @@ test('spectacular single pass: ONE call, full arc prompt, closing still as end f
   try {
     const { runId } = await runWeek({ weekOf: '2026-08-10', triggeredBy: 'test', deps: { repo, store, providers: spying, surfaces: spectacularOnly, optionsPerSurface: 1, duration: 1 } });
     const [still] = await repo.listArtworks(runId);
-    // Fixture stills carry no fal URL; pin one so the end-frame handoff is observable.
+    // Pin a legacy closing URL on the row to prove it is deliberately IGNORED
+    // (Shawn, 2026-08-10: the end-frame anchor made motion feel obligated).
     await repo.updateArtwork(still.id, { status: 'approved', closingRemoteUrl: 'https://fal.example/closing.png' });
 
     await animateRun({ runId, deps: { repo, store, providers: spying, duration: 1 } });
@@ -179,8 +177,8 @@ test('spectacular single pass: ONE call, full arc prompt, closing still as end f
     const [call] = calls;
     assert.equal(call.durationS, 2, 'single pass runs duration x acts');
     assert.match(call.prompt, /three continuous movements/, 'the stored arc prompt drives the call');
-    assert.match(call.prompt, /crescendo/);
-    assert.equal(call.endImageUrl, 'https://fal.example/closing.png', 'the approved closing still anchors the finale');
+    assert.match(call.prompt, /climax/);
+    assert.equal(call.endImageUrl ?? null, null, 'no end frame is sent — even when a legacy closing still exists');
   } finally {
     await rm(base, { recursive: true, force: true });
   }
