@@ -73,8 +73,8 @@ Implemented in the M0 scaffold:
   3-pod master is 960×384 and a standalone pod is its own 320×384 master
   (4K-class in production: 5× those figures). Layout-driven, so the same cut
   serves the connected set and a single pillar.
-- **Generation interface** (`src/services/generation/`) — Seedance 2.0 via
-  **fal.ai** (motion) and Nano Banana Pro (stills) behind one interface. A
+- **Generation interface** (`src/services/generation/`) — Seedance 2.5 via
+  **fal.ai** (motion, native 30s single pass) and Seedream v4 (stills) behind one interface. A
   **fixture** provider synthesizes media locally so the whole pipeline runs
   **without spending any generation credits**. Live mode requires explicit
   opt-in (`GENERATION_MODE=live`) plus configured keys.
@@ -93,7 +93,7 @@ Implemented in the M0 scaffold:
 | Options/week | 3 per surface |
 | Handoff | Google Drive + Jeff email |
 | Guardrails | loose — no nudity |
-| Motion / stills | Seedance 2.0 (fal.ai) / Nano Banana Pro (Gemini) |
+| Motion / stills | Seedance 2.5 (fal.ai) / Seedream v4 (fal.ai) |
 
 ## Prerequisites
 
@@ -130,8 +130,8 @@ npm run spike:eon
 ## Safety: no accidental spend
 
 `GENERATION_MODE` defaults to `fixture`. The orchestrator and spikes never call
-a paid API in that mode. Switching to `live` throws unless both `FAL_KEY`
-(Seedance motion) and `GEMINI_API_KEY` (Nano Banana stills) are set.
+a paid API in that mode. Switching to `live` throws unless `FAL_KEY`
+(Seedance motion + Seedream stills) is set.
 
 ## Layout
 

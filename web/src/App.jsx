@@ -627,12 +627,12 @@ function Header({ runs, runId, onSelectRun, onGenerate, onAnimate, pendingAnimat
             {pendingAnimate > 0 && (
               <button
                 type="button" onClick={onAnimate} disabled={busy}
-                title="Turns every design you approved into a video (~$11.40 each)."
+                title="Turns every design you approved into a video (~$8–16 each: 30s spectacular ~$16, 15s EON ~$8)."
                 className={`${btnBase} ${primary === 'animate'
                   ? 'bg-emerald-600 text-white hover:bg-emerald-500'
                   : 'border border-emerald-700/70 bg-transparent text-emerald-300 hover:border-emerald-600 hover:bg-emerald-600 hover:text-white'}`}
               >
-                {busy ? 'Starting…' : `🎬 Make ${pendingAnimate} video${pendingAnimate === 1 ? '' : 's'} (~$11.40 each)`}
+                {busy ? 'Starting…' : `🎬 Make ${pendingAnimate} video${pendingAnimate === 1 ? '' : 's'} (~$8–16 each)`}
               </button>
             )}
             {readyToSend > 0 && (

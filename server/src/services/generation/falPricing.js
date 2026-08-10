@@ -8,15 +8,17 @@
 // (~11x too low), Artwork used a flat $0.10/s, etc. One shared account with
 // divergent estimates = the "singular insane cost" nobody could reconcile.
 //
-// HOW fal ACTUALLY BILLS (verified 2026-07-19 against fal model pages):
-//   Seedance 2.0 (video)  — token formula, NOT a flat per-second rate:
+// HOW fal ACTUALLY BILLS (verified 2026-07-19 against fal model pages;
+// Seedance 2.5 rate verified 2026-08-10):
+//   Seedance (video)      — token formula, NOT a flat per-second rate:
 //       tokens = (width * height * durationS * 24) / 1024
 //       cost   = tokens/1000 * ratePer1k
 //     The 24 is fal's fixed multiplier (a frame-equivalent constant, not the
-//     clip's real fps). ratePer1k depends on tier: standard $0.014, fast
-//     $0.0112. Because it's pixel-based it prices ANY aspect exactly — which
-//     matters here: our billboards are 21:9 and 2:3, never 16:9, so a flat
-//     per-second rate is always wrong.
+//     clip's real fps). ratePer1k depends on tier: 2.0 standard $0.014, 2.0
+//     fast $0.0112, 2.5 $0.0214 (one rate at both 480p and 720p — 2.5 has no
+//     fast/standard split and no 1080p on fal). Because it's pixel-based it
+//     prices ANY aspect exactly — which matters here: our billboards are 21:9
+//     and 2:3, never 16:9, so a flat per-second rate is always wrong.
 //   Topaz upscale (video) — per second of OUTPUT, tiered by output pixels:
 //       <=720p $0.01, <=1080p $0.02, >1080p (our 4K) $0.08; x2 at >=60fps.
 //   Seedream v4 (still)   — flat $0.03 per image.
@@ -30,11 +32,14 @@ const num = (v, d) => (v === undefined || v === '' || Number.isNaN(Number(v)) ? 
 export const SEEDANCE_TOKEN_MULTIPLIER = 24;
 export const SEEDANCE_TOKENS_PER_UNIT = 1024;
 
-// $ per 1,000 tokens by Seedance tier. Verified: standard 720p -> $0.3024/s,
-// standard 1080p -> $0.682/s, fast 720p -> $0.2419/s.
+// $ per 1,000 tokens by Seedance tier. Verified: 2.0 standard 720p ->
+// $0.3024/s, 2.0 standard 1080p -> $0.682/s, 2.0 fast 720p -> $0.2419/s,
+// 2.5 720p -> $0.4622/s (fal quotes "~$0.473/s" from rounded dims; the token
+// formula is authoritative).
 export const SEEDANCE_RATE_PER_1K = {
   standard: num(process.env.FAL_PRICE_SEEDANCE_STD_PER_1K, 0.014),
   fast: num(process.env.FAL_PRICE_SEEDANCE_FAST_PER_1K, 0.0112),
+  '2.5': num(process.env.FAL_PRICE_SEEDANCE_25_PER_1K, 0.0214),
 };
 
 // Topaz upscale $ per output second, tiered by output resolution (megapixels).
@@ -52,8 +57,12 @@ const PX_720P = 1280 * 720;
 
 const round4 = (n) => Math.round(n * 1e4) / 1e4;
 
-/** Seedance tier from a model string ('...fast...' -> fast, else standard). */
+/**
+ * Seedance tier from a model string: '...2.5...' -> '2.5' (its own rate, no
+ * fast/standard split), '...fast...' -> fast, else standard.
+ */
 export function seedanceTier(model = '') {
+  if (/2[.-]5/.test(model)) return '2.5';
   return /fast/i.test(model) ? 'fast' : 'standard';
 }
 
@@ -99,7 +108,7 @@ export function seedreamCostUsd({ count = 1 } = {}) {
 // so the BILLED pixels are this budget in the clip's aspect — NOT the 4K final
 // dims (those are what Topaz bills). Keeping the budget in the real aspect is
 // what makes an ultra-wide 21:9 clip correctly cost more than a 16:9 one.
-const TIER_PIXEL_BUDGET = { standard: 1920 * 1080, fast: 1280 * 720 };
+const TIER_PIXEL_BUDGET = { standard: 1920 * 1080, fast: 1280 * 720, '2.5': 1280 * 720 };
 
 /**
  * The dimensions Seedance actually renders (and bills) for a clip of a given
@@ -181,6 +190,7 @@ export const REFERENCE_PER_SECOND = {
   seedance_standard_720p: seedanceCostUsd({ width: 1280, height: 720, durationS: 1, tier: 'standard' }),
   seedance_standard_1080p: seedanceCostUsd({ width: 1920, height: 1080, durationS: 1, tier: 'standard' }),
   seedance_fast_720p: seedanceCostUsd({ width: 1280, height: 720, durationS: 1, tier: 'fast' }),
+  seedance_25_720p: seedanceCostUsd({ width: 1280, height: 720, durationS: 1, tier: '2.5' }),
   topaz_uhd: TOPAZ_PER_SECOND.uhd,
   seedream_still: SEEDREAM_PER_IMAGE,
 };

@@ -2,7 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  buildStillPrompt, buildClosingStillPrompt, buildMotionPrompt, buildSpectacularAct, sanitizeMotionPrompt,
+  buildStillPrompt, buildClosingStillPrompt, buildMotionPrompt, buildSpectacularAct,
+  combineSpectacularActs, sanitizeMotionPrompt,
   travelFor, themeFor, choreographyFor, familyFor, arcFor, THEMES, CHOREOGRAPHIES, SPECTACULAR_FAMILIES,
 } from '../src/services/generation/prompts.js';
 import { checkPrompt } from '../src/services/guardrails.js';
@@ -152,6 +153,21 @@ test('two acts differ, act 2 lands the finale, both keep the frame fixed', () =>
   }
   // buildMotionPrompt for frame_break IS act 1 (stored as the still's motion_prompt).
   assert.equal(buildMotionPrompt({ ...JOB, option: 1 }), act1);
+});
+
+test('combineSpectacularActs joins the stored acts for a single 30s pass', () => {
+  const act1 = buildSpectacularAct({ ...JOB, option: 1, act: 1 });
+  const act2 = buildSpectacularAct({ ...JOB, option: 1, act: 2 });
+  const combined = combineSpectacularActs(act1, act2);
+  // Both stored strings survive verbatim — reviewer edits to either act must
+  // reach the render — bridged with an explicit no-cut continuation.
+  assert.ok(combined.startsWith(act1));
+  assert.ok(combined.endsWith(act2));
+  assert.match(combined, /no cut or pause/);
+  assert.ok(checkPrompt(combined).allowed);
+  // Degenerate inputs (legacy rows without a stored act 2) pass through.
+  assert.equal(combineSpectacularActs(act1, null), act1);
+  assert.equal(combineSpectacularActs(null, act2), act2);
 });
 
 test('closing still + acts rotate deterministically and vary across weeks', () => {

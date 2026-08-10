@@ -40,9 +40,11 @@ const config = {
   // How many options per surface Scott reviews each week (locked: 3).
   optionsPerSurface: num(process.env.OPTIONS_PER_SURFACE, 3),
 
-  // Generation defaults. 15s is Seedance's max per clip (fal clamps 4–15) and
-  // the standard spot length; ping-pong surfaces loop out to 30s downstream.
-  // (Was 6s — Scott: "videos are too short", 2026-07-14.)
+  // Generation defaults. durationS is the BASE clip length — one act of a
+  // multi-act surface (the spectacular runs durationS × segments = 30s);
+  // ping-pong surfaces loop out to 2× downstream. Seedance 2.5 allows up to
+  // 30s in one call; 2.0 clamped at 15. (Was 6s — Scott: "videos are too
+  // short", 2026-07-14.)
   generation: {
     durationS: num(process.env.GEN_DURATION_S, 15),
     fps: num(process.env.GEN_FPS, 30),
@@ -67,23 +69,26 @@ const config = {
   // three combined — the per-generation ledger is the only project-specific
   // figure.)
 
-  // Both models run on fal.ai: Seedance 2.0 (motion, image-to-video) + Seedream
+  // Both models run on fal.ai: Seedance 2.5 (motion, image-to-video) + Seedream
   // (stills — its output URL feeds Seedance as the first frame). Slugs verified
-  // against the live wow-contract-query integration + fal docs (2026-07).
+  // against fal docs (2.5: 2026-08-10; the rest 2026-07).
   fal: {
     key: process.env.FAL_KEY,
     // Seedance app id (no "fal-ai/" prefix — matches Content Automation).
-    // Standard tier at 1080p (4K pipeline, 2026-07-14); add `/fast` back for
-    // the cheap 720p tier if costs need trimming.
-    seedanceModel: process.env.FAL_SEEDANCE_MODEL || 'bytedance/seedance-2.0/image-to-video',
+    // 2.5 (Shawn, 2026-08-10: "go directly into using 2.5"): native 30s
+    // single-pass — the spectacular no longer stitches two 15s clips. Costs
+    // $0.0214/1k tokens vs 2.0 standard's $0.014 (falPricing.js). Reverting to
+    // a 2.0 slug re-caps clips at 15s and re-enables the two-segment chain.
+    seedanceModel: process.env.FAL_SEEDANCE_MODEL || 'bytedance/seedance-2.5/image-to-video',
     seedreamModel: process.env.FAL_SEEDREAM_MODEL || 'fal-ai/bytedance/seedream/v4/text-to-image',
     queueBase: process.env.FAL_QUEUE_BASE || 'https://queue.fal.run',
     // fal REST base for storage uploads (the stitched 30s clip + the segment
     // handoff frame must be fal-fetchable URLs before Topaz / Seedance B).
     restBase: process.env.FAL_REST_BASE || 'https://rest.fal.ai',
-    // 720p tier (Shawn, 2026-08-05): the sign is 1692x468 native, so a 21:9
-    // 720p render already matches panel width; Topaz still delivers the
-    // 4K-class file. Revert with FAL_RESOLUTION=1080p if quality dips.
+    // 720p (Shawn, 2026-08-05): the sign is 1692x468 native, so a 21:9 720p
+    // render already matches panel width; Topaz still delivers the 4K-class
+    // file. NOTE: Seedance 2.5 offers 480p/720p ONLY — no 1080p tier on fal
+    // (fal.js requests 720p if this is set to 1080p under a 2.5 model).
     resolution: process.env.FAL_RESOLUTION || '720p',
     generateAudio: process.env.FAL_GENERATE_AUDIO === '1', // artwork is silent by default
     // AI upscale to 4K-class after Seedance (billboards need real sharpness —

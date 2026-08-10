@@ -14,8 +14,8 @@ the current scaffold.
 ## Stack
 
 Node.js + Express · PostgreSQL (RDS) · S3 · FFmpeg on EC2 · React + Vite +
-Tailwind · GitHub Actions + PM2. Motion: Seedance 2.0 via fal.ai. Stills: Nano
-Banana Pro (Gemini). Handoff: Google Drive (FTP fallback).
+Tailwind · GitHub Actions + PM2. Motion: Seedance 2.5 via fal.ai. Stills:
+Seedream v4 (fal.ai). Handoff: Google Drive (FTP fallback).
 
 ## Layout
 
@@ -50,7 +50,7 @@ cd ../web && npm install && npm run dev   # http://localhost:5173
 | Options/week | 3 per surface |
 | Handoff | Google Drive + Jeff email |
 | Guardrails | loose — block nudity only |
-| Motion / stills | Seedance 2.0 (fal.ai) / Nano Banana Pro (Gemini) |
+| Motion / stills | Seedance 2.5 (fal.ai) / Seedream v4 (fal.ai) |
 
 Generation defaults to **fixture mode** — the full pipeline runs locally with
 zero spend. Live mode requires `GENERATION_MODE=live` plus `FAL_KEY` and

@@ -1,6 +1,6 @@
 # WOW Artwork Engine — Status Update
 
-**Last updated:** 2026-07-25 · **State:** ✅ Live in production, fully featured · **Maintainer:** shawn@wowmedia.com
+**Last updated:** 2026-08-10 · **State:** ✅ Live in production, fully featured · **Maintainer:** shawn@wowmedia.com
 
 > **🚀 LIVE.** The **Artwork Engine** tab is in WOW's dashboard (wow-contract-query,
 > **wowautomation.ai**). Scott can generate, review, keep/explore, tweak, approve, and
@@ -66,6 +66,17 @@ at a time, "N of 3 reviewed" progress per sign.
 
 ## Changelog (this delivery arc)
 
+- **2026-08-10 — Seedance 2.5: native 30s, no more stitching.** Motion moved to
+  Seedance 2.5 on fal (Shawn: "go directly into using 2.5"). The 30s spectacular
+  is now ONE generation call — no more chaining two 15s clips through a handoff
+  frame and an ffmpeg splice; the approved closing still anchors the finale as
+  the call's end frame, and both act prompts drive a single continuous piece.
+  The two-segment chain stays in the code as an automatic fallback if the model
+  is ever reverted to 2.0 (which caps clips at 15s). Note: 2.5 on fal renders
+  480p/720p only (no 1080p tier — same 720p the engine has run since 08-05);
+  Topaz still delivers the 4K-class file. Costs ~53%/gen-second more than 2.0
+  standard: a 30s spectacular ≈ **$16.20** (was ~$14.30 stitched), a 15s EON
+  ≈ **$8.15** (was ~$5.75); one video per sign ≈ **$32.50/week**.
 - **2026-07-25 — EON spines.** The signs were being built face-only; every EON
   pillar also has a narrow LED spine down its left side. The EON output was
   re-cut around the real geometry: designs now generate as one wrapped panorama
@@ -97,11 +108,12 @@ at a time, "N of 3 reviewed" progress per sign.
 
 ## Money & safety
 
-- **Real cost model (verified against fal, 2026-07-19).** Still = **$0.03**;
-  full-4K video = **~$11.40** (Seedance 1080p ~$10.20 + Topaz 4K ~$1.20). A batch where
-  Scott animates one option per sign ≈ **~$35**; every option ≈ **~$100+**.
+- **Real cost model (verified against fal; 2.5 rate 2026-08-10).** Still = **$0.03**;
+  full-4K video (Seedance 2.5 @720p + Topaz 4K) = **~$16.20** for the 30s spectacular,
+  **~$8.15** per 15s EON master. A batch where Scott animates one option per sign
+  ≈ **~$32.50**; every option ≈ **~$97**.
 - **The gate that protects the budget:** stills are cheap and reviewed first; only
-  approved designs ever become $11 videos. Exploring variations/tweaks is $0.03 each.
+  approved designs ever become $8–16 videos. Exploring variations/tweaks is $0.03 each.
 - **Shared fal account.** One fal account bills **Artwork + Content Automation + Broken
   News** together, so fal's own dashboard shows all three combined. Our per-generation
   **ledger** (recorded on each row) is the only artwork-specific figure; the reconciliation
@@ -127,10 +139,12 @@ at a time, "N of 3 reviewed" progress per sign.
 - **Two repos.** `wow-artwork-engine` = the engine (Node + Express, generation worker,
   scheduler, local/S3 store) running as its own PM2 app on :4000. The **Artwork Engine tab**
   lives inside `wow-contract-query` (React + Vite + Tailwind), which proxies to the engine.
-- **Generation.** Stills = Seedream v4; motion = Seedance 2.0 (1080p) → Topaz 2× upscale to
-  4K; all on fal.ai. Prompts are deterministic templates; the **tweak** feature adds an
-  OpenAI prompt-editor (`services/generation/tweak.js`) that never throws (falls back to a
-  re-roll with no key).
+- **Generation.** Stills = Seedream v4; motion = Seedance 2.5 (720p, native 30s single
+  pass) → Topaz 4× upscale to 4K-class; all on fal.ai. The 30s spectacular is one call
+  with the closing still as its end frame; the old two-segment chain (2×15s + stitch)
+  remains as an automatic fallback for 15s-capped models. Prompts are deterministic
+  templates; the **tweak** feature adds an OpenAI prompt-editor
+  (`services/generation/tweak.js`) that never throws (falls back to a re-roll with no key).
 - **EON geometry.** A pillar slab is spine (320) + face (1280) = 1600 wide, so the 3-pillar
   master is 4800×1920 and a single pillar is its own 1600×1920 master. Because a slab is
   exactly one third of the wide master, the 3-act "one act per third" choreography still

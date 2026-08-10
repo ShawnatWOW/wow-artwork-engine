@@ -26,7 +26,8 @@ import * as guardrailsModule from './guardrails.js';
 import * as qaModule from './qa.js';
 import { planJobs, POST, SURFACES, SPECS } from './generation/catalog.js';
 import {
-  buildStillPrompt, buildClosingStillPrompt, buildMotionPrompt, buildSpectacularAct, sanitizeMotionPrompt,
+  buildStillPrompt, buildClosingStillPrompt, buildMotionPrompt, buildSpectacularAct,
+  combineSpectacularActs, sanitizeMotionPrompt,
 } from './generation/prompts.js';
 import { refineTweak } from './generation/tweak.js';
 import { resolveDesign } from './keeper.js';
@@ -835,12 +836,19 @@ async function animateStill(still, ctx) {
     return input;
   };
 
+  // `segments` = how many acts long the piece is (total = duration × segments;
+  // the spectacular is 2 × 15s = 30s). HOW it renders depends on the model:
+  // Seedance 2.5 does the whole 30s in ONE call (no stitch, no seam), so the
+  // chain below only runs when the provider's max clip is too short for the
+  // total — i.e. automatically, on a revert to a 15s-capped 2.0 slug.
   const segments = surface.segments ?? 1;
+  const totalS = duration * segments;
+  const maxClipS = providers.motion.maxClipS ?? 15;
   let raw;      // the model output the QA + ledger read (stitched, for chains)
   let content;  // aspect-recovered version of `raw`
   let gen;      // provider result driving model/ledger fields
-  if (segments > 1) {
-    // ---- 30s TWO-SEGMENT CHAIN (Scott, 2026-08-05) ----------------------
+  if (totalS > maxClipS) {
+    // ---- 30s TWO-SEGMENT CHAIN (Scott, 2026-08-05) — fallback path -------
     // Segment A runs off the approved opening still; its literal last frame
     // becomes segment B's first frame (invisible splice), and the approved
     // CLOSING still is segment B's end_image_url, so the piece provably lands
@@ -904,12 +912,20 @@ async function animateStill(still, ctx) {
     }
     content = raw; // per-segment recovery already ran before the stitch
   } else {
+    // Single pass — the whole piece (both acts, for the spectacular) in one
+    // Seedance call: both stored act prompts drive it, and the approved
+    // CLOSING still is the call's end_image_url so the piece still provably
+    // lands on the storyboard's second panel.
+    const singlePrompt = segments > 1
+      ? combineSpectacularActs(motionPrompt, sanitizeMotionPrompt(still.motion_prompt_act2))
+      : motionPrompt;
     raw = path.join(dir, 'raw.mp4');
     gen = await providers.motion.generate({
       width: surface.gen.width, height: surface.gen.height, ratio: surface.gen.ratio,
-      durationS: duration, fps, output: raw, prompt: motionPrompt,
+      durationS: totalS, fps, output: raw, prompt: singlePrompt,
       referenceImage: ref,                       // local file — fixture mode
       referenceImageUrl: still.remote_url ?? null, // fal-hosted URL — live Seedance
+      endImageUrl: still.closing_remote_url ?? null,
     });
     content = await recoverContent(raw, 'raw', gen.model);
   }
@@ -925,7 +941,7 @@ async function animateStill(still, ctx) {
   // Ambient surfaces get a palindrome pass so the clip loops seamlessly on the
   // sign (art review: mismatched endpoints pop every cycle). Doubles duration.
   let srcVideo = content;
-  let effDuration = duration * segments;
+  let effDuration = totalS;
   if (surface.loop === 'pingpong') {
     srcVideo = path.join(dir, 'raw_loop.mp4');
     await ffmpeg.pingpong({ input: content, output: srcVideo });
@@ -938,9 +954,9 @@ async function animateStill(still, ctx) {
 
   // Immutable cost ledger, computed here where BOTH the Seedance render dims
   // and the 4K final dims are known. Billed on the RAW generation seconds —
-  // duration × segments (a chained 30s piece is two paid 15s Seedance calls;
-  // ping-pong doubles playback locally at no fal cost). Fixtures are free.
-  // See services/generation/falPricing.js for the rate book.
+  // duration × segments, identical whether that ran as one 30s call (2.5) or
+  // two chained 15s calls (2.0 fallback); ping-pong doubles playback locally
+  // at no fal cost. Fixtures are free. See falPricing.js for the rate book.
   const live = !String(gen.model || '').startsWith('fixture');
   const tier = falPricing.seedanceTier(gen.model);
   const aspect = finalSpec.width / finalSpec.height;
@@ -948,9 +964,9 @@ async function animateStill(still, ctx) {
   // supplying only the $/token rate — standard-at-720p must not be billed as
   // 1080p (live validation 2026-08-05: ledger said $22.84 for a ~$12 run).
   const render = falPricing.renderDimsForResolution(aspect, config.fal.resolution);
-  const seedanceUsd = live ? falPricing.seedanceCostUsd({ ...render, durationS: duration * segments, tier }) : 0;
+  const seedanceUsd = live ? falPricing.seedanceCostUsd({ ...render, durationS: totalS, tier }) : 0;
   const topazUsd = live && falPricing.usedTopaz(gen.model)
-    ? falPricing.topazCostUsd({ width: finalSpec.width, height: finalSpec.height, durationS: duration * segments, fps })
+    ? falPricing.topazCostUsd({ width: finalSpec.width, height: finalSpec.height, durationS: totalS, fps })
     : 0;
   const callCostUsd = Math.round((seedanceUsd + topazUsd) * 1e4) / 1e4;
   // One fal call = one bill. EON_SLICE stores a row per panel cut from that

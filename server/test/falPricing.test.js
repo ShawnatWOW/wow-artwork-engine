@@ -54,14 +54,28 @@ test('Seedream still is flat $0.03/image', () => {
 test('model-string helpers pick tier and detect Topaz', () => {
   assert.equal(seedanceTier('seedance-2.0@fal'), 'standard');
   assert.equal(seedanceTier('bytedance/seedance-2.0/fast/image-to-video'), 'fast');
+  assert.equal(seedanceTier('seedance-2.5@fal'), '2.5');
+  assert.equal(seedanceTier('bytedance/seedance-2.5/image-to-video'), '2.5');
+  assert.equal(seedanceTier('seedance-2.5@fal+topaz4x'), '2.5');
   assert.equal(usedTopaz('seedance-2.0@fal+topaz2x'), true);
+  assert.equal(usedTopaz('seedance-2.5@fal+topaz4x'), true);
   assert.equal(usedTopaz('seedance-2.0@fal'), false);
+});
+
+test('Seedance 2.5 prices at its own rate — ~$0.462/s at 16:9 720p', () => {
+  near(seedanceCostUsd({ width: 1280, height: 720, durationS: 1, tier: '2.5' }), 0.4622, 0.001);
+  // A native 30s single pass bills the same pixels x seconds as two chained
+  // 15s clips would — only the per-token rate differs from 2.0.
+  const single30 = seedanceCostUsd({ width: 1824, height: 504, durationS: 30, tier: '2.5' });
+  const chained = seedanceCostUsd({ width: 1824, height: 504, durationS: 15, tier: '2.5' }) * 2;
+  near(single30, chained, 0.001);
 });
 
 test('reference table matches the verified fal page', () => {
   near(REFERENCE_PER_SECOND.seedance_standard_720p, 0.3024);
   near(REFERENCE_PER_SECOND.seedance_standard_1080p, 0.682);
   near(REFERENCE_PER_SECOND.seedance_fast_720p, 0.2419);
+  near(REFERENCE_PER_SECOND.seedance_25_720p, 0.4622, 0.001);
   assert.equal(REFERENCE_PER_SECOND.topaz_uhd, 0.08);
   assert.equal(REFERENCE_PER_SECOND.seedream_still, 0.03);
 });

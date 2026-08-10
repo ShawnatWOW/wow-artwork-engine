@@ -14,8 +14,8 @@ without them. Grab them when we start M3 (delivery) and M4 (first live run).
 
 | # | What to get | Powers | Where / how to get it | Env variable |
 |---|---|---|---|---|
-| 1 | **fal.ai API key** | Motion video (Seedance 2.0) | Sign in at **fal.ai** → **Settings → API Keys** → create a key. (WOW/Shawn owns the account.) | `FAL_KEY` |
-| 2 | **Seedance 2.0 model id** *(not secret — just confirm)* | Tells us the exact model to call | **fal.ai** model catalog → open **Seedance 2.0** (text-to-video) → copy the model slug. Confirms/replaces our default `fal-ai/bytedance/seedance/v2/text-to-video`. | `FAL_SEEDANCE_MODEL` |
+| 1 | **fal.ai API key** | Motion video (Seedance 2.5) | Sign in at **fal.ai** → **Settings → API Keys** → create a key. (WOW/Shawn owns the account.) | `FAL_KEY` |
+| 2 | **Seedance 2.5 model id** *(not secret — just confirm)* | Tells us the exact model to call | **fal.ai** model catalog → open **Seedance 2.5** (image-to-video) → copy the model slug. Confirms/replaces our default `bytedance/seedance-2.5/image-to-video`. | `FAL_SEEDANCE_MODEL` |
 | 3 | **Google Gemini API key** | Still images (Nano Banana Pro) | **Google AI Studio** (aistudio.google.com) → **Get API key** → create in a Google Cloud project. | `GEMINI_API_KEY` |
 
 ## B. Delivery to Jeff — needed for M3 (handoff)
