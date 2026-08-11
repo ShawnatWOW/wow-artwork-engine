@@ -203,37 +203,37 @@ export const castList = (family) => [family.cast.keeper, family.cast.hero, famil
 // (pedestals), "figures", show words, screen words, or drawable nouns inside
 // negations. Pauses are "poised", never frozen.
 const SPECTACULAR_ARCS = [
-  // THE DISCOVERY — curiosity rewarded.
+  // THE DISCOVERY — curiosity rewarded. Keeper LEFT, hero enters RIGHT.
   ({ keeper, hero, companion }) => ({
-    opening: `${keeper} rests glowing softly at the heart of the scene while ${companion} drifts high across the deep background; far in the distance ${hero} has just slipped into view, small and curious, leaning toward the light, the nearest curl of ${keeper}'s glow spilling gently through the opening over the black frame`,
-    act1: `the story begins in quiet wonder — ${keeper} glows at the heart of the scene as ${hero} slips in from the far edge and races closer, hugging the near foreground then plunging deep. Midway through, ${hero} discovers ${keeper} and sweeps past it in a close delighted flyby; ${keeper} stirs and flares in answer, waking ripples of light that race outward through the scenery, and at the movement's peak ${hero} charges the viewer and bursts through the opening over the black frame with ${companion} streaking in close behind`,
-    act2: `${hero} arcs back inside at full speed and leads ${companion} on a joyful chase past ${keeper} — sweeping edge to edge, near foreground to deep background — and every pass they make sets off a brighter bloom, the scenery transforming region by region into a richer, more radiant world`,
-    payoff: `${keeper} erupts into full radiant bloom and hurls waves of light across the whole scene; ${hero} rides the brightest wave forward and bursts through the opening over the black frame at maximum brilliance, ${companion} sweeping wide at its side, the transformed world blazing to every edge`,
-    finale: `${keeper} at full radiant bloom at the heart of the transformed scenery, ${hero} bursting proudly through the opening over the black frame, ${companion} poised just behind it at mid-depth, ribbons of settling light drifting around all three`,
+    opening: `${keeper} rests glowing softly in the left third of the scene while ${companion} drifts high across the deep background on the right; at the far right edge ${hero} has just slipped into view, small and curious, leaning toward the distant glow, the nearest curl of ${keeper}'s light spilling gently through the opening over the black frame`,
+    act1: `the story begins in quiet wonder — ${keeper} glows in the left third as ${hero} enters at the far right edge and crosses the whole scene toward it, hugging the near foreground through the right half, plunging deep through the middle. Midway through, ${hero} reaches the left third, discovers ${keeper}, and sweeps past it in one close delighted flyby; ${keeper} stirs and flares in answer, a ripple of light racing from the left edge all the way to the right. At the movement's peak ${hero} banks off the left edge, charges back toward the right foreground, and bursts through the opening over the black frame with ${companion} diving down from the deep right to follow`,
+    act2: `${hero} re-enters at the right and leads ${companion} on a joyful chase the OTHER way — right edge to left edge through the near foreground, back left-to-right through the deep background — and every region they cross blooms brighter in their wake, the scenery transforming strip by strip until the whole width has turned radiant`,
+    payoff: `${keeper} erupts into full radiant bloom in the left third and hurls a wave of light rightward across the whole scene; ${hero} outruns the wave from left to right, growing from deep-distance small to foreground huge, and bursts through the opening over the black frame at the right of center, ${companion} sweeping wide along the top, the transformed world blazing to every edge`,
+    finale: `${keeper} at full radiant bloom in the left third of the transformed scenery, ${hero} bursting through the opening over the black frame right of center, ${companion} banking along the top edge toward it, ribbons of settling light spanning the full width`,
   }),
-  // THE SPARK THIEF — a playful theft, returned as a gift.
+  // THE SPARK THIEF — a playful theft, returned as a gift. Keeper RIGHT, escape LEFT.
   ({ keeper, hero, companion }) => ({
-    opening: `${keeper} cradles a small brilliant orb of light at the heart of the scene while ${companion} glides slow watchful passes at mid-depth; ${hero} watches from the far edge, leaning in toward the orb, one stray ribbon of its glow spilling gently through the opening over the black frame`,
-    act1: `the story begins with a heist — ${hero} darts in from the far edge and slips past ${companion} in quick feinting runs. Midway through, ${hero} snatches the blazing orb from ${keeper}; ${keeper} flares in surprise and ${companion} whips around to give chase, and at the movement's peak ${hero} dives through the opening and out over the black frame with the orb blazing in its grip, ${companion} closing fast`,
-    act2: `the chase tears across the whole scene — ${hero} races edge to edge with ${companion} hard behind, the orb's light igniting every region they cross — until ${hero} sweeps back and returns the orb to ${keeper}, whose lifted light detonates outward and transforms the scenery layer by layer`,
-    payoff: `${keeper} raises the orb to full blaze and floods the scene with new light; ${hero} and ${companion} charge the viewer side by side and burst through the opening over the black frame together, the transformed world flaring to every edge behind them`,
-    finale: `${keeper} holding the blazing orb aloft at the heart of the transformed scenery, its light washing every layer of the scene, ${hero} bursting through the opening over the black frame in one triumphant arc, ${companion} gliding just behind it at mid-depth`,
+    opening: `${keeper} cradles a small brilliant orb of light in the right third of the scene while ${companion} glides slow watchful passes across the middle at mid-depth; at the far left edge ${hero} leans into view, eyes on the distant orb, one stray ribbon of the orb's glow spilling gently through the opening over the black frame`,
+    act1: `the story begins with a heist — ${hero} enters at the far left edge and works its way right across the whole scene, slipping past ${companion} in the middle with quick feints. Midway through, ${hero} reaches the right third and snatches the blazing orb from ${keeper}; ${keeper} flares in surprise and ${companion} whips into pursuit. At the movement's peak ${hero} tears back left across the full width with the orb blazing, and dives through the opening over the black frame near the left edge, ${companion} closing fast behind`,
+    act2: `the chase doubles back — ${hero} re-enters low at the left and races right through the near foreground with ${companion} hard behind, the orb's light igniting every strip of scenery they cross, until at the right third ${hero} relents and returns the orb to ${keeper}, whose lifted light detonates outward and rolls a transformation leftward across the whole scene`,
+    payoff: `${keeper} raises the orb to full blaze at the right and the wave of new light sweeps to the far left edge; ${hero} and ${companion} ride it side by side from right to left, swelling huge in the near foreground, and burst through the opening over the black frame together left of center, the transformed world flaring behind them`,
+    finale: `${keeper} holding the blazing orb aloft in the right third of the transformed scenery, its light washing every strip of the scene to the far left edge, ${hero} bursting through the opening over the black frame left of center, ${companion} gliding just behind it at mid-depth`,
   }),
-  // THE AWAKENING — one bright visitor wakes the whole world.
+  // THE AWAKENING — one bright visitor wakes the whole world, left to right.
   ({ keeper, hero, companion }) => ({
-    opening: `the scene waits in deep rich stillness — ${keeper} sleeps dim and low at its heart, ${companion} hovering watchfully at mid-depth, while ${hero} enters from the far distance carrying a trail of bright light, its first glow spilling through the opening over the black frame`,
-    act1: `the story begins in hush — ${hero} glides in from the deep distance trailing bright light through the sleeping scenery and dips low. Midway through, ${hero} touches its light to ${keeper}; ${keeper} wakes and unfurls in spreading glow, color racing outward wave after wave while ${companion} darts closer in wonder, and at the movement's peak ${hero} bursts through the opening over the black frame just as the wave of color reaches the front of the scene`,
-    act2: `the awakening sweeps the world — ${keeper} rises and pours light back into the scene, the scenery blooming region by region into a completely new landscape while ${hero} and ${companion} race edge to edge claiming each fresh-lit region, every pass answered by a pulse of new color`,
-    payoff: `${keeper} rises to full height in the fully awakened world and casts light to every edge; ${hero} charges from the deepest distance to huge in the near foreground and bursts through the opening over the black frame trailing its whole ribbon of light, ${companion} flanking wide, the scene at maximum brilliance`,
-    finale: `the fully awakened scene glowing in rich transformed color, ${keeper} risen tall at its heart, ${hero} bursting through the opening over the black frame with its light-trail streaming behind, ${companion} poised at mid-depth beside ${keeper}`,
+    opening: `the scene waits in deep rich stillness — ${keeper} sleeps dim and low in the right third, ${companion} hovering watchfully above the middle at mid-depth, while ${hero} enters at the far left edge carrying a trail of bright light, its first glow spilling through the opening over the black frame`,
+    act1: `the story begins in hush — ${hero} glides in at the far left edge trailing bright light and crosses the sleeping scenery left to right, skimming the near foreground then rising through the deep middle. Midway through, ${hero} reaches the right third and touches its light to ${keeper}; ${keeper} wakes and unfurls in spreading glow, color rolling back leftward wave after wave while ${companion} darts down from the middle in wonder. At the movement's peak ${hero} rides the returning wave leftward and bursts through the opening over the black frame left of center, just as the color reaches the far left edge`,
+    act2: `the awakening claims the whole width — ${keeper} rises at the right and pours light outward while ${hero} and ${companion} split the scene between them, ${hero} sweeping the near foreground right-to-left and ${companion} the deep background left-to-right, each strip they cross blooming into a completely new landscape`,
+    payoff: `${keeper} rises to full height at the right and casts light to every edge; ${hero} turns at the far left and charges the full width back toward the viewer, growing from deep-distance small to foreground huge, bursting through the opening over the black frame right of center trailing its whole ribbon of light, ${companion} flanking along the top, the scene at maximum brilliance`,
+    finale: `the fully awakened scene glowing in rich transformed color across its whole width, ${keeper} risen tall in the right third, ${hero} bursting through the opening over the black frame right of center with its light-trail streaming back to the far left edge, ${companion} poised above the middle`,
   }),
-  // THE DUEL OF LIGHT — a contest that becomes an alliance.
+  // THE DUEL OF LIGHT — a contest that becomes an alliance, fought across the width.
   ({ keeper, hero, companion }) => ({
-    opening: `${hero} and ${companion} face each other from opposite ends of the scene at mid-depth, bright energy gathering around each of them, while ${keeper} watches calm and glowing from the deep center; one streamer of gathered light already spills through the opening over the black frame`,
-    act1: `the story begins as a contest — ${hero} and ${companion} trade charges from opposite ends, each pass wider and brighter, every impact detonating color through the scenery. Midway through, the exchanges grow bolder, crossing the near foreground in alternating raids, and at the movement's peak ${hero} throws the boldest charge yet, sweeping out through the opening and across the black frame as ${companion} rises to match it`,
-    act2: `${keeper} surges up from the deep center and braids the duelling ribbons of light into one — the contest turns to alliance, ${hero} and ${companion} now charging together edge to edge as their merged light fuses the warring halves of the scenery into one majestic new vista`,
-    payoff: `the braided stream of light swells into a torrent spanning the whole scene; ${hero} rides its crest through the opening over the black frame with ${companion} arcing at its side, ${keeper} blazing at the source, the fused vista at full brilliance`,
-    finale: `one great braided stream of light flowing from the deep center out through the opening and across the black frame, ${hero} riding its crest through the opening, ${companion} arcing alongside at mid-depth, ${keeper} glowing at the stream's source`,
+    opening: `${hero} and ${companion} face each other from the far left and far right edges at mid-depth, bright energy gathering around each of them, while ${keeper} watches calm and glowing from the deep middle distance; one streamer of gathered light already spills through the opening over the black frame`,
+    act1: `the story begins as a contest — ${hero} charges from the far left and ${companion} from the far right, crossing mid-scene and detonating color where they pass, each returning charge cutting a wider path through a new strip of scenery. Midway through, the raids cross the near foreground in alternating passes, left-to-right then right-to-left. At the movement's peak ${hero} throws the boldest charge yet, sweeping from the far left all the way out through the opening and across the black frame right of center, as ${companion} rises to match it along the top`,
+    act2: `${keeper} surges up from the deep middle and braids the duelling ribbons into one — the contest turns to alliance, ${hero} and ${companion} now charging together, left edge to right edge through the near foreground, back through the deep background, their merged light fusing the warring halves of the scenery into one majestic new vista`,
+    payoff: `the braided stream of light swells into a torrent spanning the full width; ${hero} rides its crest from the deep middle out to foreground huge and bursts through the opening over the black frame left of center, ${companion} arcing along the right, ${keeper} blazing at the source, the fused vista at full brilliance edge to edge`,
+    finale: `one great braided stream of light spanning the full width and flowing out through the opening over the black frame, ${hero} riding its crest left of center, ${companion} arcing along the right at mid-depth, ${keeper} glowing at the deep middle source`,
   }),
 ];
 
@@ -575,11 +575,17 @@ const CONSTANCY_SPEC =
   'Saturation stays rich and maxed for the entire duration — colors may transform as the scene changes, ' +
   'but they never fade, wash out, or drift toward grey.';
 
-// The frame rule for both spectacular acts: fixed, flush, inviolable.
+// The frame rule for both spectacular acts: fixed, flush, inviolable. Since
+// 2026-08-11 the delivered video carries NO composited plate (it buried the
+// pop-outs), so the model's own painted frame IS the frame — it must stay
+// crisp to the last frame, and crossers must render in front of it.
 const FRAME_MOTION_RULE =
   `The matte-black frame running along all four outer edges of the image stays perfectly fixed for the whole clip — ` +
   `it never moves, bends, shrinks, detaches from the edges or fades, and nothing ever appears outside it: ` +
   `the frame's outer edge remains the absolute boundary of the piece at all times. ` +
+  `The black strips stay crisp, straight and solid black to the very last frame, painted as the nearest ` +
+  `layer of the scene — except when a character bursts through the opening, when the character is drawn ` +
+  `IN FRONT of the strips, covering them. ` +
   `Characters crossing the frame visibly occlude it, casting moving shadows onto it, yet always stop ` +
   `short of the image's outer edge — every character, trail and effect stays fully inside the image bounds, ` +
   `never touched or cropped by the outer boundary. ` +
@@ -617,8 +623,10 @@ export function buildSpectacularArcPrompt({ specKey, option, weekOf }) {
     `clip ends — the ending is a peak, never a slow settle. ` +
     `Movement tells the story: ONE character leads each beat while the others visibly react to it, and every ` +
     `character travels with purpose — crossing the full width and the full depth of the ultra-wide scene, ` +
-    `claiming new ground with every beat. No character ever circles in place, orbits the center, or hovers in ` +
-    `the middle of the frame; the middle is ground they pass through, not where they live. ` +
+    `claiming new ground with every beat. Each beat begins where the last one ended and travels somewhere ` +
+    `NEW — enter from one side, exit toward another; no path retraces itself. No character ever circles in ` +
+    `place, orbits the center, or hovers in the middle of the frame; the middle is ground they pass through, ` +
+    `not where they live. ` +
     `Even at full speed the motion phrases itself like a told story: a breath of poised anticipation gathers ` +
     `before each burst, so every surge lands harder than the one before. ` +
     `The story keeps finding reasons to break the frame — near-camera flybys and sudden scale surges from deep ` +

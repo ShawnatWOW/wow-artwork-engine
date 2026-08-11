@@ -969,14 +969,14 @@ async function animateStill(still, ctx) {
   // pixels — cover's center-crop paid for any aspect error with exactly those
   // pixels, visibly thinning the frame even with a locked camera.
   await ffmpeg.conform({ input: srcVideo, output: final, width: finalSpec.width, height: finalSpec.height, duration: effDuration, fps, fit: 'exact' });
-  // FRAME PLATE on every delivered frame: whatever Seedance did, the outermost
-  // band is exact black so the piece sits flush against the billboard's bezel.
-  // Composited AFTER conform, at delivery dims, so the band is pixel-exact on
-  // the file Jeff receives. Subjects popping over the painted band survive:
-  // the plate's solid part is only the outermost strip, which the containment
-  // prompt keeps them clear of (Scott, 2026-08-07).
+  // FRAME PLATE on the delivered video: OFF by default (Shawn, 2026-08-11).
+  // The stamp was burying characters that Seedance correctly rendered IN FRONT
+  // of its painted frame — the post-composited-letterbox failure of 2026-07-21
+  // all over again; no pop-out survives an opaque band drawn on top. Frame
+  // geometry is anchored by the PLATED STILL Seedance animates from instead;
+  // FRAME_PLATE_ON_VIDEO=1 restores the stamp if painted frames drift.
   let deliverable = final;
-  if (surface.post === POST.FRAME_BREAK) {
+  if (surface.post === POST.FRAME_BREAK && config.generation.framePlateOnVideo) {
     deliverable = path.join(dir, 'final_framed.mp4');
     await compositeFramePlate({ input: final, output: deliverable, width: finalSpec.width, height: finalSpec.height });
   }

@@ -60,6 +60,16 @@ const config = {
     // paint frames as scenery, so the band is composited, never generated
     // (Scott, 2026-08-07).
     frameBandFrac: num(process.env.FRAME_BAND_FRAC, 0.05),
+    // Plate on the delivered VIDEO is OFF by default (Shawn, 2026-08-11): the
+    // opaque band + stepped shadow (~100px zone at delivery scale) was stamped
+    // OVER every frame, burying characters that Seedance correctly rendered IN
+    // FRONT of its painted frame — the exact post-composited-letterbox failure
+    // documented 2026-07-21; no pop-out can survive a plate drawn on top. The
+    // plate still goes on every STILL (what Scott reviews and what Seedance
+    // animates from), which anchors the frame's geometry at frame 1; the model
+    // then owns the frame for the rest of the clip. FRAME_PLATE_ON_VIDEO=1
+    // restores the old stamp if model-painted frames drift too much.
+    framePlateOnVideo: bool(process.env.FRAME_PLATE_ON_VIDEO, false),
   },
 
   // fixture | live  — see .env.example. `live` requires explicit opt-in so a

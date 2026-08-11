@@ -208,7 +208,7 @@ test('the spectacular motion prompt is ONE three-movement arc — boilerplate on
       assert.ok(a[piece]?.length > 40, `arc option ${option} missing ${piece}`);
     }
     assert.match(a.act1, /Midway through/);
-    assert.match(a.act1, /at the movement's peak/);
+    assert.match(a.act1, /at the movement's peak/i);
     // The hero owns the act-1 surge: it is named in every act-1 peak.
     const fam = familyFor({ ...JOB, option });
     assert.ok(a.act1.includes(fam.cast.hero), 'act 1 names the hero');
