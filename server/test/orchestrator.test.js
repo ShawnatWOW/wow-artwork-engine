@@ -177,7 +177,7 @@ test('spectacular single pass: ONE call, full arc prompt, NO end-frame anchor', 
     const [call] = calls;
     assert.equal(call.durationS, 2, 'single pass runs duration x acts');
     assert.match(call.prompt, /three continuous movements/, 'the stored arc prompt drives the call');
-    assert.match(call.prompt, /climax/);
+    assert.match(call.prompt, /the payoff/);
     assert.equal(call.endImageUrl ?? null, null, 'no end frame is sent — even when a legacy closing still exists');
   } finally {
     await rm(base, { recursive: true, force: true });
