@@ -504,37 +504,26 @@ const FRAME_MOTION_RULE =
   `perform inside the opening and burst out toward the frame plane, always watched from outside.`;
 
 /**
- * The spectacular's full 30-second motion as ONE single-pass prompt — three
- * time-beat movements (ignition → metamorphosis → climax) built from the
- * week's arc, with every rule stated exactly once. Written for Seedance 2.5,
- * which follows temporal structure in a single prompt. NO end frame is sent
- * with it (live QA 2026-08-10, Shawn: anchoring the clip on a target frame
- * made the motion feel obligated to reach it instead of moving freely) — the
- * ending is described in words and left free to move. Pure.
- * @param {{ specKey, option, weekOf }} job
+ * The spectacular's motion prompt — deliberately MINIMAL (Shawn, 2026-08-10,
+ * after two live 2.5 rounds): choreographing the motion backfired twice. The
+ * timestamped "movements" structure read to Seedance 2.5 as a multi-shot
+ * storyboard and it CUT on the beat boundaries, abandoning the frame; the
+ * scripted story beats over-constrained motion the model handles better on
+ * its own. So the prompt now says only what the model cannot infer: one
+ * continuous take (never cut), the painted frame stays exactly as it is
+ * (never reframed, never removed), the characters interact with it, and the
+ * colors hold. Everything else — where things go, how the scene evolves —
+ * is the model's. Identical for every option on purpose: the variety lives
+ * in the still, and re-rolls rely on the model being stochastic. Pure.
  */
-export function buildSpectacularArcPrompt({ specKey, option, weekOf }) {
-  const arc = arcFor({ specKey, option, weekOf });
-  return `${CAMERA_LOCK} Trompe-l'oeil 3D pop-out spectacle in three continuous movements — one unbroken shot, no cuts, ` +
-    `a story told entirely through where the characters go. ` +
-    `First movement (opening ~10 seconds) — ignition: ${arc.act1}. ` +
-    `Second movement (middle ~12 seconds) — metamorphosis: ${arc.act2}. ` +
-    `Third movement (final ~8 seconds) — climax: the story pays off in the grandest surge yet — the whole cast ` +
-    `sweeps across the full scene in one climactic charge, light detonating in their wake, still at maximum ` +
-    `speed and brilliance as the clip ends — the ending is a peak, never a slow settle. ` +
-    `Movement tells the story: every character travels with PURPOSE, crossing the full width and the full depth ` +
-    `of the ultra-wide scene and claiming new ground with every beat — no character ever circles in place, ` +
-    `orbits the center, or hovers in the middle of the frame; the middle is ground they pass through, not where they live. ` +
-    `At every moment of all three movements at least one character is mid-burst through the opening, ` +
-    `crossing the frame plane toward the viewer — near-camera flybys and sudden scale surges from deep in the ` +
-    `scene to huge in the foreground are the signature moves. ` +
-    `A living ambient layer — swarms of glowing particles, schools of small luminous shapes, ricocheting light ` +
-    `trails — keeps every region of the composition in motion at all times; no corner of the frame ever goes still. ` +
+export function buildSpectacularArcPrompt() {
+  return `${CAMERA_LOCK} One single continuous take for the entire clip — no cuts, no shot changes, ` +
+    `no new angles, no transitions of any kind, ever. ` +
+    `The scene comes alive in constant motion, moving freely inside the painted black frame. ` +
+    `The characters interact with the frame — bursting out through the opening, over and past the black ` +
+    `border toward the viewer, casting light and moving shadows onto it — and diving back into the scene. ` +
     `${FRAME_MOTION_RULE} ` +
-    `Multiple characters are in motion at every moment — none of them ever freezes or hovers; the whole ` +
-    `environment moves with them, swirling, flowing and evolving continuously; every pixel is alive. ` +
-    `The energy climbs in waves from the first movement to the last. ` +
-    `Smooth, premium, explosive high-energy movement — never static, never jittery. ${CONSTANCY_SPEC}`;
+    `Smooth, premium movement — never static, never jittery. ${CONSTANCY_SPEC}`;
 }
 
 /**

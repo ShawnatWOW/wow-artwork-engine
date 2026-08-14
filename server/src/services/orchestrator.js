@@ -969,17 +969,14 @@ async function animateStill(still, ctx) {
   // pixels — cover's center-crop paid for any aspect error with exactly those
   // pixels, visibly thinning the frame even with a locked camera.
   await ffmpeg.conform({ input: srcVideo, output: final, width: finalSpec.width, height: finalSpec.height, duration: effDuration, fps, fit: 'exact' });
-  // FRAME PLATE on every delivered frame: whatever Seedance did, the outermost
-  // band is exact black so the piece sits flush against the billboard's bezel.
-  // Composited AFTER conform, at delivery dims, so the band is pixel-exact on
-  // the file Jeff receives. Subjects popping over the painted band survive:
-  // the plate's solid part is only the outermost strip, which the containment
-  // prompt keeps them clear of (Scott, 2026-08-07).
-  let deliverable = final;
-  if (surface.post === POST.FRAME_BREAK) {
-    deliverable = path.join(dir, 'final_framed.mp4');
-    await compositeFramePlate({ input: final, output: deliverable, width: finalSpec.width, height: finalSpec.height });
-  }
+  // NOTHING is composited onto the video (Shawn, 2026-08-10, after reviewing
+  // the first 2.5 creative): the old per-frame plate's translucent depth
+  // rings sat IN FRONT of the model's painted frame and of any art crossing
+  // it — a black gradient floating over the picture. The frame plate is
+  // applied to the STILL only (where the frame is born); the video keeps the
+  // frame it inherited from that still as real model-rendered pixels, so
+  // everything on screen can interact with it.
+  const deliverable = final;
   const td = thumbDims(finalSpec);
   const thumb = path.join(dir, 'thumb.jpg');
   await ffmpeg.thumbnail({ input: deliverable, output: thumb, width: td.width, height: td.height, atSeconds: Math.min(2, effDuration / 2) });

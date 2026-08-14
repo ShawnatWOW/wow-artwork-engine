@@ -153,48 +153,30 @@ test('two acts differ, act 2 lands the finale, both keep the frame fixed', () =>
   }
 });
 
-test('the spectacular motion prompt is ONE three-movement arc — boilerplate once, aggressive finish', () => {
-  const arc = buildSpectacularArcPrompt({ ...JOB, option: 1 });
-  // buildMotionPrompt for frame_break IS the arc (stored as the still's motion_prompt).
+test('the spectacular motion prompt is MINIMAL — frame rules only, no choreography, no shot list', () => {
+  const arc = buildSpectacularArcPrompt();
+  // buildMotionPrompt for frame_break IS this prompt (stored as the still's motion_prompt).
   assert.equal(buildMotionPrompt({ ...JOB, option: 1 }), arc);
-  // Three explicit time beats, in order.
-  const beats = ['First movement', 'Second movement', 'Third movement'];
-  let at = -1;
-  for (const b of beats) {
-    const i = arc.indexOf(b);
-    assert.ok(i > at, `${b} present and in order`);
-    at = i;
-  }
-  // Every rule exactly ONCE — no chain-era duplicated boilerplate.
+  assert.ok(arc.startsWith('Fixed camera, locked-off shot:'), 'camera lock must lead');
+  // Every rule exactly once.
   const count = (re) => (arc.match(re) || []).length;
   assert.equal(count(/Fixed camera, locked-off shot/g), 1, 'camera lock stated once');
   assert.equal(count(/stays perfectly fixed for the whole clip/g), 1, 'frame rule stated once');
   assert.equal(count(/never fade, wash out, or drift/g), 1, 'anti-drift stated once');
-  assert.ok(arc.startsWith('Fixed camera, locked-off shot:'), 'camera lock must lead');
-  assert.doesNotMatch(arc, /act 1 of 2|act 2 of 2/, 'no chain-era act labels');
-  // The aggression rules: constant frame-breaking, ambient density, explosive
-  // arrival (never the old "eases into place and holds").
-  assert.match(arc, /at least one character is mid-burst through the opening/);
-  assert.match(arc, /no corner of the frame ever goes still/);
-  assert.match(arc, /climax/);
-  assert.match(arc, /never a slow settle/);
-  assert.doesNotMatch(arc, /eases into its place/);
-  // Story-through-movement (Shawn, 2026-08-10): the anti-circling rule is
-  // stated, and the circling vocabulary that literalized into characters
-  // orbiting the center is banned from every arc body.
-  assert.match(arc, /no character ever circles in place/);
-  for (let option = 1; option <= 4; option += 1) {
-    const a = arcFor({ ...JOB, option });
-    for (const body of [a.act1, a.act2]) {
-      assert.doesNotMatch(body, /orbit|vortex|figure-eight|interlocking|spiral|swirl/i, `arc option ${option} must travel, not circle`);
-    }
-  }
+  // One unbroken take — and NOTHING that reads as a shot list: Seedance 2.5
+  // treated timestamped "movements" as cut points and cut on the beat
+  // boundaries (live QA 2026-08-10, t=9.67s in Test Art.mp4).
+  assert.match(arc, /One single continuous take/);
+  assert.match(arc, /no cuts, no shot changes/);
+  assert.doesNotMatch(arc, /movement \(|act \d of 2|\d+ seconds/i, 'no timestamps or numbered beats');
+  // Frame interaction is the one demanded behavior; the rest is the model's.
+  assert.match(arc, /bursting out through the opening/);
   assert.doesNotMatch(arc, DOMAIN_TERMS);
   assert.doesNotMatch(arc, META_TERMS);
   assert.ok(checkPrompt(arc).allowed);
-  // Deterministic, and distinct across options.
-  assert.equal(arc, buildSpectacularArcPrompt({ ...JOB, option: 1 }));
-  assert.notEqual(arc, buildSpectacularArcPrompt({ ...JOB, option: 2 }));
+  // Identical for every option on purpose — variety lives in the still, and
+  // re-rolls rely on the model being stochastic.
+  assert.equal(buildMotionPrompt({ ...JOB, option: 2 }), arc);
 });
 
 test('combineSpectacularActs joins the stored acts for a single 30s pass', () => {
