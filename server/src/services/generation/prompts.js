@@ -605,14 +605,26 @@ const FRAME_MOTION_RULE =
  * scripted story beats over-constrained motion the model handles better on
  * its own. So the prompt now says only what the model cannot infer: one
  * continuous take (never cut), the painted frame stays exactly as it is
- * (never reframed, never removed), the characters interact with it, and the
- * colors hold. Everything else — where things go, how the scene evolves —
- * is the model's. Identical for every option on purpose: the variety lives
- * in the still, and re-rolls rely on the model being stochastic. Pure.
+ * (never reframed, never removed), the characters interact with it, the
+ * colors hold — plus ONE untimed story sentence naming the design's own
+ * cast (beginning → journey → payoff), so the motion has a plot without a
+ * shot list. Everything else is the model's. Pure.
  */
-export function buildSpectacularArcPrompt() {
+export function buildSpectacularArcPrompt({ specKey, option, weekOf } = {}) {
+  // ONE story sentence (Shawn, 2026-08-14: "there's no real story to it") —
+  // a beginning, a journey and a payoff named in a single breath, with NO
+  // timestamps and NO numbered beats (those read as a shot list and caused
+  // the cuts). The cast names match the design's still, so the story is
+  // about the characters actually in the picture.
+  const f = familyFor({ specKey: specKey ?? 'spectacular_wow1_8', option: option ?? 1, weekOf });
+  const { keeper, hero, companion } = f.cast;
+  const story = `A simple story plays out across this one take: ${hero} sets out from one side of the ` +
+    `scene and crosses its full width to reach ${keeper}; their meeting ignites the whole world — ` +
+    `${companion} races through the blaze and waves of light sweep to every corner — a clear beginning, ` +
+    `journey and payoff inside one unbroken shot. `;
   return `${CAMERA_LOCK} One single continuous take for the entire clip — no cuts, no shot changes, ` +
     `no new angles, no transitions of any kind, ever. ` +
+    `${story}` +
     `The scene comes alive in constant motion, moving freely inside the painted black frame. ` +
     `The characters interact with the frame — climbing onto the black border, sliding along its strips, ` +
     `leaning over its inner edge, casting light and moving shadows onto it — and diving back into the ` +

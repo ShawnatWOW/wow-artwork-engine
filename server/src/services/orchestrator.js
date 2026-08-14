@@ -773,25 +773,45 @@ async function animateStill(still, ctx) {
   const ref = path.join(dir, 'ref.png');
   await writeFile(ref, await store.getBuffer(still.s3_key_final));
 
-  // NO silent aspect repair (Shawn, 2026-08-14: "we don't want to mask
-  // failure behind the illusion of success"). If the model returns a
-  // different canvas shape than the approved still, the clip is delivered
-  // as-is and the mismatch is stamped LOUDLY on the row (the dashboard's
-  // error ribbon), so a wrong-shaped render reads as the failure it is.
-  const checkAspect = async (input, model) => {
-    if (String(model || '').startsWith('fixture') || !still.width || !still.height) return null;
+  // ASPECT HANDLING (Shawn, 2026-08-14, round 2 — the "squished" render).
+  // Seedance cannot output the spectacular's extreme 3.6:1: it returns a
+  // taller canvas with the art LETTERBOXED inside black bars. Two rules:
+  //   1. Black PADDING is not art — cropdetect finds the actual bars and
+  //      only they are removed (this is extraction, not repair: nothing of
+  //      the picture is touched, and it's what keeps the conform from
+  //      stretching bars+art into a squish).
+  //   2. If the extracted content STILL doesn't match the design's aspect,
+  //      that is a real failure: it is NEVER stretched to spec (fit
+  //      'contain' pads instead of distorting) and the row is flagged
+  //      loudly so the card shows exactly what happened.
+  const extractContent = async (input, model) => {
+    if (String(model || '').startsWith('fixture') || !still.width || !still.height) {
+      return { path: input, warn: null };
+    }
+    let contentPath = input;
     try {
-      const rawDims = await ffmpeg.probe(input);
+      const bars = await ffmpeg.detectContentCrop(input);
+      if (bars) {
+        const out = path.join(dir, 'content.mp4');
+        await ffmpeg.cropColumn({ input, output: out, width: bars.width, height: bars.height, x: bars.x, y: bars.y });
+        logger.info({ stillId: still.id, bars }, 'Model letterboxed the render — extracted the art band (black padding only)');
+        contentPath = out;
+      }
+    } catch (err) {
+      logger.warn({ stillId: still.id, err: err.message }, 'Letterbox detection failed; using raw output');
+    }
+    try {
+      const dims = await ffmpeg.probe(contentPath);
       const want = still.width / still.height;
-      const got = rawDims.width / rawDims.height;
-      if (rawDims.width && Math.abs(got - want) / want > 0.03) {
-        logger.warn({ stillId: still.id, raw: `${rawDims.width}x${rawDims.height}`, want: want.toFixed(3) }, 'Model returned a different aspect — delivering uncropped, flagged');
-        return `qa: model returned ${rawDims.width}x${rawDims.height} (aspect ${got.toFixed(2)}) instead of the design's ${want.toFixed(2)} — delivered as-is, not cropped`;
+      const got = dims.width / dims.height;
+      if (dims.width && Math.abs(got - want) / want > 0.03) {
+        logger.warn({ stillId: still.id, content: `${dims.width}x${dims.height}`, want: want.toFixed(3) }, 'Content aspect mismatch after bar extraction — will pad, never stretch');
+        return { path: contentPath, warn: `qa: model content is ${dims.width}x${dims.height} (aspect ${got.toFixed(2)}) vs the design's ${want.toFixed(2)} — delivered undistorted (padded, not stretched)` };
       }
     } catch (err) {
       logger.warn({ stillId: still.id, err: err.message }, 'Aspect check failed');
     }
-    return null;
+    return { path: contentPath, warn: null };
   };
 
   // The whole piece — every act — in ONE Seedance call. The chain-era
@@ -812,8 +832,9 @@ async function animateStill(still, ctx) {
     referenceImageUrl: still.remote_url ?? null, // fal-hosted URL — live Seedance
   });
   const raw = raw0; // the model output the QA + ledger read
-  const content = raw; // delivered as the model made it — no crop, no repair
-  const aspectWarn = await checkAspect(raw, gen.model);
+  const extracted = await extractContent(raw, gen.model);
+  const content = extracted.path;
+  const aspectWarn = extracted.warn;
 
   // QA: measure saturation drift on the model's raw output (Seedance colors
   // drain over a clip). Warning only — stored on the motion rows.
@@ -925,7 +946,9 @@ async function animateStill(still, ctx) {
   // fit 'exact': the spectacular's painted frame lives in the outermost
   // pixels — cover's center-crop paid for any aspect error with exactly those
   // pixels, visibly thinning the frame even with a locked camera.
-  await ffmpeg.conform({ input: srcVideo, output: final, width: finalSpec.width, height: finalSpec.height, duration: effDuration, fps, fit: 'exact' });
+  // 'exact' is a pure scale when the aspect matched (guaranteed above); on a
+  // flagged mismatch 'contain' pads instead — the art is never distorted.
+  await ffmpeg.conform({ input: srcVideo, output: final, width: finalSpec.width, height: finalSpec.height, duration: effDuration, fps, fit: aspectWarn ? 'contain' : 'exact' });
   // FRAME PLATE on the delivered video: OFF by default (Shawn, 2026-08-11).
   // The stamp was burying characters that Seedance correctly rendered IN FRONT
   // of its painted frame — the post-composited-letterbox failure of 2026-07-21

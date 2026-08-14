@@ -162,8 +162,8 @@ test('two acts differ, act 2 lands the finale, both keep the frame fixed', () =>
   }
 });
 
-test('the spectacular motion prompt is MINIMAL — frame rules only, no choreography, no shot list', () => {
-  const arc = buildSpectacularArcPrompt();
+test('the spectacular motion prompt is MINIMAL + one untimed story — no choreography, no shot list', () => {
+  const arc = buildSpectacularArcPrompt({ ...JOB, option: 1 });
   // buildMotionPrompt for frame_break IS this prompt (stored as the still's motion_prompt).
   assert.equal(buildMotionPrompt({ ...JOB, option: 1 }), arc);
   assert.ok(arc.startsWith('Fixed camera, locked-off shot:'), 'camera lock must lead');
@@ -187,9 +187,15 @@ test('the spectacular motion prompt is MINIMAL — frame rules only, no choreogr
   assert.doesNotMatch(arc, DOMAIN_TERMS);
   assert.doesNotMatch(arc, META_TERMS);
   assert.ok(checkPrompt(arc).allowed);
-  // Identical for every option on purpose — variety lives in the still, and
-  // re-rolls rely on the model being stochastic.
-  assert.equal(buildMotionPrompt({ ...JOB, option: 2 }), arc);
+  // ONE untimed story sentence naming the design's own cast (Shawn,
+  // 2026-08-14: "there's no real story to it") — beginning, journey, payoff,
+  // still zero timestamps/beats, so it can't read as a shot list.
+  assert.match(arc, /A simple story plays out across this one take/);
+  assert.match(arc, /beginning, journey and payoff inside one unbroken shot/);
+  // The story names the option's own cast, so options now DIFFER — and each
+  // is deterministic for its seed.
+  assert.equal(buildMotionPrompt({ ...JOB, option: 1 }), arc);
+  assert.notEqual(buildMotionPrompt({ ...JOB, option: 2 }), arc);
 });
 
 test('combineSpectacularActs joins the stored acts for a single 30s pass', () => {
