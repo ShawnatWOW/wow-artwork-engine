@@ -66,6 +66,15 @@ at a time, "N of 3 reviewed" progress per sign.
 
 ## Changelog (this delivery arc)
 
+- **2026-08-14 (3) — Squish fixed + a story restored.** The first no-plate render
+  came out vertically squished: Seedance can't produce 3.6:1, letterboxes the
+  art in a taller canvas, and the exact-fit conform then STRETCHED bars+art to
+  spec. Fix: cropdetect removes the actual black padding (extraction, not
+  repair), and stretching is gone for good — a true aspect mismatch delivers
+  undistorted (padded) with a loud card flag. And because "there's no real
+  story to it": the motion prompt gains ONE untimed story sentence naming the
+  design's own cast (beginning → journey → payoff) — narrative without the
+  timestamped beats that caused cuts.
 - **2026-08-14 (2) — Shawn's flow-review change set.** From the ARTWORK_FLOW.md
   read-through: (1) frame plate fully retired — nothing is ever composited on
   stills OR videos; the perimeter is Seedream's to paint and Seedance's to

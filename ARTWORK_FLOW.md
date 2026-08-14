@@ -35,10 +35,13 @@ every rule, and the exact text sent to the AI models.
 10. **No upscale for now** *(2026-08-14)*. Topaz is OFF during visual iteration — renders
     come back faster and cheaper at 720p. `FAL_UPSCALE=1` re-enables the 4K pass for real
     deliveries once the visuals are down.
-11. **No silent repair** *(2026-08-14)*. If the model returns a different canvas shape than
-    the design, the clip is delivered **as-is** and the mismatch is stamped loudly on the
-    card's error ribbon ("model returned WxH instead of…") — failure is visible, never
-    masked by a crop.
+11. **Letterbox extraction + never-stretch** *(2026-08-14, round 2 — the "squished"
+    render)*. Seedance can't output the extreme 3.6:1, so it letterboxes the art inside a
+    taller canvas. cropdetect finds the actual black bars and removes ONLY them (padding,
+    not picture). If the extracted content still doesn't match the design's aspect, that's
+    a real failure: it is **never stretched** — delivered undistorted (padded to spec) with
+    a loud flag on the card. The squish came from the old exact-fit stretch; stretching is
+    gone.
 12. **QA.** Saturation-drift measurement (warning only — Seedance colors can drain).
 13. **Conform.** Exact-fit scale to delivery spec (spectacular 3840×1062). **Nothing is
     composited onto the video** — the file ships exactly as the model made it.
@@ -63,9 +66,9 @@ every rule, and the exact text sent to the AI models.
 *(Style family + cast + opening tableau now rotate per BATCH — every "New batch" gets fresh
 subjects and environments; the frame and containment language is identical every time.)*
 
-### Motion prompt — spectacular (identical for every option, by design)
+### Motion prompt — spectacular (per-design: the story names the design's own cast)
 
-> Fixed camera, locked-off shot: the camera holds fixed framing for the entire clip — no dolly, no push-in, no pull-back, no zoom, no pan, no reframing. **One single continuous take for the entire clip — no cuts, no shot changes, no new angles, no transitions of any kind, ever.** The scene comes alive in constant motion, moving freely inside the painted black frame. **The characters interact with the frame — climbing onto the black border, sliding along its strips, leaning over its inner edge, casting light and moving shadows onto it — and diving back into the scene. They keep their entire form inside the picture at all times: nothing is ever cut off by the picture's edge — the drama lives right at the frame, never beyond it.** The matte-black frame running along all four outer edges of the image stays perfectly fixed for the whole clip […] except when a character moves onto them, when the character is drawn IN FRONT of the strips, covering them. […] The viewpoint stays outside the frame, in front of the black border, for the entire clip — it never travels through the opening into the scene. **Rapid, exciting, high-energy movement — never static, never jittery.** Saturation stays rich and maxed for the entire duration — colors may transform as the scene changes, but they never fade, wash out, or drift toward grey.
+> Fixed camera, locked-off shot: the camera holds fixed framing for the entire clip — no dolly, no push-in, no pull-back, no zoom, no pan, no reframing. **One single continuous take for the entire clip — no cuts, no shot changes, no new angles, no transitions of any kind, ever.** **A simple story plays out across this one take: *[hero]* sets out from one side of the scene and crosses its full width to reach *[keeper]*; their meeting ignites the whole world — *[companion]* races through the blaze and waves of light sweep to every corner — a clear beginning, journey and payoff inside one unbroken shot.** The scene comes alive in constant motion, moving freely inside the painted black frame. **The characters interact with the frame — climbing onto the black border, sliding along its strips, leaning over its inner edge, casting light and moving shadows onto it — and diving back into the scene. They keep their entire form inside the picture at all times: nothing is ever cut off by the picture's edge — the drama lives right at the frame, never beyond it.** The matte-black frame running along all four outer edges of the image stays perfectly fixed for the whole clip […] except when a character moves onto them, when the character is drawn IN FRONT of the strips, covering them. […] The viewpoint stays outside the frame, in front of the black border, for the entire clip — it never travels through the opening into the scene. **Rapid, exciting, high-energy movement — never static, never jittery.** Saturation stays rich and maxed for the entire duration — colors may transform as the scene changes, but they never fade, wash out, or drift toward grey.
 
 The **minimal contract**, tuned per your 2026-08-14 notes: framing locked (the
 first-frame=last-frame line is gone), one take, characters work ONTO the frame with their
@@ -86,7 +89,8 @@ everything else is the model's choice.
 | 6 | Colors never wash out / drift grey | Constancy clause + post-hoc saturation QA warning |
 | 7 | Any characters welcome — creatures, people, living objects; no text/logos/watermarks | Still prompt creative-freedom clause; nudity guardrail before every spend |
 | 8 | Fresh subjects + environments every batch | Prompt seed now salts with the batch id — no weekly repetition |
-| 9 | Failures are visible, never masked | Aspect mismatch delivered as-is + flagged on the card; sat-drift flagged |
+| 9 | Failures are visible, never masked, never stretched | Black padding extracted (cropdetect); true aspect mismatch → padded + flagged, no distortion |
+| 11 | The motion has a story — beginning, journey, payoff — with zero timestamps | One untimed story sentence naming the design's own cast |
 | 10 | Delivery: exact pixels (3840×1062; EON panels 320/1280×1920) | Conform exact-fit (Topaz 4× returns via `FAL_UPSCALE=1` for real deliveries) |
 
 ## Current knobs & numbers
