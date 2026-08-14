@@ -1,0 +1,88 @@
+// The STORY DIRECTOR — writes each design's motion story FROM the actual
+// generated still (Shawn, 2026-08-14: "we need a better correlation between
+// the still generated and the prompt for the video… if it's ocean-themed with
+// a shark and fish, the story would be the fish swimming across the screen
+// while the shark chases it, hiding in the seaweed it generated, then the
+// shark finally biting it").
+//
+// A template can never know what Seedream really painted. This module shows
+// the finished still to a vision LLM and asks for ONE story paragraph that
+// uses exactly what is in the picture — the real characters, the real
+// scenery as props and hiding places — with real stakes and a decisive
+// payoff. The engine then wraps that paragraph in the fixed motion contract
+// (camera lock, one take, frame rules, constancy) so the LLM contributes
+// story, never rules.
+//
+// Same conventions as tweak.js: raw fetch (no openai dep), config read at
+// call time, and NEVER throws — any failure (no key, no image URL, network,
+// bad output) returns null and the caller falls back to the template story.
+
+import config from '../../config/index.js';
+import logger from '../../config/logger.js';
+
+const DIRECTOR_SYSTEM = `You are the motion director for a psychedelic billboard artwork. You are shown the exact still image a video model will animate into one continuous shot. Study what is ACTUALLY in the picture: every character and every piece of painted scenery (plants, coral, clouds, structures, drips, light — whatever is really there).
+
+Write ONE story paragraph (90-140 words) scripting a dramatic journey that uses ONLY what you can see:
+- a protagonist with a clear goal, and real stakes — a chase, a hunt, a rivalry, a rescue, an escape. Predator-and-prey drama is welcome, including a decisive catch.
+- the painted scenery used as the stage: ducking behind it, weaving through it, hiding in it, bursting out of it.
+- constant travel in DEPTH: the action repeatedly moves between the deep distance and the frame plane at the very front, with characters climbing onto the painted black border strips and diving back into the scene.
+- a decisive payoff in the final moments — caught, escaped, transformed, united — at full speed, never a slow settle.
+
+HARD RULES: name only characters visibly present in the image. EVERY character moves in EVERY moment — nothing ever stands still, poses, or watches idly. Everything keeps its entire form inside the picture. FORBIDDEN words and devices: timestamps, second counts, numbered beats or parts, and the words "cut", "shot", "scene two", "act", "camera", "transition", "frame two".
+
+Return STRICT JSON {"story":"<one flowing present-tense paragraph>"}.`;
+
+// Shot-list vocabulary that must never reach Seedance (it reads them as an
+// edit list — live QA 2026-08-14: timestamped beats caused a cut at t=9.67s).
+const BANNED = /\b(\d+\s*(?:seconds?|s\b))|(cut(?:s|ting)? to)|\bshot\b|\bscene (?:two|2)\b|\bact \d\b|\bcamera\b|\btransition\b/i;
+
+/**
+ * Ask the vision LLM for a story paragraph grounded in the actual still.
+ * @param {{ imageUrl: string|null, cast?: string, style?: string }} o
+ * @returns {Promise<string|null>} the story paragraph, or null on ANY failure
+ *   or rule violation (caller falls back to the template story). Never throws.
+ */
+export async function directStory({ imageUrl, cast, style } = {}) {
+  const { apiKey, baseUrl, directorModel } = config.openai;
+  if (!apiKey || !imageUrl) return null;
+  try {
+    const resp = await fetch(`${baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: directorModel,
+        max_tokens: 500,
+        response_format: { type: 'json_object' },
+        messages: [
+          { role: 'system', content: DIRECTOR_SYSTEM },
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'text',
+                text: `This is the still that will be animated${style ? ` (art style: ${style})` : ''}.` +
+                  `${cast ? ` The intended cast was: ${cast} — but trust the IMAGE over this list.` : ''} ` +
+                  'Write the story paragraph. JSON only.',
+              },
+              { type: 'image_url', image_url: { url: imageUrl } },
+            ],
+          },
+        ],
+      }),
+    });
+    if (!resp.ok) throw new Error(`openai ${resp.status}`);
+    const data = await resp.json();
+    const story = String(JSON.parse(data.choices?.[0]?.message?.content || '{}').story || '').trim();
+    if (!story || story.length < 60) return null;
+    if (BANNED.test(story)) {
+      logger.warn({ sample: story.slice(0, 120) }, 'Director story contained shot-list vocabulary — falling back to template');
+      return null;
+    }
+    return story;
+  } catch (err) {
+    logger.warn({ err: err.message }, 'Story director failed — falling back to the template story');
+    return null;
+  }
+}
+
+export default { directStory };

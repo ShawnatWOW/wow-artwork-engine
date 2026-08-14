@@ -27,8 +27,9 @@ import * as qaModule from './qa.js';
 import { planJobs, POST, SURFACES, SPECS } from './generation/catalog.js';
 import {
   buildStillPrompt, buildClosingStillPrompt, buildMotionPrompt,
-  combineSpectacularActs, sanitizeMotionPrompt,
+  composeSpectacularMotionPrompt, combineSpectacularActs, sanitizeMotionPrompt,
 } from './generation/prompts.js';
+import { directStory } from './generation/director.js';
 import { refineTweak } from './generation/tweak.js';
 import { resolveDesign } from './keeper.js';
 import falPricing from './generation/falPricing.js';
@@ -111,7 +112,7 @@ export async function runWeek({ weekOf, triggeredBy = 'manual', onStart, deps = 
     for (const job of jobs) {
       // Seed by BATCH, not by week (Shawn, 2026-08-14): every new batch gets
       // fresh subjects and environments instead of repeating the week's picks.
-      const r = await generateStill(job, { runId: run.id, weekOf: week, promptSeed: `${week}#run${run.id}`, repo, store, providers, guardrails, qa, workDir });
+      const r = await generateStill(job, { runId: run.id, weekOf: week, promptSeed: `${week}#run${run.id}`, directStory: deps.directStory, repo, store, providers, guardrails, qa, workDir });
       counts.ready += r.ready; counts.failed += r.failed; counts.blocked += r.blocked;
       done += 1;
       await repo.setRunProgress?.(run.id, { phase: 'designs', done, total: jobs.length });
@@ -140,7 +141,7 @@ async function generateStill(job, ctx) {
   // links through to EVERY insert path (ready, qa-failed, blocked, error) so a
   // variation stays attached to its family even if it fails.
   const prompt = ctx.promptOverride ?? buildStillPrompt({ style: job.style, specKey: job.specKey, option: job.option, weekOf: seed });
-  const motionPrompt = ctx.motionPromptOverride ?? buildMotionPrompt({ style: job.style, specKey: job.specKey, option: job.option, weekOf: seed });
+  let motionPrompt = ctx.motionPromptOverride ?? buildMotionPrompt({ style: job.style, specKey: job.specKey, option: job.option, weekOf: seed });
   // Storyboard surfaces (the spectacular) get a CLOSING still — the "ends
   // with" panel. Variations inherit their source's stored version via the
   // override; legacy rows without one rebuild from the template so re-rolls
@@ -193,6 +194,18 @@ async function generateStill(job, ctx) {
     // a row, but its pixels had been replaced. The sequence is the count of
     // stills the run has already produced, so it is unique and monotonic
     // (generation is sequential) without needing the not-yet-assigned row id.
+    // STORY DIRECTOR (Shawn, 2026-08-14): the motion story is written FROM
+    // the actual generated still — a vision LLM looks at what Seedream really
+    // painted (the real characters, the real scenery to hide in) and scripts
+    // a chase/hunt/journey with a decisive payoff; the engine wraps it in the
+    // fixed motion contract. Best-effort: on any failure (no key, fixture
+    // mode, bad output) the template chase story stands. Overrides (vary/
+    // tweak) keep their design's stored story.
+    if (job.style === 'frame_break' && !ctx.motionPromptOverride && referenceUrl) {
+      const story = await (ctx.directStory ?? directStory)({ imageUrl: referenceUrl });
+      if (story) motionPrompt = composeSpectacularMotionPrompt(story);
+    }
+
     const priorStills = (await repo.listArtworks(runId)).filter((a) => a.stage === 'still').length;
     const key = artworkKey({
       runId, surfaceKey: job.key, option: job.option, variant: `g${priorStills + 1}`, name: 'still.png',
@@ -401,7 +414,7 @@ export async function regenerateStills({ runId, surfaceKey, triggeredBy = 'dashb
     let done = 0;
     await repo.setRunProgress?.(runId, { phase: 'designs', done, total: jobs.length });
     for (const job of jobs) {
-      const r = await generateStill(job, { runId, weekOf: week, promptSeed, repo, store, providers, guardrails, qa, workDir });
+      const r = await generateStill(job, { runId, weekOf: week, promptSeed, directStory: deps.directStory, repo, store, providers, guardrails, qa, workDir });
       counts.ready += r.ready; counts.failed += r.failed; counts.blocked += r.blocked;
       done += 1;
       await repo.setRunProgress?.(runId, { phase: 'designs', done, total: jobs.length });
@@ -533,7 +546,7 @@ export async function regenerateStill({ artworkId, triggeredBy = 'dashboard', on
   const workDir = deps.workDir || (await mkdtemp(path.join(os.tmpdir(), `wae-regen1-${run.id}-`)));
   try {
     await repo.setRunProgress?.(run.id, { phase: 'designs', done: 0, total: 1 });
-    const counts = await generateStill(job, { runId: run.id, weekOf: run.week_of, promptSeed, repo, store, providers, guardrails, qa, workDir });
+    const counts = await generateStill(job, { runId: run.id, weekOf: run.week_of, promptSeed, directStory: deps.directStory, repo, store, providers, guardrails, qa, workDir });
     await repo.setRunProgress?.(run.id, { phase: 'designs', done: 1, total: 1 });
     const status = counts.ready === 0 ? 'failed' : 'complete';
     await repo.setRunStatus(run.id, status);

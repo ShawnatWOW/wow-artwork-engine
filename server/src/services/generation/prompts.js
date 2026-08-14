@@ -610,28 +610,45 @@ const FRAME_MOTION_RULE =
  * cast (beginning → journey → payoff), so the motion has a plot without a
  * shot list. Everything else is the model's. Pure.
  */
-export function buildSpectacularArcPrompt({ specKey, option, weekOf } = {}) {
-  // ONE story sentence (Shawn, 2026-08-14: "there's no real story to it") —
-  // a beginning, a journey and a payoff named in a single breath, with NO
-  // timestamps and NO numbered beats (those read as a shot list and caused
-  // the cuts). The cast names match the design's still, so the story is
-  // about the characters actually in the picture.
-  const f = familyFor({ specKey: specKey ?? 'spectacular_wow1_8', option: option ?? 1, weekOf });
-  const { keeper, hero, companion } = f.cast;
-  const story = `A simple story plays out across this one take: ${hero} sets out from one side of the ` +
-    `scene and crosses its full width to reach ${keeper}; their meeting ignites the whole world — ` +
-    `${companion} races through the blaze and waves of light sweep to every corner — a clear beginning, ` +
-    `journey and payoff inside one unbroken shot. `;
+/**
+ * Wrap ANY story paragraph in the fixed motion contract. The story supplies
+ * WHAT happens; the wrapper supplies the immutable rules (camera lock, one
+ * take, frame kept + worked, constant full-cast motion, color constancy).
+ * Used by both the vision-directed story (director.js — written from the
+ * actual generated still) and the template fallback below. Pure.
+ */
+export function composeSpectacularMotionPrompt(story) {
+  const s = String(story || '').trim();
   return `${CAMERA_LOCK} One single continuous take for the entire clip — no cuts, no shot changes, ` +
     `no new angles, no transitions of any kind, ever. ` +
-    `${story}` +
-    `The scene comes alive in constant motion, moving freely inside the painted black frame. ` +
+    `${s}${s && !s.endsWith('.') ? '.' : ''} ` +
+    `Every character is in motion at every single moment of the clip — none of them ever stands still, ` +
+    `poses, hovers or waits; even while one leads the action the others keep moving through the scene. ` +
+    `The action travels in depth the whole time — from the deep distance up to the frame plane at the ` +
+    `very front and back again. ` +
     `The characters interact with the frame — climbing onto the black border, sliding along its strips, ` +
     `leaning over its inner edge, casting light and moving shadows onto it — and diving back into the ` +
     `scene. They keep their entire form inside the picture at all times: nothing is ever cut off by the ` +
     `picture's edge — the drama lives right at the frame, never beyond it. ` +
     `${FRAME_MOTION_RULE} ` +
     `Rapid, exciting, high-energy movement — never static, never jittery. ${CONSTANCY_SPEC}`;
+}
+
+export function buildSpectacularArcPrompt({ specKey, option, weekOf } = {}) {
+  // TEMPLATE story — the fallback when the vision director (director.js)
+  // can't run (no OpenAI key, fixture mode, or a failed call). A chase with
+  // real stakes (Shawn, 2026-08-14: story = pursuit, scenery used as cover,
+  // depth travel, decisive payoff), with NO timestamps and NO numbered beats
+  // (those read as a shot list and caused the cuts). The cast names match
+  // the design's still, so the story is about the characters in the picture.
+  const f = familyFor({ specKey: specKey ?? 'spectacular_wow1_8', option: option ?? 1, weekOf });
+  const { keeper, hero, companion } = f.cast;
+  const story = `A chase with real stakes plays out across this one take: ${hero} flees across the full ` +
+    `width of the scene with ${companion} in relentless pursuit — weaving through the painted scenery, ` +
+    `ducking behind it, breaking cover, diving from the deep distance up to the frame itself and back — ` +
+    `until the chase peaks at ${keeper}, where the pursuit ends in one decisive dramatic payoff and the ` +
+    `whole world erupts with light.`;
+  return composeSpectacularMotionPrompt(story);
 }
 
 /**
@@ -672,6 +689,6 @@ export function combineSpectacularActs(act1, act2) {
 export { THEMES, CHOREOGRAPHIES, SOLO_MOTIONS, SPECTACULAR_FAMILIES, SPECTACULAR_ARCS };
 export default {
   buildStillPrompt, buildClosingStillPrompt, buildMotionPrompt, buildSpectacularArcPrompt,
-  buildSpectacularAct, combineSpectacularActs, sanitizeMotionPrompt,
+  composeSpectacularMotionPrompt, buildSpectacularAct, combineSpectacularActs, sanitizeMotionPrompt,
   travelFor, themeFor, choreographyFor, soloMotionFor, familyFor, arcFor, THEMES, SPECTACULAR_FAMILIES,
 };

@@ -654,3 +654,50 @@ test('run progress: runWeek and animateRun record phase/done/total for the dashb
     await rm(base, { recursive: true, force: true });
   }
 });
+
+test('story director: the motion prompt is written from the ACTUAL still when a director runs', async (t) => {
+  if (!(await hasFfmpeg())) return t.skip('ffmpeg not installed');
+  const { base, repo, store } = await harness();
+  const seen = [];
+  // A still provider that (unlike the fixture) reports a hosted URL, so the
+  // director step has an image to look at.
+  const urlStill = {
+    ...stillProvider,
+    generate: async (args) => ({ ...(await stillProvider.generate(args)), url: 'https://fal.example/still.png' }),
+  };
+  const providersWithUrl = { mode: 'fixture', still: urlStill, motion: motionProvider };
+  const directStory = async ({ imageUrl }) => {
+    seen.push(imageUrl);
+    return 'THE DIRECTED SHARK STORY: the shark hunts the fish through the painted seaweed';
+  };
+  const spectacularOnly = SURFACES.filter((s) => s.key === 'spectacular');
+  try {
+    const { runId } = await runWeek({
+      weekOf: '2026-08-17', triggeredBy: 'test',
+      deps: { repo, store, providers: providersWithUrl, surfaces: spectacularOnly, optionsPerSurface: 1, duration: 1, directStory },
+    });
+    const [still] = await repo.listArtworks(runId);
+    assert.deepEqual(seen, ['https://fal.example/still.png'], 'the director is shown the generated still');
+    assert.match(still.motion_prompt, /THE DIRECTED SHARK STORY/, 'the directed story drives the motion prompt');
+    // The fixed contract still wraps the directed story.
+    assert.match(still.motion_prompt, /One single continuous take/);
+    assert.match(still.motion_prompt, /Every character is in motion at every single moment/);
+    assert.ok(still.motion_prompt.startsWith('Fixed camera, locked-off shot:'));
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
+});
+
+test('story director: falls back to the template chase story without a director/URL', async (t) => {
+  if (!(await hasFfmpeg())) return t.skip('ffmpeg not installed');
+  const { base, repo, store } = await harness();
+  const spectacularOnly = SURFACES.filter((s) => s.key === 'spectacular');
+  try {
+    // Plain fixture provider: no still URL -> the director step never runs.
+    const { runId } = await runWeek({ weekOf: '2026-08-17', triggeredBy: 'test', deps: { repo, store, providers, surfaces: spectacularOnly, optionsPerSurface: 1, duration: 1 } });
+    const [still] = await repo.listArtworks(runId);
+    assert.match(still.motion_prompt, /A chase with real stakes/, 'template story stands when no director can run');
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
+});
