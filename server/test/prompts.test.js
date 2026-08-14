@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   buildStillPrompt, buildClosingStillPrompt, buildMotionPrompt, buildSpectacularArcPrompt,
-  buildSpectacularAct, combineSpectacularActs, sanitizeMotionPrompt,
+  buildSpectacularAct, combineSpectacularActs, sanitizeMotionPrompt, castList,
   travelFor, themeFor, choreographyFor, familyFor, arcFor, THEMES, CHOREOGRAPHIES, SPECTACULAR_FAMILIES,
 } from '../src/services/generation/prompts.js';
 import { checkPrompt } from '../src/services/guardrails.js';
@@ -85,13 +85,13 @@ test('every prompt names concrete non-human subjects (themes for EON, casts for 
       const f = familyFor(args);
       const still = buildStillPrompt(args);
       const closing = buildClosingStillPrompt(args);
-      for (const member of f.cast) {
+      for (const member of castList(f)) {
         assert.ok(still.includes(member), `opening still must name ${member}`);
         assert.ok(closing.includes(member), `closing still must name ${member}`);
       }
-      // Motion acts reference the cast through the arc's choreography.
+      // Motion acts reference the cast through the arc's story beats.
       const act1 = buildSpectacularAct({ ...args, act: 1 });
-      assert.ok(f.cast.some((m) => act1.includes(m)), 'act 1 must name the cast');
+      assert.ok(castList(f).some((m) => act1.includes(m)), 'act 1 must name the cast');
     } else {
       const t = themeFor(args);
       assert.ok(subjects.has(t.subject));
@@ -113,12 +113,19 @@ test('spectacular options draw guaranteed-distinct style families', () => {
 test('spectacular still is an ensemble: multiple named characters, verified frame geometry', () => {
   const still = buildStillPrompt({ ...JOB, option: 1 });
   const f = familyFor({ ...JOB, option: 1 });
-  assert.ok(f.cast.length >= 2, 'a cast has at least two characters');
+  assert.ok(castList(f).length >= 2, 'a cast has at least two characters');
   // The verified geometry formula (live-tested 2026-08-04) must survive edits.
   assert.match(still, /flush with the picture's edges on all sides/);
   assert.match(still, /one-point perspective/);
   assert.match(still, /never shown as an object/);
   assert.match(still, /ensemble of characters/);
+  // Story overhaul (2026-08-11): the opening is an ESTABLISHING shot — the
+  // arc's opening scene, poised, never the old everyone-mid-explosion text
+  // (frozen light-detonations in frame one smear when animated and leave the
+  // story nowhere to build).
+  assert.match(still, /This is how the story opens/);
+  assert.match(still, /poised and alive with quiet anticipation/);
+  assert.doesNotMatch(still, /bursting with kinetic energy/);
 });
 
 test('closing still: spectacular-only, same geometry + cast, reads as a finale', () => {
@@ -207,14 +214,16 @@ test('closing still + acts rotate deterministically and vary across weeks', () =
   assert.ok(arcs.size >= 2, `expected ≥2 distinct arcs across 8 weeks, got ${arcs.size}`);
 });
 
-test('spectacular families are all colorful and every cast member is non-human-named', () => {
+test('spectacular families: full role-cast, every member concrete and non-human-named', () => {
   assert.ok(SPECTACULAR_FAMILIES.length >= 8, 'at least 8 style variations');
   for (const f of SPECTACULAR_FAMILIES) {
-    assert.ok(f.cast.length >= 2 && f.cast.length <= 4, `${f.key}: 2-4 characters`);
-    for (const member of f.cast) {
+    // Story roles (2026-08-11): keeper (rooted heart), hero (agile
+    // protagonist), companion (secondary mover) — every beat needs its lead.
+    for (const role of ['keeper', 'hero', 'companion']) {
+      assert.ok(f.cast[role]?.length > 8, `${f.key}: missing ${role}`);
       // Named concrete creatures/objects — never a bare "creature"/"figure"
       // (vague subjects render humanoid; Seedance moderation refuses those).
-      assert.doesNotMatch(member, /\b(figure|person|human|creature)\b/i, `${f.key}: "${member}" too vague`);
+      assert.doesNotMatch(f.cast[role], /\b(figure|person|human|creature)\b/i, `${f.key}: "${f.cast[role]}" too vague`);
     }
   }
 });

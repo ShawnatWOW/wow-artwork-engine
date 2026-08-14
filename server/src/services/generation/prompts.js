@@ -87,48 +87,88 @@ const TRAVELS = [
 // built for constant motion; every cast member is a NAMED non-human creature
 // (vague subjects collapse to humanoids, which Seedance moderation refuses).
 // The 3 weekly options are guaranteed DIFFERENT families — see familyFor().
+// Every family casts three named non-human characters into fixed NARRATIVE
+// ROLES (story overhaul 2026-08-11), so every arc beat has a clear lead:
+//   keeper    — the large, rooted presence at the heart of the scene
+//   hero      — the agile protagonist; owns the frame-punch payoffs
+//   companion — the secondary mover; reacts, chases, mirrors
 const SPECTACULAR_FAMILIES = [
   {
     key: 'liquid_chrome',
     style: 'liquid-chrome psychedelia — molten mirror surfaces streaked with hot pink, electric blue and acid green',
-    cast: ['a serpent of liquid chrome', 'a mirrored octopus dripping rainbow paint', 'a molten-mercury hummingbird'],
+    cast: {
+      keeper: 'a mirrored octopus dripping rainbow paint',
+      hero: 'a serpent of liquid chrome',
+      companion: 'a molten-mercury hummingbird',
+    },
   },
   {
     key: 'neon_botanical',
     style: 'neon botanical jungle — day-glo flora, luminous vines and hyper-saturated tropical light',
-    cast: ['a giant day-glo orchid with curling luminous tendrils', 'an electric-green vine serpent', 'a neon hummingbird moth'],
+    cast: {
+      keeper: 'a giant day-glo orchid with curling luminous tendrils',
+      hero: 'an electric-green vine serpent',
+      companion: 'a neon hummingbird moth',
+    },
   },
   {
     key: 'cosmic_candy',
     style: 'cosmic candy — glossy sugar-glass surfaces, swirling nebula taffy and hyper-sweet saturated color',
-    cast: ['a candy-glass koi fish', 'a taffy-winged phoenix', 'a gummy comet whale trailing sparkling sugar dust'],
+    cast: {
+      keeper: 'a gummy comet whale trailing sparkling sugar dust',
+      hero: 'a candy-glass koi fish',
+      companion: 'a taffy-winged phoenix',
+    },
   },
   {
     key: 'stained_glass',
     style: 'stained-glass kaleidoscope — jewel-toned translucent facets refracting brilliant light',
-    cast: ['a crystal butterfly with kaleidoscope stained-glass wings', 'a stained-glass phoenix', 'a prism-shelled beetle'],
+    cast: {
+      keeper: 'a stained-glass phoenix perched with wings spread wide',
+      hero: 'a crystal butterfly with kaleidoscope stained-glass wings',
+      companion: 'a prism-shelled beetle',
+    },
   },
   {
     key: 'wet_paint',
     style: 'wet-paint pop surrealism — thick glossy paint in collision, splashing and swirling in saturated color',
-    cast: ['a paint-splash cheetah', 'a dripping-rainbow cobra', 'an ink-burst falcon'],
+    cast: {
+      keeper: 'a dripping-rainbow cobra risen in a gleaming coil',
+      hero: 'a paint-splash cheetah',
+      companion: 'an ink-burst falcon',
+    },
   },
   {
     key: 'deep_sea',
     style: 'iridescent deep-sea bioluminescence — electric glowing life against rich abyssal color',
-    cast: ['a pulsing electric jellyfish with trailing neon tentacles', 'an iridescent manta ray', 'a bioluminescent anglerfish'],
+    cast: {
+      keeper: 'a pulsing electric jellyfish with trailing neon tentacles',
+      hero: 'an iridescent manta ray',
+      companion: 'a bioluminescent anglerfish',
+    },
   },
   {
     key: 'ultraviolet',
     style: 'ultraviolet blacklight neon — trippy UV glow, vivid and electric',
-    cast: ['a dancing cluster of glowing neon mushrooms', 'an ultraviolet chameleon', 'a neon-striped gecko'],
+    cast: {
+      keeper: 'a dancing cluster of glowing neon mushrooms',
+      hero: 'an ultraviolet chameleon',
+      companion: 'a neon-striped gecko',
+    },
   },
   {
     key: 'cosmic_tiedye',
     style: 'cosmic tie-dye nebula — swirling stardust bursting with saturated color',
-    cast: ['a cosmic koi fish swimming through swirls of stardust', 'a nebula fox with a comet tail', 'a stardust dragon serpent'],
+    cast: {
+      keeper: 'a stardust dragon serpent wound through the deep distance',
+      hero: 'a cosmic koi fish',
+      companion: 'a nebula fox with a comet tail',
+    },
   },
 ];
+
+/** The cast as a list (keeper, hero, companion). Pure; exported for tests/UI. */
+export const castList = (family) => [family.cast.keeper, family.cast.hero, family.cast.companion];
 
 // Two-act scene arcs — each one a STORY told through movement, not a motion
 // texture. Live QA 2026-08-10 (Shawn): the old vocabulary ("orbit", "vortex",
@@ -142,30 +182,62 @@ const SPECTACULAR_FAMILIES = [
 // Vocabulary guardrails from live QA 2026-08-05: no "celebration" (pulled
 // CROWDS of neon human runners), no "frozen" (pulled stone statues + a museum
 // room) — beats are described purely as the cast + light + scenery.
+// Narrative arcs — each is a complete little STORY told across the 30 seconds,
+// written as ordered beats with a clear LEAD character per beat (story
+// overhaul 2026-08-11, Shawn: "not flowing with a clear plot" — simultaneous
+// unordered activity reads as screensaver soup; the model needs sequence,
+// cause → reaction, and a protagonist).
+//
+// Each arc ships FIVE pieces telling one story:
+//   opening — the establishing scene (the opening still; the video's frame 1)
+//   act1    — the setup and inciting event (first movement)
+//   act2    — the consequence and transformation (second movement)
+//   payoff  — the ending AS MOTION (third movement) — described in words and
+//             left free, never anchored on a target frame (live QA 2026-08-10)
+//   finale  — the ending as a TABLEAU (the closing still, when storyboard is
+//             flipped back on; legacy rows still render it)
+//
+// Vocabulary laws (all learned live): TRAVEL verbs only — orbit/spiral/swirl/
+// figure-eight/interlocking literalized into characters circling the center
+// (2026-08-10); no "frozen" (statues), "celebration" (crowds), "monumental"
+// (pedestals), "figures", show words, screen words, or drawable nouns inside
+// negations. Pauses are "poised", never frozen.
 const SPECTACULAR_ARCS = [
-  (cast) => ({
-    act1: `A pursuit tears across the whole scene: ${cast} burst in one after another from the deep distance, and the chase sweeps from the far left edge to the far right — hugging the near foreground, plunging deep, veering back — each character seizing the lead in turn and punching out through the opening as the race passes`,
-    act2: `The chase transforms the world — every region the characters cross erupts into a new landscape of the same vivid palette, until the pursuit becomes a triumphant charge storming back across the full width, gathering light with every stride`,
-    finale: 'the full cast mid-charge in a line spanning the whole width of the transformed scenery, the leader bursting through the opening over the black frame',
+  // THE DISCOVERY — curiosity rewarded. Keeper LEFT, hero enters RIGHT.
+  ({ keeper, hero, companion }) => ({
+    opening: `${keeper} rests glowing softly in the left third of the scene while ${companion} drifts high across the deep background on the right; at the far right edge ${hero} has just slipped into view, small and curious, leaning toward the distant glow, the nearest curl of ${keeper}'s light spilling gently through the opening over the black frame`,
+    act1: `the story begins in quiet wonder — ${keeper} glows in the left third as ${hero} enters at the far right edge and crosses the whole scene toward it, hugging the near foreground through the right half, plunging deep through the middle. Midway through, ${hero} reaches the left third, discovers ${keeper}, and sweeps past it in one close delighted flyby; ${keeper} stirs and flares in answer, a ripple of light racing from the left edge all the way to the right. At the movement's peak ${hero} banks off the left edge, charges back toward the right foreground, and bursts through the opening over the black frame with ${companion} diving down from the deep right to follow`,
+    act2: `${hero} re-enters at the right and leads ${companion} on a joyful chase the OTHER way — right edge to left edge through the near foreground, back left-to-right through the deep background — and every region they cross blooms brighter in their wake, the scenery transforming strip by strip until the whole width has turned radiant`,
+    payoff: `${keeper} erupts into full radiant bloom in the left third and hurls a wave of light rightward across the whole scene; ${hero} outruns the wave from left to right, growing from deep-distance small to foreground huge, and bursts through the opening over the black frame at the right of center, ${companion} sweeping wide along the top, the transformed world blazing to every edge`,
+    finale: `${keeper} at full radiant bloom in the left third of the transformed scenery, ${hero} bursting through the opening over the black frame right of center, ${companion} banking along the top edge toward it, ribbons of settling light spanning the full width`,
   }),
-  (cast) => ({
-    act1: `A meeting of forces: from opposite far edges of the scene, ${cast} advance toward each other through the deep space, carving glowing paths through erupting scenery, until they meet head-on in a blinding collision of light that hurls them past each other into the near foreground and out through the opening`,
-    act2: `The collision births a new world — the environment reforms brighter and denser, and the characters now move as allies, carving long crisscrossing paths that span the full width and depth, trading the near foreground in explosive turns`,
-    finale: 'the full cast caught mid-leap in the reborn dreamscape, two characters bursting through the opening over the black frame from opposite sides, the rest streaking at depth between them',
+  // THE SPARK THIEF — a playful theft, returned as a gift. Keeper RIGHT, escape LEFT.
+  ({ keeper, hero, companion }) => ({
+    opening: `${keeper} cradles a small brilliant orb of light in the right third of the scene while ${companion} glides slow watchful passes across the middle at mid-depth; at the far left edge ${hero} leans into view, eyes on the distant orb, one stray ribbon of the orb's glow spilling gently through the opening over the black frame`,
+    act1: `the story begins with a heist — ${hero} enters at the far left edge and works its way right across the whole scene, slipping past ${companion} in the middle with quick feints. Midway through, ${hero} reaches the right third and snatches the blazing orb from ${keeper}; ${keeper} flares in surprise and ${companion} whips into pursuit. At the movement's peak ${hero} tears back left across the full width with the orb blazing, and dives through the opening over the black frame near the left edge, ${companion} closing fast behind`,
+    act2: `the chase doubles back — ${hero} re-enters low at the left and races right through the near foreground with ${companion} hard behind, the orb's light igniting every strip of scenery they cross, until at the right third ${hero} relents and returns the orb to ${keeper}, whose lifted light detonates outward and rolls a transformation leftward across the whole scene`,
+    payoff: `${keeper} raises the orb to full blaze at the right and the wave of new light sweeps to the far left edge; ${hero} and ${companion} ride it side by side from right to left, swelling huge in the near foreground, and burst through the opening over the black frame together left of center, the transformed world flaring behind them`,
+    finale: `${keeper} holding the blazing orb aloft in the right third of the transformed scenery, its light washing every strip of the scene to the far left edge, ${hero} bursting through the opening over the black frame left of center, ${companion} gliding just behind it at mid-depth`,
   }),
-  (cast) => ({
-    act1: `One spark wakes the world: the first of ${cast} erupts from the deep distance and rushes the near foreground, and everywhere it travels the scenery ignites — it races the full width of the scene waking the others, each new character joining the run at full speed and bursting through the opening as it enters`,
-    act2: `The awakened world surges — region by region the environment blooms into a completely new landscape as the characters fan out to claim it, streaking to the far edges and diving through the depths, every path a new stroke of light`,
-    finale: 'the full cast fanned across the fully awakened landscape at every depth, the nearest character surging through the opening over the black frame, the scene at maximum brilliance',
+  // THE AWAKENING — one bright visitor wakes the whole world, left to right.
+  ({ keeper, hero, companion }) => ({
+    opening: `the scene waits in deep rich stillness — ${keeper} sleeps dim and low in the right third, ${companion} hovering watchfully above the middle at mid-depth, while ${hero} enters at the far left edge carrying a trail of bright light, its first glow spilling through the opening over the black frame`,
+    act1: `the story begins in hush — ${hero} glides in at the far left edge trailing bright light and crosses the sleeping scenery left to right, skimming the near foreground then rising through the deep middle. Midway through, ${hero} reaches the right third and touches its light to ${keeper}; ${keeper} wakes and unfurls in spreading glow, color rolling back leftward wave after wave while ${companion} darts down from the middle in wonder. At the movement's peak ${hero} rides the returning wave leftward and bursts through the opening over the black frame left of center, just as the color reaches the far left edge`,
+    act2: `the awakening claims the whole width — ${keeper} rises at the right and pours light outward while ${hero} and ${companion} split the scene between them, ${hero} sweeping the near foreground right-to-left and ${companion} the deep background left-to-right, each strip they cross blooming into a completely new landscape`,
+    payoff: `${keeper} rises to full height at the right and casts light to every edge; ${hero} turns at the far left and charges the full width back toward the viewer, growing from deep-distance small to foreground huge, bursting through the opening over the black frame right of center trailing its whole ribbon of light, ${companion} flanking along the top, the scene at maximum brilliance`,
+    finale: `the fully awakened scene glowing in rich transformed color across its whole width, ${keeper} risen tall in the right third, ${hero} bursting through the opening over the black frame right of center with its light-trail streaming back to the far left edge, ${companion} poised above the middle`,
   }),
-  (cast) => ({
-    act1: `A rivalry splits the scene: ${cast} clash from opposite ends, trading charges across the full width — each impact detonating color through the scenery — and lunging past each other through the opening in alternating raids`,
-    act2: `The rivalry breaks into alliance — the warring halves of the environment fuse into one majestic new vista, and the characters charge together, sweeping edge to edge through the near foreground and the deep background as one blazing front`,
-    finale: 'the full cast charging as one blazing front across the fused vista, the foremost character bursting through the opening over the black frame, every character distinct and glowing',
+  // THE DUEL OF LIGHT — a contest that becomes an alliance, fought across the width.
+  ({ keeper, hero, companion }) => ({
+    opening: `${hero} and ${companion} face each other from the far left and far right edges at mid-depth, bright energy gathering around each of them, while ${keeper} watches calm and glowing from the deep middle distance; one streamer of gathered light already spills through the opening over the black frame`,
+    act1: `the story begins as a contest — ${hero} charges from the far left and ${companion} from the far right, crossing mid-scene and detonating color where they pass, each returning charge cutting a wider path through a new strip of scenery. Midway through, the raids cross the near foreground in alternating passes, left-to-right then right-to-left. At the movement's peak ${hero} throws the boldest charge yet, sweeping from the far left all the way out through the opening and across the black frame right of center, as ${companion} rises to match it along the top`,
+    act2: `${keeper} surges up from the deep middle and braids the duelling ribbons into one — the contest turns to alliance, ${hero} and ${companion} now charging together, left edge to right edge through the near foreground, back through the deep background, their merged light fusing the warring halves of the scenery into one majestic new vista`,
+    payoff: `the braided stream of light swells into a torrent spanning the full width; ${hero} rides its crest from the deep middle out to foreground huge and bursts through the opening over the black frame left of center, ${companion} arcing along the right, ${keeper} blazing at the source, the fused vista at full brilliance edge to edge`,
+    finale: `one great braided stream of light spanning the full width and flowing out through the opening over the black frame, ${hero} riding its crest left of center, ${companion} arcing along the right at mid-depth, ${keeper} glowing at the deep middle source`,
   }),
 ];
 
-/** Join a cast into prose: "a, b and c". Pure. */
+/** Join a cast list into prose: "a, b and c". Pure. */
 const joinCast = (cast) => `${cast.slice(0, -1).join(', ')} and ${cast.at(-1)}`;
 
 /**
@@ -178,11 +250,11 @@ export function familyFor({ specKey, option, weekOf }) {
   return SPECTACULAR_FAMILIES[(base + (option - 1)) % SPECTACULAR_FAMILIES.length];
 }
 
-/** The two-act arc for one spectacular option. Pure; exported for tests. */
+/** The narrative arc for one spectacular option. Pure; exported for tests. */
 export function arcFor({ specKey, option, weekOf }) {
   const f = familyFor({ specKey, option, weekOf });
   const arc = SPECTACULAR_ARCS[hash(`arc:${weekOf || 'week'}:${specKey}:${option}`) % SPECTACULAR_ARCS.length];
-  return arc(joinCast(f.cast));
+  return arc(f.cast);
 }
 
 // 3-act journeys for the connected wide master. Each act plays out in one
@@ -300,6 +372,13 @@ const FRAME_CONTAINMENT =
   `Every element stays well inside the picture's borders: nothing but the black frame itself ever ` +
   `touches the picture's edge, and nothing is cropped by the picture's boundary — every character ` +
   `and every trail stays fully contained within the frame's outer edge, one solid contained 3D space.`;
+// Poise clause for the OPENING still — a story has to start somewhere lower
+// than its climax (story overhaul 2026-08-11). CAST_ENERGY stays on the
+// closing still (the payoff tableau, when the storyboard flow is on).
+const CAST_POISE =
+  'The scene is poised and alive with quiet anticipation — soft trails of light drift through it, ' +
+  'every character distinct and mid-gesture at its own depth, the whole space glowing with rich ' +
+  'saturated color that feels ready to move.';
 // Ensemble variant of ENERGY: the whole cast alive at layered depths.
 const CAST_ENERGY =
   'Every character is caught mid-motion and bursting with kinetic energy — trails of light streak ' +
@@ -337,25 +416,32 @@ export function buildStillPrompt({ style, specKey, option, weekOf }) {
       `${WRAP_BANDS_CONNECTED} ${CONTRAST} ${SAFE}`;
   }
   if (style === 'frame_break') {
-    // The WOW signature 3D pop-out — ensemble edition (Scott, 2026-08-05).
+    // The WOW signature 3D pop-out — story edition (Shawn, 2026-08-11).
     // The black frame is PAINTED INTO the scene (trompe-l'oeil); characters
-    // physically break through it. Never rely on a post-composited letterbox —
-    // that clips the art BEHIND the frame so nothing can ever pop out
+    // physically break through it. Never rely on a post-composited letterbox
+    // alone — that clips the art BEHIND the frame so nothing can ever pop out
     // (Shawn, 2026-07-15 + 2026-07-21). Geometry formula verified live
     // 2026-08-04 — see FRAME_GEOMETRY / FRAME_CONTAINMENT; never regress to
     // "inset border" or "shadow box as an object" wording (both failed live).
+    //
+    // This is the ESTABLISHING SHOT — the arc's opening scene, poised rather
+    // than exploding, so the 30-second story has somewhere to build to
+    // (when frame one is already mid-explosion, the frozen light-detonations
+    // smear when animated and the video has no rising action). The gentle
+    // frame overlap in each arc's opening keeps the 3D read from second one;
+    // the big punches belong to the movements and the ending.
     const f = familyFor({ specKey, option, weekOf });
-    const cast = joinCast(f.cast);
+    const cast = joinCast(castList(f));
+    const arc = arcFor({ specKey, option, weekOf });
     return `An ultra-wide trompe-l'oeil deep-relief composition in perfectly frontal, dead-centered, ` +
       `symmetrical one-point perspective. Style: ${f.style}. ` +
       `${FRAME_GEOMETRY} ${FRAME_STYLE} ` +
-      `The scene is home to an ensemble of characters: ${cast}. ${ONLY_CAST(cast)} They are placed at clearly ` +
-      `different depths — some deep in the distance, some mid-ground, and at least one bursting forward through the ` +
-      `opening toward the viewer: its body and trailing light cross the frame's inner edge and overlap the ` +
-      `frame's black front strips — rendered IN FRONT of them, partially covering them, casting soft shadows ` +
-      `onto them — unmistakably closer to the viewer than the frame plane. Every character is distinct, ` +
-      `mid-motion and interacting with the others. ${FRAME_CONTAINMENT} ` +
-      `${CAST_ENERGY} ${CONTRAST} ${SAFE}`;
+      `The scene is home to an ensemble of characters: ${cast}. ${ONLY_CAST(cast)} ` +
+      `This is how the story opens: ${arc.opening}. ` +
+      `Whatever crosses the frame's inner edge is rendered IN FRONT of the black strips, partially ` +
+      `covering them and casting soft shadows onto them — unmistakably closer to the viewer than the ` +
+      `frame plane. ${FRAME_CONTAINMENT} ` +
+      `${CAST_POISE} ${CONTRAST} ${SAFE}`;
   }
   // eon_single: tall portrait composition, composed to wrap (the left band is
   // cut away onto the pod's spine — see WRAP_BAND_SINGLE).
@@ -376,7 +462,7 @@ export function buildStillPrompt({ style, specKey, option, weekOf }) {
 export function buildClosingStillPrompt({ style, specKey, option, weekOf }) {
   if (style !== 'frame_break') return null; // storyboard is a spectacular-only feature
   const f = familyFor({ specKey, option, weekOf });
-  const cast = joinCast(f.cast);
+  const cast = joinCast(castList(f));
   const arc = arcFor({ specKey, option, weekOf });
   return `An ultra-wide trompe-l'oeil deep-relief composition in perfectly frontal, dead-centered, ` +
     `symmetrical one-point perspective. Style: ${f.style}. ` +
@@ -489,11 +575,17 @@ const CONSTANCY_SPEC =
   'Saturation stays rich and maxed for the entire duration — colors may transform as the scene changes, ' +
   'but they never fade, wash out, or drift toward grey.';
 
-// The frame rule for both spectacular acts: fixed, flush, inviolable.
+// The frame rule for both spectacular acts: fixed, flush, inviolable. Since
+// 2026-08-11 the delivered video carries NO composited plate (it buried the
+// pop-outs), so the model's own painted frame IS the frame — it must stay
+// crisp to the last frame, and crossers must render in front of it.
 const FRAME_MOTION_RULE =
   `The matte-black frame running along all four outer edges of the image stays perfectly fixed for the whole clip — ` +
   `it never moves, bends, shrinks, detaches from the edges or fades, and nothing ever appears outside it: ` +
   `the frame's outer edge remains the absolute boundary of the piece at all times. ` +
+  `The black strips stay crisp, straight and solid black to the very last frame, painted as the nearest ` +
+  `layer of the scene — except when a character bursts through the opening, when the character is drawn ` +
+  `IN FRONT of the strips, covering them. ` +
   `Characters crossing the frame visibly occlude it, casting moving shadows onto it, yet always stop ` +
   `short of the image's outer edge — every character, trail and effect stays fully inside the image bounds, ` +
   `never touched or cropped by the outer boundary. ` +
@@ -504,8 +596,8 @@ const FRAME_MOTION_RULE =
   `perform inside the opening and burst out toward the frame plane, always watched from outside.`;
 
 /**
- * The spectacular's motion prompt — deliberately MINIMAL (Shawn, 2026-08-10,
- * after two live 2.5 rounds): choreographing the motion backfired twice. The
+ * The spectacular's motion prompt — deliberately MINIMAL (Shawn, 2026-08-14,
+ * after three live 2.5 rounds): choreographing the motion kept backfiring. The
  * timestamped "movements" structure read to Seedance 2.5 as a multi-shot
  * storyboard and it CUT on the beat boundaries, abandoning the frame; the
  * scripted story beats over-constrained motion the model handles better on

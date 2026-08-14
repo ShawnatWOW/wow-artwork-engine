@@ -969,14 +969,17 @@ async function animateStill(still, ctx) {
   // pixels — cover's center-crop paid for any aspect error with exactly those
   // pixels, visibly thinning the frame even with a locked camera.
   await ffmpeg.conform({ input: srcVideo, output: final, width: finalSpec.width, height: finalSpec.height, duration: effDuration, fps, fit: 'exact' });
-  // NOTHING is composited onto the video (Shawn, 2026-08-10, after reviewing
-  // the first 2.5 creative): the old per-frame plate's translucent depth
-  // rings sat IN FRONT of the model's painted frame and of any art crossing
-  // it — a black gradient floating over the picture. The frame plate is
-  // applied to the STILL only (where the frame is born); the video keeps the
-  // frame it inherited from that still as real model-rendered pixels, so
-  // everything on screen can interact with it.
-  const deliverable = final;
+  // FRAME PLATE on the delivered video: OFF by default (Shawn, 2026-08-11).
+  // The stamp was burying characters that Seedance correctly rendered IN FRONT
+  // of its painted frame — the post-composited-letterbox failure of 2026-07-21
+  // all over again; no pop-out survives an opaque band drawn on top. Frame
+  // geometry is anchored by the PLATED STILL Seedance animates from instead;
+  // FRAME_PLATE_ON_VIDEO=1 restores the stamp if painted frames drift.
+  let deliverable = final;
+  if (surface.post === POST.FRAME_BREAK && config.generation.framePlateOnVideo) {
+    deliverable = path.join(dir, 'final_framed.mp4');
+    await compositeFramePlate({ input: final, output: deliverable, width: finalSpec.width, height: finalSpec.height });
+  }
   const td = thumbDims(finalSpec);
   const thumb = path.join(dir, 'thumb.jpg');
   await ffmpeg.thumbnail({ input: deliverable, output: thumb, width: td.width, height: td.height, atSeconds: Math.min(2, effDuration / 2) });
