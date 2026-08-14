@@ -327,9 +327,10 @@ export function soloMotionFor({ specKey, option, weekOf }) {
 const CONTRAST =
   'High-contrast lighting: a bright, saturated hero subject against a deep, dark background, ' +
   'strong tonal separation readable from far away in direct sunlight; never an all-white or all-black scene.';
+// Humans and any characters are allowed (Shawn, 2026-08-14) — only
+// text/logos/watermarks stay banned (billboard art must never carry stray type).
 const SAFE =
-  'Ultra high detail. No people, no faces, no human figures, no human silhouettes, no mannequins, ' +
-  'no statues of people, no hands, no text, no logos, no watermarks.';
+  'Ultra high detail. No text, no logos, no watermarks.';
 // Energy clause for standalone stills — the subject should feel alive even as
 // a still frame. (Kept off the connected master, whose environment must stay
 // clean and uniform for the travel illusion.)
@@ -436,9 +437,11 @@ export function buildStillPrompt({ style, specKey, option, weekOf }) {
     return `An ultra-wide trompe-l'oeil deep-relief composition in perfectly frontal, dead-centered, ` +
       `symmetrical one-point perspective. Style: ${f.style}. ` +
       `${FRAME_GEOMETRY} ${FRAME_STYLE} ` +
-      `The scene is home to an ensemble of characters: ${cast}. ${ONLY_CAST(cast)} ` +
+      `The scene is home to an ensemble of characters: ${cast}. ` +
+      `Beyond that cast there is full creative freedom — any characters and scenery that serve the ` +
+      `scene are welcome: creatures, people, living objects, anything with personality. ` +
       `This is how the story opens: ${arc.opening}. ` +
-      `Whatever crosses the frame's inner edge is rendered IN FRONT of the black strips, partially ` +
+      `Whatever moves onto the frame's inner edge is rendered IN FRONT of the black strips, partially ` +
       `covering them and casting soft shadows onto them — unmistakably closer to the viewer than the ` +
       `frame plane. ${FRAME_CONTAINMENT} ` +
       `${CAST_POISE} ${CONTRAST} ${SAFE}`;
@@ -535,8 +538,7 @@ export function sanitizeMotionPrompt(prompt) {
 // frame (Scott, 2026-08-07).
 const CAMERA_LOCK =
   'Fixed camera, locked-off shot: the camera holds fixed framing for the entire clip — ' +
-  'no dolly, no push-in, no pull-back, no zoom, no pan, no reframing. ' +
-  'The framing of the first frame is exactly the framing of the last frame.';
+  'no dolly, no push-in, no pull-back, no zoom, no pan, no reframing.';
 
 /**
  * The motion prompt for one option — how the art moves within the frame.
@@ -584,16 +586,16 @@ const FRAME_MOTION_RULE =
   `it never moves, bends, shrinks, detaches from the edges or fades, and nothing ever appears outside it: ` +
   `the frame's outer edge remains the absolute boundary of the piece at all times. ` +
   `The black strips stay crisp, straight and solid black to the very last frame, painted as the nearest ` +
-  `layer of the scene — except when a character bursts through the opening, when the character is drawn ` +
+  `layer of the scene — except when a character moves onto them, when the character is drawn ` +
   `IN FRONT of the strips, covering them. ` +
-  `Characters crossing the frame visibly occlude it, casting moving shadows onto it, yet always stop ` +
-  `short of the image's outer edge — every character, trail and effect stays fully inside the image bounds, ` +
+  `Characters on the frame visibly occlude it, casting moving shadows onto it, yet always keep their ` +
+  `entire form inside the image bounds — every character, trail and effect stays fully inside the image, ` +
   `never touched or cropped by the outer boundary. ` +
   `The four black strips remain flush with the four edges of the image in every single frame, ` +
   `the same width from the first frame to the last. ` +
   `The viewpoint stays outside the frame, in front of the black border, for the entire clip — ` +
   `it never travels through the opening into the scene. The scene transforms and the characters ` +
-  `perform inside the opening and burst out toward the frame plane, always watched from outside.`;
+  `perform inside the opening and come forward onto the frame plane, always watched from outside.`;
 
 /**
  * The spectacular's motion prompt — deliberately MINIMAL (Shawn, 2026-08-14,
@@ -612,10 +614,12 @@ export function buildSpectacularArcPrompt() {
   return `${CAMERA_LOCK} One single continuous take for the entire clip — no cuts, no shot changes, ` +
     `no new angles, no transitions of any kind, ever. ` +
     `The scene comes alive in constant motion, moving freely inside the painted black frame. ` +
-    `The characters interact with the frame — bursting out through the opening, over and past the black ` +
-    `border toward the viewer, casting light and moving shadows onto it — and diving back into the scene. ` +
+    `The characters interact with the frame — climbing onto the black border, sliding along its strips, ` +
+    `leaning over its inner edge, casting light and moving shadows onto it — and diving back into the ` +
+    `scene. They keep their entire form inside the picture at all times: nothing is ever cut off by the ` +
+    `picture's edge — the drama lives right at the frame, never beyond it. ` +
     `${FRAME_MOTION_RULE} ` +
-    `Smooth, premium movement — never static, never jittery. ${CONSTANCY_SPEC}`;
+    `Rapid, exciting, high-energy movement — never static, never jittery. ${CONSTANCY_SPEC}`;
 }
 
 /**
