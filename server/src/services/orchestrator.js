@@ -786,32 +786,54 @@ async function animateStill(still, ctx) {
   const ref = path.join(dir, 'ref.png');
   await writeFile(ref, await store.getBuffer(still.s3_key_final));
 
-  // ASPECT HANDLING (Shawn, 2026-08-14, round 2 — the "squished" render).
-  // Seedance cannot output the spectacular's extreme 3.6:1: it returns a
-  // taller canvas with the art LETTERBOXED inside black bars. Two rules:
-  //   1. Black PADDING is not art — cropdetect finds the actual bars and
-  //      only they are removed (this is extraction, not repair: nothing of
-  //      the picture is touched, and it's what keeps the conform from
-  //      stretching bars+art into a squish).
-  //   2. If the extracted content STILL doesn't match the design's aspect,
-  //      that is a real failure: it is NEVER stretched to spec (fit
-  //      'contain' pads instead of distorting) and the row is flagged
-  //      loudly so the card shows exactly what happened.
+  // ASPECT HANDLING (Shawn, 2026-08-14, rounds 2+4). Seedance cannot output
+  // the spectacular's extreme 3.6:1: it returns a taller canvas with the art
+  // LETTERBOXED inside black bars. Rules:
+  //   1. The bars' position is computed from GEOMETRY alone (the design's
+  //      aspect vs the raw canvas) — never from cropdetect, which cannot
+  //      tell padding from the artwork's own painted black frame and ate the
+  //      frame on the first live cheetah render (round 4).
+  //   2. The crop only happens after PROOF: the stripped regions must
+  //      measure near-black. If they don't, nothing is cropped — the render
+  //      is delivered undistorted (padded) and flagged.
+  //   3. If content still doesn't match the design's aspect, it is NEVER
+  //      stretched (fit 'contain' pads) and the row is flagged loudly.
   const extractContent = async (input, model) => {
     if (String(model || '').startsWith('fixture') || !still.width || !still.height) {
       return { path: input, warn: null };
     }
     let contentPath = input;
     try {
-      const bars = await ffmpeg.detectContentCrop(input);
+      const rawDims = await ffmpeg.probe(input);
+      const want = still.width / still.height;
+      const bars = ffmpeg.computeBarCrop({ rawWidth: rawDims.width, rawHeight: rawDims.height, wantAspect: want });
       if (bars) {
-        const out = path.join(dir, 'content.mp4');
-        await ffmpeg.cropColumn({ input, output: out, width: bars.width, height: bars.height, x: bars.x, y: bars.y });
-        logger.info({ stillId: still.id, bars }, 'Model letterboxed the render — extracted the art band (black padding only)');
-        contentPath = out;
+        // Proof step: both stripped regions must be near-black padding.
+        const strips = bars.bars === 'horizontal'
+          ? [
+            { width: rawDims.width, height: bars.y, x: 0, y: 0 },
+            { width: rawDims.width, height: rawDims.height - bars.y - bars.height, x: 0, y: bars.y + bars.height },
+          ]
+          : [
+            { width: bars.x, height: rawDims.height, x: 0, y: 0 },
+            { width: rawDims.width - bars.x - bars.width, height: rawDims.height, x: bars.x + bars.width, y: 0 },
+          ];
+        const lumas = [];
+        for (const strip of strips.filter((r) => r.width >= 2 && r.height >= 2)) {
+          lumas.push(await ffmpeg.regionMeanLuma(input, strip));
+        }
+        const BLACK = 28; // mean 0-255 luma; true padding measures ~16
+        if (lumas.length && lumas.every((l) => l !== null && l <= BLACK)) {
+          const out = path.join(dir, 'content.mp4');
+          await ffmpeg.cropColumn({ input, output: out, width: bars.width, height: bars.height, x: bars.x, y: bars.y });
+          logger.info({ stillId: still.id, bars, lumas }, 'Model letterboxed the render — stripped the proven-black padding');
+          contentPath = out;
+        } else {
+          logger.warn({ stillId: still.id, bars, lumas }, 'Aspect excess is NOT black padding — leaving the render uncropped');
+        }
       }
     } catch (err) {
-      logger.warn({ stillId: still.id, err: err.message }, 'Letterbox detection failed; using raw output');
+      logger.warn({ stillId: still.id, err: err.message }, 'Letterbox extraction failed; using raw output');
     }
     try {
       const dims = await ffmpeg.probe(contentPath);

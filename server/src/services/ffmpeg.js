@@ -303,6 +303,48 @@ export async function detectContentCrop(input, { seconds = 2, limit = 24 } = {})
   return { width: w, height: h, x, y };
 }
 
+/**
+ * GEOMETRIC bar crop — where letterbox/pillarbox bars MUST be if the model
+ * padded `wantAspect` content into a raw canvas, computed from shape alone.
+ * Replaces cropdetect for extraction (live QA 2026-08-14: cropdetect cannot
+ * tell Seedance's padding from the artwork's own painted black frame, and ate
+ * the frame). Returns { width, height, x, y, bars: 'horizontal'|'vertical' }
+ * or null when the raw canvas already matches. Pure.
+ */
+export function computeBarCrop({ rawWidth, rawHeight, wantAspect, tolerance = 0.03 } = {}) {
+  if (!rawWidth || !rawHeight || !wantAspect) return null;
+  const even = (n) => Math.max(2, Math.floor(n / 2) * 2);
+  const rawAspect = rawWidth / rawHeight;
+  if (Math.abs(rawAspect - wantAspect) / wantAspect <= tolerance) return null;
+  if (rawAspect < wantAspect) {
+    const height = even(rawWidth / wantAspect);
+    return { width: rawWidth, height, x: 0, y: even((rawHeight - height) / 2), bars: 'horizontal' };
+  }
+  const width = even(rawHeight * wantAspect);
+  return { width, height: rawHeight, x: even((rawWidth - width) / 2), y: 0, bars: 'vertical' };
+}
+
+/**
+ * Mean luma (0-255) of a region over the first `seconds` — the proof step
+ * before cropping: bars are only removed when the stripped regions are
+ * actually near-black padding. Returns null when unmeasurable.
+ */
+export async function regionMeanLuma(input, { width, height, x, y, seconds = 1 } = {}) {
+  const args = [
+    '-i', input, '-t', String(seconds),
+    '-vf', `crop=${width}:${height}:${x}:${y},signalstats,metadata=print:key=lavfi.signalstats.YAVG:file=-`,
+    '-f', 'null', '-',
+  ];
+  try {
+    const { stdout } = await execFileP(FFMPEG(), args, { maxBuffer: 1024 * 1024 * 32 });
+    const vals = [...String(stdout).matchAll(/YAVG=([\d.]+)/g)].map((m) => Number(m[1]));
+    if (!vals.length) return null;
+    return vals.reduce((a, b) => a + b, 0) / vals.length;
+  } catch {
+    return null;
+  }
+}
+
 /** ffprobe → { width, height, duration } for an output file. */
 export async function probe(input) {
   const args = [
@@ -379,4 +421,6 @@ export default {
   pingpong,
   probe,
   detectContentCrop,
+  computeBarCrop,
+  regionMeanLuma,
 };

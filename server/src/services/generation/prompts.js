@@ -621,6 +621,9 @@ export function composeSpectacularMotionPrompt(story) {
   const s = String(story || '').trim();
   return `${CAMERA_LOCK} One single continuous take for the entire clip — no cuts, no shot changes, ` +
     `no new angles, no transitions of any kind, ever. ` +
+    `The clip begins exactly on this picture's frozen moment and immediately moves AWAY from it — the ` +
+    `story never returns to, recreates, or ends on the arrangement shown at the start; the final moment ` +
+    `looks clearly different from the first. ` +
     `${s}${s && !s.endsWith('.') ? '.' : ''} ` +
     `Every character is in motion at every single moment of the clip — none of them ever stands still, ` +
     `poses, hovers or waits; even while one leads the action the others keep moving through the scene. ` +
@@ -646,8 +649,8 @@ export function buildSpectacularArcPrompt({ specKey, option, weekOf } = {}) {
   const story = `A chase with real stakes plays out across this one take: ${hero} flees across the full ` +
     `width of the scene with ${companion} in relentless pursuit — weaving through the painted scenery, ` +
     `ducking behind it, breaking cover, diving from the deep distance up to the frame itself and back — ` +
-    `until the chase peaks at ${keeper}, where the pursuit ends in one decisive dramatic payoff and the ` +
-    `whole world erupts with light.`;
+    `until the chase peaks at ${keeper}, where the pursuit ends in one decisive dramatic payoff far ` +
+    `from where it began, and the whole world erupts with light.`;
   return composeSpectacularMotionPrompt(story);
 }
 
