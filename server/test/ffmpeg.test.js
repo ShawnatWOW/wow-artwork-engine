@@ -199,3 +199,23 @@ test('frame plate: outer band probes pure black on a bright still and a video', 
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test('computeBarCrop: pure geometry — letterbox, pillarbox, and no-bars cases', () => {
+  const AR = 3840 / 1062; // the spectacular
+  // Seedance letterboxes the wide art in a taller canvas: strip top/bottom only.
+  const lb = ffmpeg.computeBarCrop({ rawWidth: 1824, rawHeight: 1080, wantAspect: AR });
+  assert.equal(lb.bars, 'horizontal');
+  assert.equal(lb.width, 1824, 'letterbox never touches width');
+  assert.equal(lb.x, 0);
+  assert.ok(Math.abs(lb.height - 1824 / AR) <= 2);
+  assert.ok(lb.y > 0 && lb.y * 2 + lb.height <= 1080);
+  // Pillarbox: strip left/right only.
+  const pb = ffmpeg.computeBarCrop({ rawWidth: 2000, rawHeight: 400, wantAspect: 4 });
+  assert.equal(pb.bars, 'vertical');
+  assert.equal(pb.height, 400);
+  assert.equal(pb.width, 1600);
+  assert.equal(pb.x, 200);
+  // Near-match -> no bars to strip.
+  assert.equal(ffmpeg.computeBarCrop({ rawWidth: 3840, rawHeight: 1062, wantAspect: AR }), null);
+  assert.equal(ffmpeg.computeBarCrop({ rawWidth: 0, rawHeight: 100, wantAspect: AR }), null);
+});

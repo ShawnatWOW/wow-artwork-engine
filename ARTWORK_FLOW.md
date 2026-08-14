@@ -45,13 +45,13 @@ every rule, and the exact text sent to the AI models.
 10. **No upscale for now** *(2026-08-14)*. Topaz is OFF during visual iteration — renders
     come back faster and cheaper at 720p. `FAL_UPSCALE=1` re-enables the 4K pass for real
     deliveries once the visuals are down.
-11. **Letterbox extraction + never-stretch** *(2026-08-14, round 2 — the "squished"
-    render)*. Seedance can't output the extreme 3.6:1, so it letterboxes the art inside a
-    taller canvas. cropdetect finds the actual black bars and removes ONLY them (padding,
-    not picture). If the extracted content still doesn't match the design's aspect, that's
-    a real failure: it is **never stretched** — delivered undistorted (padded to spec) with
-    a loud flag on the card. The squish came from the old exact-fit stretch; stretching is
-    gone.
+11. **Letterbox extraction: geometry + proof, never-stretch** *(2026-08-14, rounds 2+4)*.
+    Seedance can't output the extreme 3.6:1, so it letterboxes the art in a taller canvas.
+    The bars' position is computed from GEOMETRY (design aspect vs raw canvas) — never
+    cropdetect, which couldn't tell padding from the artwork's own painted black frame and
+    ate the frame on the cheetah render. The crop happens only after PROOF that the
+    stripped regions measure near-black; otherwise nothing is cropped. Content that still
+    mismatches is **never stretched** — delivered undistorted (padded) with a loud flag.
 12. **QA.** Saturation-drift measurement (warning only — Seedance colors can drain).
 13. **Conform.** Exact-fit scale to delivery spec (spectacular 3840×1062). **Nothing is
     composited onto the video** — the file ships exactly as the model made it.
@@ -78,7 +78,7 @@ subjects and environments; the frame and containment language is identical every
 
 ### Motion prompt — spectacular (per-design: the story is written FROM the design's still)
 
-> Fixed camera, locked-off shot […] **One single continuous take — no cuts, no shot changes, no new angles, no transitions, ever.** ***[STORY — written by the vision director from the actual still: a hunt/chase/journey using the real characters and real painted scenery as cover, traveling between the deep distance and the frame plane, ending in a decisive payoff. Template fallback: "A chase with real stakes plays out across this one take: [hero] flees across the full width of the scene with [companion] in relentless pursuit — weaving through the painted scenery, ducking behind it, breaking cover, diving from the deep distance up to the frame itself and back — until the chase peaks at [keeper], where the pursuit ends in one decisive dramatic payoff and the whole world erupts with light."]*** **Every character is in motion at every single moment of the clip — none of them ever stands still, poses, hovers or waits.** **The action travels in depth the whole time — from the deep distance up to the frame plane at the very front and back again.** The characters interact with the frame — climbing onto the black border, sliding along its strips, leaning over its inner edge, casting light and moving shadows onto it — with their entire form inside the picture at all times. The matte-black frame stays perfectly fixed […] The viewpoint never travels into the scene. **Rapid, exciting, high-energy movement — never static, never jittery.** Saturation stays rich and maxed for the entire duration.
+> Fixed camera, locked-off shot […] **One single continuous take — no cuts, no shot changes, no new angles, no transitions, ever.** ***[STORY — written by the vision director from the actual still: a hunt/chase/journey using the real characters and real painted scenery as cover, traveling between the deep distance and the frame plane, ending in a decisive payoff. Template fallback: "A chase with real stakes plays out across this one take: [hero] flees across the full width of the scene with [companion] in relentless pursuit — weaving through the painted scenery, ducking behind it, breaking cover, diving from the deep distance up to the frame itself and back — until the chase peaks at [keeper], where the pursuit ends in one decisive dramatic payoff and the whole world erupts with light."]*** **The clip begins exactly on the picture's frozen moment and immediately moves AWAY from it — the story never returns to, recreates, or ends on the arrangement shown at the start (arrival-shaped stories made the model animate TOWARD the still, turning the preview into the last frame).** **Every character is in motion at every single moment of the clip — none of them ever stands still, poses, hovers or waits.** **The action travels in depth the whole time — from the deep distance up to the frame plane at the very front and back again.** The characters interact with the frame — climbing onto the black border, sliding along its strips, leaning over its inner edge, casting light and moving shadows onto it — with their entire form inside the picture at all times. The matte-black frame stays perfectly fixed […] The viewpoint never travels into the scene. **Rapid, exciting, high-energy movement — never static, never jittery.** Saturation stays rich and maxed for the entire duration.
 
 The **minimal contract**, tuned per your 2026-08-14 notes: framing locked (the
 first-frame=last-frame line is gone), one take, characters work ONTO the frame with their

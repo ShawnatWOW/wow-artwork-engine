@@ -66,6 +66,17 @@ at a time, "N of 3 reviewed" progress per sign.
 
 ## Changelog (this delivery arc)
 
+- **2026-08-14 (4) — Frame-eating crop fixed + departure stories.** The cheetah
+  render exposed two defects. (1) cropdetect couldn't tell Seedance's letterbox
+  padding from the artwork's own painted black frame and cropped INTO the
+  frame. Extraction is now pure geometry (design aspect vs raw canvas) and
+  only strips bars after PROVING they measure near-black — it can never eat
+  the frame. (2) The approved still was showing up as the video's LAST frame:
+  arrival-shaped stories (decisive payoff ≈ the still's composed tableau) made
+  the model animate toward the input image. The director and the prompt
+  wrapper now demand DEPARTURE — the story starts exactly on the still's
+  frozen moment, immediately moves away, and must end visibly different from
+  where it began.
 - **2026-08-14 (3) — Squish fixed + a story restored.** The first no-plate render
   came out vertically squished: Seedance can't produce 3.6:1, letterboxes the
   art in a taller canvas, and the exact-fit conform then STRETCHED bars+art to

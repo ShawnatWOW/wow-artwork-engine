@@ -27,6 +27,7 @@ Write ONE story paragraph (90-140 words) scripting a dramatic journey that uses 
 - the painted scenery used as the stage: ducking behind it, weaving through it, hiding in it, bursting out of it.
 - constant travel in DEPTH: the action repeatedly moves between the deep distance and the frame plane at the very front, with characters climbing onto the painted black border strips and diving back into the scene.
 - a decisive payoff in the final moments — caught, escaped, transformed, united — at full speed, never a slow settle.
+- DEPARTURE, not arrival: the image IS the story's first instant — your opening words must describe exactly this frozen moment springing into motion and immediately moving AWAY from it. The ending must look clearly DIFFERENT from the image: never regroup the characters into the arrangement shown, never return home to the starting pose — end displaced, somewhere new. (Live QA 2026-08-14: arrival-shaped stories made the model animate TOWARD the input image, so the approved still became the last frame instead of the first.)
 
 HARD RULES: name only characters visibly present in the image. EVERY character moves in EVERY moment — nothing ever stands still, poses, or watches idly. Everything keeps its entire form inside the picture. FORBIDDEN words and devices: timestamps, second counts, numbered beats or parts, and the words "cut", "shot", "scene two", "act", "camera", "transition", "frame two".
 
