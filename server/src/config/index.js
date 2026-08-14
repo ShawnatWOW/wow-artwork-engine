@@ -60,22 +60,6 @@ const config = {
       ? undefined
       : Number(process.env.GEN_EON_DURATION_S),
     fps: num(process.env.GEN_FPS, 30),
-    // Solid black band width of the spectacular's composited frame plate, as a
-    // fraction of image height (~53px at 1062). The perimeter band must be
-    // EXACT so it merges with the billboard structure's own bezel — models
-    // paint frames as scenery, so the band is composited, never generated
-    // (Scott, 2026-08-07).
-    frameBandFrac: num(process.env.FRAME_BAND_FRAC, 0.05),
-    // Plate on the delivered VIDEO is OFF by default (Shawn, 2026-08-11): the
-    // opaque band + stepped shadow (~100px zone at delivery scale) was stamped
-    // OVER every frame, burying characters that Seedance correctly rendered IN
-    // FRONT of its painted frame — the exact post-composited-letterbox failure
-    // documented 2026-07-21; no pop-out can survive a plate drawn on top. The
-    // plate still goes on every STILL (what Scott reviews and what Seedance
-    // animates from), which anchors the frame's geometry at frame 1; the model
-    // then owns the frame for the rest of the clip. FRAME_PLATE_ON_VIDEO=1
-    // restores the old stamp if model-painted frames drift too much.
-    framePlateOnVideo: bool(process.env.FRAME_PLATE_ON_VIDEO, false),
   },
 
   // fixture | live  — see .env.example. `live` requires explicit opt-in so a
@@ -113,11 +97,13 @@ const config = {
     // (fal.js requests 720p if this is set to 1080p under a 2.5 model).
     resolution: process.env.FAL_RESOLUTION || '720p',
     generateAudio: process.env.FAL_GENERATE_AUDIO === '1', // artwork is silent by default
-    // AI upscale to 4K-class after Seedance (billboards need real sharpness —
-    // a plain ffmpeg blow-up looks soft at street scale). Topaz runs on the
-    // fal-hosted Seedance URL before download. FAL_UPSCALE=0 to disable.
+    // Topaz AI upscale to 4K-class after Seedance. OFF during visual
+    // iteration (Shawn, 2026-08-14: "remove 4K upscale for now until we get
+    // the visuals down") — renders review faster/cheaper at 720p, conformed
+    // up by plain ffmpeg. FAL_UPSCALE=1 turns it back on for real deliveries;
+    // billboards DO need it at street scale.
     upscale: {
-      enabled: process.env.FAL_UPSCALE === undefined ? true : ['1', 'true', 'yes', 'on'].includes(String(process.env.FAL_UPSCALE).toLowerCase()),
+      enabled: process.env.FAL_UPSCALE === undefined ? false : ['1', 'true', 'yes', 'on'].includes(String(process.env.FAL_UPSCALE).toLowerCase()),
       model: process.env.FAL_UPSCALE_MODEL || 'fal-ai/topaz/upscale/video',
       // 4x pairs with the 720p Seedance tier: 1680x720 → 6720x2880, conformed
       // DOWN to the 3840-wide spec (2x left conform upscaling 1.14x in plain

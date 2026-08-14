@@ -133,10 +133,12 @@ test('closing still: spectacular-only, same geometry + cast, reads as a finale',
   assert.match(closing, /flush with the picture's edges on all sides/);
   assert.match(closing, /never shown as an object/);
   assert.match(closing, /how the story ends/);
-  // Whitelist guard: the trailing SAFE blacklist alone let human statues and
-  // bystanders into the first live closing frame (2026-08-05).
+  // The opening still grants creative freedom (Shawn, 2026-08-14: any
+  // characters are okay — humans included); the legacy closing keeps its
+  // chain-era whitelist untouched.
   assert.match(closing, /ONLY living things/);
-  assert.match(buildStillPrompt({ ...JOB, option: 1 }), /ONLY living things/);
+  assert.match(buildStillPrompt({ ...JOB, option: 1 }), /full creative freedom/);
+  assert.doesNotMatch(buildStillPrompt({ ...JOB, option: 1 }), /ONLY living things/);
   assert.doesNotMatch(closing, /performance|finale|stage/i);
   // The storyboard is a spectacular-only feature.
   assert.equal(buildClosingStillPrompt({ style: 'eon_single', specKey: 'eon_master_pod', option: 1, weekOf: '2026-08-10' }), null);
@@ -176,8 +178,12 @@ test('the spectacular motion prompt is MINIMAL — frame rules only, no choreogr
   assert.match(arc, /One single continuous take/);
   assert.match(arc, /no cuts, no shot changes/);
   assert.doesNotMatch(arc, /movement \(|act \d of 2|\d+ seconds/i, 'no timestamps or numbered beats');
-  // Frame interaction is the one demanded behavior; the rest is the model's.
-  assert.match(arc, /bursting out through the opening/);
+  // Frame interaction is ONTO the frame, never out of the picture (Shawn,
+  // 2026-08-14: leaving the bounds gets cut off by the aspect ratio and
+  // ruins the illusion — the 3D read comes from working the edges).
+  assert.match(arc, /climbing onto the black border/);
+  assert.match(arc, /entire form inside the picture/);
+  assert.doesNotMatch(arc, /bursting out|past the black border|toward the viewer/);
   assert.doesNotMatch(arc, DOMAIN_TERMS);
   assert.doesNotMatch(arc, META_TERMS);
   assert.ok(checkPrompt(arc).allowed);
@@ -228,12 +234,14 @@ test('spectacular families: full role-cast, every member concrete and non-human-
   }
 });
 
-test('still prompts carry the contrast clause and hardened people/text negatives', () => {
+test('still prompts carry the contrast clause and the text/logo negatives', () => {
   for (const job of planJobs({ optionsPerSurface: 3 })) {
     const still = buildStillPrompt({ style: job.style, specKey: job.specKey, option: job.option, weekOf: '2026-08-10' });
     assert.match(still, /never an all-white or all-black scene/, `missing contrast clause: ${still}`);
-    assert.match(still, /No people, no faces, no human figures/, `missing people exclusion: ${still}`);
-    assert.match(still, /no text, no logos, no watermarks/);
+    // Humans and any characters are allowed (Shawn, 2026-08-14) — only stray
+    // type stays banned on billboard art.
+    assert.doesNotMatch(still, /No people, no faces/);
+    assert.match(still, /No text, no logos, no watermarks/);
   }
 });
 

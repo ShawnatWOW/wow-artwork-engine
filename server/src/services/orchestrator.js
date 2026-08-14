@@ -49,22 +49,6 @@ const thumbDims = (spec) => ({ width: even(spec.width / 2), height: even(spec.he
 // Review-grid preview size. Nothing on the dashboard renders a design wider
 // than ~1400 CSS px, so a 4096px master is ~50x more bytes than the screen can
 // use. Caps the long edge and keeps the aspect exactly.
-// The spectacular frame plate: exact-perimeter black band + stepped black
-// depth, composited onto the still (what Scott reviews AND what Seedance
-// animates from) and onto every final video frame. See ffmpeg.buildFramePlateArgs
-// for the full rationale (Scott, 2026-08-07: the model paints frames as
-// scenery INSIDE the picture, so the true perimeter never matched the
-// billboard's physical bezel).
-const even2 = (n) => Math.max(2, Math.floor(n / 2) * 2);
-async function compositeFramePlate({ input, output, width, height }) {
-  await ffmpeg.applyFramePlate({
-    input, output, width, height,
-    band: even2(height * config.generation.frameBandFrac),
-    still: /\.(png|jpe?g)$/i.test(output),
-  });
-  return output;
-}
-
 const PREVIEW_MAX_EDGE = 1280;
 function previewDims(width, height, maxEdge = PREVIEW_MAX_EDGE) {
   const scale = Math.min(1, maxEdge / Math.max(width, height));
@@ -125,7 +109,9 @@ export async function runWeek({ weekOf, triggeredBy = 'manual', onStart, deps = 
     let done = 0;
     await repo.setRunProgress?.(run.id, { phase: 'designs', done, total: jobs.length });
     for (const job of jobs) {
-      const r = await generateStill(job, { runId: run.id, weekOf: week, repo, store, providers, guardrails, qa, workDir });
+      // Seed by BATCH, not by week (Shawn, 2026-08-14): every new batch gets
+      // fresh subjects and environments instead of repeating the week's picks.
+      const r = await generateStill(job, { runId: run.id, weekOf: week, promptSeed: `${week}#run${run.id}`, repo, store, providers, guardrails, qa, workDir });
       counts.ready += r.ready; counts.failed += r.failed; counts.blocked += r.blocked;
       done += 1;
       await repo.setRunProgress?.(run.id, { phase: 'designs', done, total: jobs.length });
@@ -193,25 +179,13 @@ async function generateStill(job, ctx) {
     const gen = await providers.still.generate({
       width: job.gen.width, height: job.gen.height, ratio: job.gen.ratio, output: stillPath, prompt,
     });
-    // FRAME PLATE (spectacular only): the reviewed still, the stored file and
-    // the Seedance reference all carry the exact-perimeter band. If the fal
-    // upload fails we fall back to the raw Seedream URL — a soft frame beats
-    // a lost design.
-    let finalStillPath = stillPath;
-    let referenceUrl = gen.url ?? null;
-    const isFrameBreak = job.post === POST.FRAME_BREAK;
+    // NO frame plate anywhere (Shawn, 2026-08-14): the perimeter comes from
+    // Seedream painting it (still prompt) and Seedance maintaining it — the
+    // reviewed still, the stored file and the Seedance reference are the raw
+    // model output, untouched.
+    const finalStillPath = stillPath;
+    const referenceUrl = gen.url ?? null;
     const live = !String(gen.model || '').startsWith('fixture');
-    if (isFrameBreak) {
-      finalStillPath = path.join(dir, 'still_framed.png');
-      await compositeFramePlate({ input: stillPath, output: finalStillPath, width: job.gen.width, height: job.gen.height });
-      if (live) {
-        try {
-          referenceUrl = (await uploadToFalStorage({ sourcePath: finalStillPath, contentType: 'image/png' })).url;
-        } catch (err) {
-          logger.warn({ runId, surface: job.key, err: err.message }, 'Framed-still upload failed; Seedance will reference the unframed still');
-        }
-      }
-    }
 
     // Every generation gets its own file. Keying on (run, surface, option slot)
     // alone meant a variation, a re-roll or a per-design regenerate silently
@@ -282,27 +256,17 @@ async function generateStill(job, ctx) {
         const cgen = await providers.still.generate({
           width: job.gen.width, height: job.gen.height, ratio: job.gen.ratio, output: closingPath, prompt: closingPrompt,
         });
-        // Same plate as the opening: the clip interpolates toward this image,
-        // so the 30s piece ENDS on the exact perimeter band too.
-        const closingFramed = path.join(dir, 'closing_framed.png');
-        await compositeFramePlate({ input: closingPath, output: closingFramed, width: job.gen.width, height: job.gen.height });
-        let closingUrl = cgen.url ?? null;
-        if (live) {
-          try {
-            closingUrl = (await uploadToFalStorage({ sourcePath: closingFramed, contentType: 'image/png' })).url;
-          } catch (err) {
-            logger.warn({ runId, surface: job.key, err: err.message }, 'Framed closing upload failed; the clip will anchor on the unframed closing');
-          }
-        }
+        // No plate (2026-08-14): the raw model closing is stored/referenced.
+        const closingUrl = cgen.url ?? null;
         const cput = await store.put({
           key: artworkKey({ runId, surfaceKey: job.key, option: job.option, variant: `g${priorStills + 1}`, name: 'closing.png' }),
-          sourcePath: closingFramed,
+          sourcePath: closingPath,
         });
         let cthumbKey = cput.key;
         try {
           const td = previewDims(job.gen.width, job.gen.height);
           const cthumbPath = path.join(dir, 'closing_thumb.jpg');
-          await ffmpeg.thumbnail({ input: closingFramed, output: cthumbPath, width: td.width, height: td.height });
+          await ffmpeg.thumbnail({ input: closingPath, output: cthumbPath, width: td.width, height: td.height });
           const ctp = await store.put({
             key: artworkKey({ runId, surfaceKey: job.key, option: job.option, variant: `g${priorStills + 1}`, name: 'closing_thumb.jpg' }),
             sourcePath: cthumbPath,
@@ -809,33 +773,25 @@ async function animateStill(still, ctx) {
   const ref = path.join(dir, 'ref.png');
   await writeFile(ref, await store.getBuffer(still.s3_key_final));
 
-  // Video models return their own frame shape (e.g. a 960x960 square) with the
-  // input art letterboxed/extended inside. The TRUE content aspect is known —
-  // it's the approved still's — so recover it deterministically: center-crop
-  // the model output to the still's aspect ratio (no fragile bar detection).
-  const recoverContent = async (input, label, model) => {
-    if (String(model || '').startsWith('fixture') || !still.width || !still.height) return input;
+  // NO silent aspect repair (Shawn, 2026-08-14: "we don't want to mask
+  // failure behind the illusion of success"). If the model returns a
+  // different canvas shape than the approved still, the clip is delivered
+  // as-is and the mismatch is stamped LOUDLY on the row (the dashboard's
+  // error ribbon), so a wrong-shaped render reads as the failure it is.
+  const checkAspect = async (input, model) => {
+    if (String(model || '').startsWith('fixture') || !still.width || !still.height) return null;
     try {
       const rawDims = await ffmpeg.probe(input);
       const want = still.width / still.height;
       const got = rawDims.width / rawDims.height;
       if (rawDims.width && Math.abs(got - want) / want > 0.03) {
-        const even = (n) => Math.max(2, Math.floor(n / 2) * 2);
-        let cw = rawDims.width;
-        let ch = rawDims.height;
-        if (got > want) cw = even(rawDims.height * want);
-        else ch = even(rawDims.width / want);
-        const cx = even((rawDims.width - cw) / 2);
-        const cy = even((rawDims.height - ch) / 2);
-        const out = path.join(dir, `${label}_content.mp4`);
-        await ffmpeg.cropColumn({ input, output: out, width: cw, height: ch, x: cx, y: cy });
-        logger.info({ stillId: still.id, raw: `${rawDims.width}x${rawDims.height}`, content: `${cw}x${ch}@${cx},${cy}` }, 'Recovered content band from model output');
-        return out;
+        logger.warn({ stillId: still.id, raw: `${rawDims.width}x${rawDims.height}`, want: want.toFixed(3) }, 'Model returned a different aspect — delivering uncropped, flagged');
+        return `qa: model returned ${rawDims.width}x${rawDims.height} (aspect ${got.toFixed(2)}) instead of the design's ${want.toFixed(2)} — delivered as-is, not cropped`;
       }
     } catch (err) {
-      logger.warn({ stillId: still.id, err: err.message }, 'Content recovery failed; using raw output');
+      logger.warn({ stillId: still.id, err: err.message }, 'Aspect check failed');
     }
-    return input;
+    return null;
   };
 
   // The whole piece — every act — in ONE Seedance call. The chain-era
@@ -856,7 +812,8 @@ async function animateStill(still, ctx) {
     referenceImageUrl: still.remote_url ?? null, // fal-hosted URL — live Seedance
   });
   const raw = raw0; // the model output the QA + ledger read
-  const content = await recoverContent(raw, 'raw', gen.model);
+  const content = raw; // delivered as the model made it — no crop, no repair
+  const aspectWarn = await checkAspect(raw, gen.model);
 
   // QA: measure saturation drift on the model's raw output (Seedance colors
   // drain over a clip). Warning only — stored on the motion rows.
@@ -865,6 +822,7 @@ async function animateStill(still, ctx) {
     const drift = await qa.satDrift(raw);
     if (drift.warn) driftWarn = `qa: ${drift.reason}`;
   } catch { /* QA measurement is best-effort; never fail the render on it */ }
+  const qaWarn = [aspectWarn, driftWarn].filter(Boolean).join(' | ') || null;
 
   // Ambient surfaces get a palindrome pass so the clip loops seamlessly on the
   // sign (art review: mismatched endpoints pop every cycle). Doubles duration.
@@ -908,7 +866,7 @@ async function animateStill(still, ctx) {
   const insertMotion = (extra) => repo.insertArtwork({
     runId, surface: surface.surface, style: surface.style, mediaType: 'video', stage: 'motion',
     sourceStillId: still.id, prompt: still.prompt, motionPrompt, model: gen.model,
-    s3KeyRaw: rawPut.key, error: driftWarn ?? null, ...extra,
+    s3KeyRaw: rawPut.key, error: qaWarn, ...extra,
   });
 
   if (surface.post === POST.EON_SLICE) {
@@ -974,11 +932,7 @@ async function animateStill(still, ctx) {
   // all over again; no pop-out survives an opaque band drawn on top. Frame
   // geometry is anchored by the PLATED STILL Seedance animates from instead;
   // FRAME_PLATE_ON_VIDEO=1 restores the stamp if painted frames drift.
-  let deliverable = final;
-  if (surface.post === POST.FRAME_BREAK && config.generation.framePlateOnVideo) {
-    deliverable = path.join(dir, 'final_framed.mp4');
-    await compositeFramePlate({ input: final, output: deliverable, width: finalSpec.width, height: finalSpec.height });
-  }
+  const deliverable = final;
   const td = thumbDims(finalSpec);
   const thumb = path.join(dir, 'thumb.jpg');
   await ffmpeg.thumbnail({ input: deliverable, output: thumb, width: td.width, height: td.height, atSeconds: Math.min(2, effDuration / 2) });

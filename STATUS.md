@@ -66,6 +66,18 @@ at a time, "N of 3 reviewed" progress per sign.
 
 ## Changelog (this delivery arc)
 
+- **2026-08-14 (2) — Shawn's flow-review change set.** From the ARTWORK_FLOW.md
+  read-through: (1) frame plate fully retired — nothing is ever composited on
+  stills OR videos; the perimeter is Seedream's to paint and Seedance's to
+  keep. (2) Topaz upscale OFF during iteration (FAL_UPSCALE=1 restores it for
+  real deliveries) — a 10s render is now ~$4.60 and ~3–6 min. (3) The silent
+  aspect center-crop is gone: wrong-shaped renders deliver as-is with a loud
+  flag on the card. (4) Fresh subjects + environments every batch (prompt
+  seed salts with the batch id) and full creative freedom — humans and any
+  characters allowed; only text/logos stay banned. (5) Motion: characters go
+  ONTO the frame with their whole form always inside the picture (leaving the
+  bounds ruins the illusion), first-frame=last-frame line removed, "smooth,
+  premium" replaced with "rapid, exciting".
 - **2026-08-14 — 10-second iteration mode + the flow documented.** Movement still
   minimal and cuts still appearing after the minimal-prompt round, so the
   spectacular renders at **10s (~$5.40, ~4–8 min)** while the visuals get
