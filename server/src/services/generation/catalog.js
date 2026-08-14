@@ -65,21 +65,18 @@ export const SURFACES = [
     // band; no center-crop lottery (art review, 2026-07-10). Seedream max 4096.
     gen: { kind: 'motion', width: 4096, height: 1132, ratio: '21:9' },
     post: POST.FRAME_BREAK,
-    // Scott's notes 2026-08-05: the spectacular is a 30s multi-act piece.
-    //   storyboard — OFF since 2026-08-10 (Shawn, live QA): generating a
-    //                closing still and anchoring the video on it as an end
-    //                frame made the motion feel obligated to reach a target
-    //                frame instead of moving freely. The ending is now
-    //                described in the arc prompt and left free. Flip back to
-    //                true to restore the closing-still + end-frame flow.
-    //   acts      — how many acts long the piece is: total runtime is config
-    //               duration × acts (2 × 15s = 30s), always rendered as ONE
-    //               native Seedance 2.5 call — the chain-era stitching was
-    //               removed 2026-08-10 (Shawn: "remove stitching"). A revert
-    //               to a 15s-capped 2.0 slug now just yields a 15s piece
-    //               (fal.js clamps the duration), not a chained 30s one.
+    // storyboard — OFF since 2026-08-10 (Shawn, live QA): generating a
+    //              closing still and anchoring the video on it as an end
+    //              frame made the motion feel obligated to reach a target
+    //              frame instead of moving freely. The ending is left free.
+    //              Flip back to true to restore the closing-still flow.
+    // durationS  — the piece's TOTAL length, one native Seedance 2.5 call
+    //              (stitching removed 2026-08-10). Currently the 10s
+    //              iteration length (config.spectacularDurationS; Shawn,
+    //              2026-08-14 — cheap rounds until the visuals are nailed);
+    //              GEN_SPECTACULAR_DURATION_S=30 restores the full piece.
     storyboard: false,
-    acts: 2,
+    durationS: config.generation.spectacularDurationS,
     // No ping-pong: continuous kinetic motion throughout (user: "whole scene active")
     // makes seamless looping less critical than full-frame activity.
   },

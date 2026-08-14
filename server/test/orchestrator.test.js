@@ -112,11 +112,11 @@ test('Phase 2: animateRun animates ONLY approved stills, conformed to spec, link
     const spec = motions.find((m) => m.style === 'frame_break');
     let p = await ffmpeg.probe(store.localPath(spec.s3_key_final));
     assert.equal(p.width, 3840); assert.equal(p.height, 1062);
-    // The spectacular is a two-act piece (acts: 2 in the catalog) rendered in
-    // ONE pass — duration × acts seconds in a single call (Seedance 2.5's
-    // native 30s; fixtures synthesize any length). With duration=1 the
-    // deliverable runs ~2s. EON clips stay single-act (~1s).
-    assert.ok((p.duration ?? 0) > 1.5, `spectacular should run both acts (2s), got ${p.duration}s`);
+    // The spectacular renders its configured TOTAL length in one call
+    // (production: config.spectacularDurationS; the test script pins
+    // GEN_SPECTACULAR_DURATION_S=2 so fixtures stay fast). EON clips use the
+    // injected base duration (~1s).
+    assert.ok((p.duration ?? 0) > 1.5, `spectacular should run its full 2s, got ${p.duration}s`);
     assert.equal(spec.duration_s, 2);
     // Every EON row is cut to its panel's spec and labelled with which panel
     // of which pod it drives — that label is what routes the file to Jeff.
@@ -175,7 +175,7 @@ test('spectacular single pass: ONE call, full arc prompt, NO end-frame anchor', 
     await animateRun({ runId, deps: { repo, store, providers: spying, duration: 1 } });
     assert.equal(calls.length, 1, 'the whole piece must render in a single Seedance call');
     const [call] = calls;
-    assert.equal(call.durationS, 2, 'single pass runs duration x acts');
+    assert.equal(call.durationS, 2, 'single pass runs the surface total (test-pinned 2s)');
     assert.match(call.prompt, /One single continuous take/, 'the stored minimal prompt drives the call');
     assert.match(call.prompt, /no cuts, no shot changes/);
     assert.equal(call.endImageUrl ?? null, null, 'no end frame is sent — even when a legacy closing still exists');

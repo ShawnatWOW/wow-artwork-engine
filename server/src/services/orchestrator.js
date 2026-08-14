@@ -840,14 +840,13 @@ async function animateStill(still, ctx) {
 
   // The whole piece — every act — in ONE Seedance call. The chain-era
   // stitching (2×15s + handoff frame + concat) was removed 2026-08-10; 2.5
-  // renders duration × acts (30s for the spectacular) natively. New designs
+  // renders the surface's total length natively. New designs
   // store the full three-movement arc as their motion prompt; pre-2.5 rows
   // store act 1 + act 2, which combineSpectacularActs joins here. NO end
   // frame is sent — deliberately, even for legacy rows that stored a closing
   // still (live QA 2026-08-10, Shawn: anchoring on a target frame made the
   // motion feel obligated instead of free) — the ending lives in the prompt.
-  const acts = surface.acts ?? 1;
-  const totalS = (surface.durationS ?? duration) * acts;
+  const totalS = surface.durationS ?? duration;
   const singlePrompt = combineSpectacularActs(motionPrompt, sanitizeMotionPrompt(still.motion_prompt_act2));
   const raw0 = path.join(dir, 'raw.mp4');
   const gen = await providers.motion.generate({
@@ -883,7 +882,7 @@ async function animateStill(still, ctx) {
 
   // Immutable cost ledger, computed here where BOTH the Seedance render dims
   // and the 4K final dims are known. Billed on the RAW generation seconds
-  // (duration × acts, one call); ping-pong doubles playback locally at no fal
+  // (the surface's total seconds, one call); ping-pong doubles playback locally at no fal
   // cost. Fixtures are free. See falPricing.js for the rate book.
   const live = !String(gen.model || '').startsWith('fixture');
   const tier = falPricing.seedanceTier(gen.model);

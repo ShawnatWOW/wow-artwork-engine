@@ -66,6 +66,12 @@ at a time, "N of 3 reviewed" progress per sign.
 
 ## Changelog (this delivery arc)
 
+- **2026-08-14 — 10-second iteration mode + the flow documented.** Movement still
+  minimal and cuts still appearing after the minimal-prompt round, so the
+  spectacular renders at **10s (~$5.40, ~4–8 min)** while the visuals get
+  nailed — `GEN_SPECTACULAR_DURATION_S=30` restores the full piece without a
+  deploy. The complete criteria + flow (exact prompts included) now lives in
+  `ARTWORK_FLOW.md`.
 - **2026-08-10 (night) — Nothing on top of the video + hands-off motion.** Review
   of the first Test Art render (Shawn): the video cut to a different shot at
   ~9.7s — exactly on the prompt's "movement" beat boundary, proving Seedance

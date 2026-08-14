@@ -47,6 +47,12 @@ const config = {
   // short", 2026-07-14.)
   generation: {
     durationS: num(process.env.GEN_DURATION_S, 15),
+    // TOTAL spectacular clip length. 10s ITERATION MODE (Shawn, 2026-08-14):
+    // "reduce time to 10 seconds until we nail the visuals" — cheap fast
+    // rounds (~$5.40/render vs ~$16.20 at 30s), and shorter clips give
+    // Seedance less room to cut between scenes. GEN_SPECTACULAR_DURATION_S=30
+    // restores the full piece without a deploy once the look is right.
+    spectacularDurationS: num(process.env.GEN_SPECTACULAR_DURATION_S, 10),
     // Optional EON override: set GEN_EON_DURATION_S=30 to render EON pieces at
     // Seedance 2.5's native 30s (halves visible loop repetition on the
     // pillars; ~2x the gen cost). Unset -> EON uses the base duration (15s).
