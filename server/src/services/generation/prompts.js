@@ -596,47 +596,26 @@ const FRAME_MOTION_RULE =
   `perform inside the opening and burst out toward the frame plane, always watched from outside.`;
 
 /**
- * The spectacular's full 30-second motion as ONE single-pass prompt — three
- * time-beat movements (ignition → metamorphosis → climax) built from the
- * week's arc, with every rule stated exactly once. Written for Seedance 2.5,
- * which follows temporal structure in a single prompt. NO end frame is sent
- * with it (live QA 2026-08-10, Shawn: anchoring the clip on a target frame
- * made the motion feel obligated to reach it instead of moving freely) — the
- * ending is described in words and left free to move. Pure.
- * @param {{ specKey, option, weekOf }} job
+ * The spectacular's motion prompt — deliberately MINIMAL (Shawn, 2026-08-14,
+ * after three live 2.5 rounds): choreographing the motion kept backfiring. The
+ * timestamped "movements" structure read to Seedance 2.5 as a multi-shot
+ * storyboard and it CUT on the beat boundaries, abandoning the frame; the
+ * scripted story beats over-constrained motion the model handles better on
+ * its own. So the prompt now says only what the model cannot infer: one
+ * continuous take (never cut), the painted frame stays exactly as it is
+ * (never reframed, never removed), the characters interact with it, and the
+ * colors hold. Everything else — where things go, how the scene evolves —
+ * is the model's. Identical for every option on purpose: the variety lives
+ * in the still, and re-rolls rely on the model being stochastic. Pure.
  */
-export function buildSpectacularArcPrompt({ specKey, option, weekOf }) {
-  const arc = arcFor({ specKey, option, weekOf });
-  // Story overhaul (Shawn, 2026-08-11: "unnatural, not story-like, no clear
-  // plot" — reported even after the aggressive 08-10 rewrite). The fix is
-  // LEGIBILITY, not less energy: every beat has ONE lead character the others
-  // react to, the three movements are the arc's own setup → turn → payoff
-  // (not a generic climax), and bursts are separated by beats of poised
-  // anticipation — a story phrase, not a wall of simultaneous motion. All
-  // 08-10 laws stay: single free-moving pass (no end-frame anchor), travel
-  // not circling, peak ending, constant frame-breaking as the signature.
-  return `${CAMERA_LOCK} Trompe-l'oeil 3D pop-out spectacle in three continuous movements — one unbroken shot, no cuts, ` +
-    `a story told entirely through where the characters go and why. ` +
-    `First movement (opening ~10 seconds) — the setup: ${arc.act1}. ` +
-    `Second movement (middle ~12 seconds) — the turn: ${arc.act2}. ` +
-    `Third movement (final ~8 seconds) — the payoff: ${arc.payoff}, still at full speed and brilliance as the ` +
-    `clip ends — the ending is a peak, never a slow settle. ` +
-    `Movement tells the story: ONE character leads each beat while the others visibly react to it, and every ` +
-    `character travels with purpose — crossing the full width and the full depth of the ultra-wide scene, ` +
-    `claiming new ground with every beat. Each beat begins where the last one ended and travels somewhere ` +
-    `NEW — enter from one side, exit toward another; no path retraces itself. No character ever circles in ` +
-    `place, orbits the center, or hovers in the middle of the frame; the middle is ground they pass through, ` +
-    `not where they live. ` +
-    `Even at full speed the motion phrases itself like a told story: a breath of poised anticipation gathers ` +
-    `before each burst, so every surge lands harder than the one before. ` +
-    `The story keeps finding reasons to break the frame — near-camera flybys and sudden scale surges from deep ` +
-    `in the scene to huge in the foreground are the signature moves, and whenever the story surges, at least ` +
-    `one character is mid-burst through the opening, crossing the frame plane toward the viewer. ` +
-    `A living ambient layer — drifting glowing particles, small luminous shapes, ricocheting light trails — ` +
-    `keeps the world feeling alive between the leads' moves, answering the characters instead of churning on its own. ` +
+export function buildSpectacularArcPrompt() {
+  return `${CAMERA_LOCK} One single continuous take for the entire clip — no cuts, no shot changes, ` +
+    `no new angles, no transitions of any kind, ever. ` +
+    `The scene comes alive in constant motion, moving freely inside the painted black frame. ` +
+    `The characters interact with the frame — bursting out through the opening, over and past the black ` +
+    `border toward the viewer, casting light and moving shadows onto it — and diving back into the scene. ` +
     `${FRAME_MOTION_RULE} ` +
-    `The energy climbs in waves from the first movement to the last. ` +
-    `Smooth, premium, explosive high-energy movement — never static, never jittery. ${CONSTANCY_SPEC}`;
+    `Smooth, premium movement — never static, never jittery. ${CONSTANCY_SPEC}`;
 }
 
 /**

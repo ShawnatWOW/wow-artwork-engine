@@ -81,7 +81,7 @@ test('Phase 1: runWeek generates one still per surface/option (nothing animated)
     // three-movement arc, stored as the design's single motion prompt.
     assert.ok(!spec.closing_prompt && !spec.closing_key, 'no closing still on new designs');
     assert.equal(spec.motion_prompt_act2, null, 'new designs store the whole arc in one motion prompt');
-    assert.match(spec.motion_prompt, /three continuous movements/);
+    assert.match(spec.motion_prompt, /One single continuous take/);
     for (const eon of stills.filter((a) => a.style !== 'frame_break')) {
       assert.ok(!eon.closing_key && !eon.motion_prompt_act2, `${eon.style} has no storyboard`);
     }
@@ -176,8 +176,8 @@ test('spectacular single pass: ONE call, full arc prompt, NO end-frame anchor', 
     assert.equal(calls.length, 1, 'the whole piece must render in a single Seedance call');
     const [call] = calls;
     assert.equal(call.durationS, 2, 'single pass runs duration x acts');
-    assert.match(call.prompt, /three continuous movements/, 'the stored arc prompt drives the call');
-    assert.match(call.prompt, /the payoff/);
+    assert.match(call.prompt, /One single continuous take/, 'the stored minimal prompt drives the call');
+    assert.match(call.prompt, /no cuts, no shot changes/);
     assert.equal(call.endImageUrl ?? null, null, 'no end frame is sent — even when a legacy closing still exists');
   } finally {
     await rm(base, { recursive: true, force: true });

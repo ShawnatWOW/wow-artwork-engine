@@ -66,6 +66,18 @@ at a time, "N of 3 reviewed" progress per sign.
 
 ## Changelog (this delivery arc)
 
+- **2026-08-10 (night) — Nothing on top of the video + hands-off motion.** Review
+  of the first Test Art render (Shawn): the video cut to a different shot at
+  ~9.7s — exactly on the prompt's "movement" beat boundary, proving Seedance
+  2.5 reads timestamped sections as a shot list — and the composited frame
+  plate's translucent depth rings floated as a black gradient IN FRONT of the
+  painted frame. Both gone: (1) the video is delivered exactly as the model
+  made it — nothing is superimposed; the frame plate is applied to the STILL
+  only, and the video keeps the frame it inherits from that still as real
+  pixels everything can interact with. (2) The motion prompt is now minimal
+  by design: one continuous take (never cut), keep the framing, never remove
+  the frame, characters interact with it, colors hold. No choreography, no
+  story beats, no timestamps — the model owns the motion.
 - **2026-08-10 (evening) — Free endings + story-driven movement.** First live 2.5
   creative reviewed subpar (Shawn): the end-frame anchor made the motion feel
   obligated to reach a target frame, and the characters circled in the center.
