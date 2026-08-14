@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   buildStillPrompt, buildClosingStillPrompt, buildMotionPrompt, buildSpectacularArcPrompt,
+  composeSpectacularMotionPrompt,
   buildSpectacularAct, combineSpectacularActs, sanitizeMotionPrompt, castList,
   travelFor, themeFor, choreographyFor, familyFor, arcFor, THEMES, CHOREOGRAPHIES, SPECTACULAR_FAMILIES,
 } from '../src/services/generation/prompts.js';
@@ -190,8 +191,10 @@ test('the spectacular motion prompt is MINIMAL + one untimed story — no choreo
   // ONE untimed story sentence naming the design's own cast (Shawn,
   // 2026-08-14: "there's no real story to it") — beginning, journey, payoff,
   // still zero timestamps/beats, so it can't read as a shot list.
-  assert.match(arc, /A simple story plays out across this one take/);
-  assert.match(arc, /beginning, journey and payoff inside one unbroken shot/);
+  assert.match(arc, /A chase with real stakes plays out across this one take/);
+  assert.match(arc, /decisive dramatic payoff/);
+  assert.match(arc, /Every character is in motion at every single moment/);
+  assert.match(arc, /deep distance up to the frame/);
   // The story names the option's own cast, so options now DIFFER — and each
   // is deterministic for its seed.
   assert.equal(buildMotionPrompt({ ...JOB, option: 1 }), arc);
@@ -305,4 +308,16 @@ test('NO prompt contains placement/hardware or meta-artwork terms, all pass guar
       assert.ok(checkPrompt(p).allowed);
     }
   }
+});
+
+test('composeSpectacularMotionPrompt wraps ANY story in the fixed contract, rules once', () => {
+  const p = composeSpectacularMotionPrompt('The shark hunts the fish through the seaweed');
+  assert.ok(p.startsWith('Fixed camera, locked-off shot:'));
+  assert.match(p, /The shark hunts the fish through the seaweed\./);
+  const count = (re) => (p.match(re) || []).length;
+  assert.equal(count(/Fixed camera, locked-off shot/g), 1);
+  assert.equal(count(/stays perfectly fixed for the whole clip/g), 1);
+  assert.equal(count(/never fade, wash out, or drift/g), 1);
+  assert.match(p, /Every character is in motion at every single moment/);
+  assert.match(p, /deep distance up to the frame plane/);
 });

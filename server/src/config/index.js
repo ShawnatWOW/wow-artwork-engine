@@ -123,6 +123,10 @@ const config = {
   openai: {
     apiKey: process.env.OPENAI_API_KEY || process.env.OPEN_AI_API_KEY || '',
     model: process.env.ARTWORK_TWEAK_MODEL || 'gpt-4o-mini',
+    // Vision model for the story director (generation/director.js) — looks at
+    // each generated still and scripts its motion story from what is actually
+    // in the picture.
+    directorModel: process.env.ARTWORK_DIRECTOR_MODEL || 'gpt-4o-mini',
     baseUrl: process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1',
   },
 

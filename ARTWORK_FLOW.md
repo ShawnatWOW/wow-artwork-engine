@@ -19,8 +19,18 @@ every rule, and the exact text sent to the AI models.
 5. **No frame plate — anywhere** *(2026-08-14)*. Nothing is ever composited. The frame
    exists only because Seedream paints it (the still prompt demands it) and Seedance
    maintains it. What Scott reviews and what Seedance animates from is the raw model still.
-6. **QA.** A luma check catches black/blank renders.
-7. The design lands on the dashboard for review (approve / pass / keep & explore / tweak).
+6. **Story director** *(2026-08-14, round 3 — "the movement keeps most of the creatures
+   still… need story")*. A vision LLM is shown the ACTUAL generated still and scripts one
+   story paragraph from what is really in it — the real characters, the real painted
+   scenery used as cover and props (the shark hunts the fish through the seaweed *it
+   generated*), constant travel between the deep distance and the frame plane, and a
+   decisive payoff (the catch, the escape, the transformation). The engine wraps that
+   paragraph in the fixed motion contract; the LLM writes story, never rules. Any
+   shot-list vocabulary in its output is rejected. Fallback (no key / failure): a
+   template chase story with the design's cast. ~$0.01/design (`ARTWORK_DIRECTOR_MODEL`,
+   default gpt-4o-mini).
+7. **QA.** A luma check catches black/blank renders.
+8. The design lands on the dashboard for review (approve / pass / keep & explore / tweak).
 
 ### Phase 2 — Videos · one Seedance call per design, only on APPROVED designs
 
@@ -66,9 +76,9 @@ every rule, and the exact text sent to the AI models.
 *(Style family + cast + opening tableau now rotate per BATCH — every "New batch" gets fresh
 subjects and environments; the frame and containment language is identical every time.)*
 
-### Motion prompt — spectacular (per-design: the story names the design's own cast)
+### Motion prompt — spectacular (per-design: the story is written FROM the design's still)
 
-> Fixed camera, locked-off shot: the camera holds fixed framing for the entire clip — no dolly, no push-in, no pull-back, no zoom, no pan, no reframing. **One single continuous take for the entire clip — no cuts, no shot changes, no new angles, no transitions of any kind, ever.** **A simple story plays out across this one take: *[hero]* sets out from one side of the scene and crosses its full width to reach *[keeper]*; their meeting ignites the whole world — *[companion]* races through the blaze and waves of light sweep to every corner — a clear beginning, journey and payoff inside one unbroken shot.** The scene comes alive in constant motion, moving freely inside the painted black frame. **The characters interact with the frame — climbing onto the black border, sliding along its strips, leaning over its inner edge, casting light and moving shadows onto it — and diving back into the scene. They keep their entire form inside the picture at all times: nothing is ever cut off by the picture's edge — the drama lives right at the frame, never beyond it.** The matte-black frame running along all four outer edges of the image stays perfectly fixed for the whole clip […] except when a character moves onto them, when the character is drawn IN FRONT of the strips, covering them. […] The viewpoint stays outside the frame, in front of the black border, for the entire clip — it never travels through the opening into the scene. **Rapid, exciting, high-energy movement — never static, never jittery.** Saturation stays rich and maxed for the entire duration — colors may transform as the scene changes, but they never fade, wash out, or drift toward grey.
+> Fixed camera, locked-off shot […] **One single continuous take — no cuts, no shot changes, no new angles, no transitions, ever.** ***[STORY — written by the vision director from the actual still: a hunt/chase/journey using the real characters and real painted scenery as cover, traveling between the deep distance and the frame plane, ending in a decisive payoff. Template fallback: "A chase with real stakes plays out across this one take: [hero] flees across the full width of the scene with [companion] in relentless pursuit — weaving through the painted scenery, ducking behind it, breaking cover, diving from the deep distance up to the frame itself and back — until the chase peaks at [keeper], where the pursuit ends in one decisive dramatic payoff and the whole world erupts with light."]*** **Every character is in motion at every single moment of the clip — none of them ever stands still, poses, hovers or waits.** **The action travels in depth the whole time — from the deep distance up to the frame plane at the very front and back again.** The characters interact with the frame — climbing onto the black border, sliding along its strips, leaning over its inner edge, casting light and moving shadows onto it — with their entire form inside the picture at all times. The matte-black frame stays perfectly fixed […] The viewpoint never travels into the scene. **Rapid, exciting, high-energy movement — never static, never jittery.** Saturation stays rich and maxed for the entire duration.
 
 The **minimal contract**, tuned per your 2026-08-14 notes: framing locked (the
 first-frame=last-frame line is gone), one take, characters work ONTO the frame with their
