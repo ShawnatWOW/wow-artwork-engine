@@ -125,7 +125,10 @@ test('spectacular still is an ensemble: multiple named characters, verified fram
   // (frozen light-detonations in frame one smear when animated and leave the
   // story nowhere to build).
   assert.match(still, /This is how the story opens/);
-  assert.match(still, /poised and alive with quiet anticipation/);
+  // The opening tableau seeds the video's momentum (Shawn, 2026-08-15):
+  // the environment must already be visibly mid-motion, not waiting.
+  assert.match(still, /scenery itself\s+flows, sways and churns/);
+  assert.match(still, /unmistakable momentum/);
   assert.doesNotMatch(still, /bursting with kinetic energy/);
 });
 
@@ -319,5 +322,7 @@ test('composeSpectacularMotionPrompt wraps ANY story in the fixed contract, rule
   assert.equal(count(/stays perfectly fixed for the whole clip/g), 1);
   assert.equal(count(/never fade, wash out, or drift/g), 1);
   assert.match(p, /Every character is in motion at every single moment/);
+  assert.match(p, /The environment is a character too/);
+  assert.match(p, /every pixel is alive/);
   assert.match(p, /deep distance up to the frame plane/);
 });

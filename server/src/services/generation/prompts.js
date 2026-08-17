@@ -376,10 +376,16 @@ const FRAME_CONTAINMENT =
 // Poise clause for the OPENING still — a story has to start somewhere lower
 // than its climax (story overhaul 2026-08-11). CAST_ENERGY stays on the
 // closing still (the payoff tableau, when the storyboard flow is on).
+// The opening still seeds the VIDEO's energy (image-to-video inherits the
+// first frame's momentum): the environment must already be visibly in motion
+// — flowing, streaming, churning — not poised and waiting (Shawn, 2026-08-15:
+// "the environment inside the frame is dull and lacks movement"). Characters
+// stay mid-stride rather than mid-explosion (frozen detonations smear when
+// animated — 2026-08-11).
 const CAST_POISE =
-  'The scene is poised and alive with quiet anticipation — soft trails of light drift through it, ' +
-  'every character distinct and mid-gesture at its own depth, the whole space glowing with rich ' +
-  'saturated color that feels ready to move.';
+  'The whole scene is visibly mid-motion: currents of light stream through it, the scenery itself ' +
+  'flows, sways and churns, every character distinct and mid-stride at its own depth, the whole ' +
+  'space glowing with rich saturated color and unmistakable momentum.';
 // Ensemble variant of ENERGY: the whole cast alive at layered depths.
 const CAST_ENERGY =
   'Every character is caught mid-motion and bursting with kinetic energy — trails of light streak ' +
@@ -627,6 +633,10 @@ export function composeSpectacularMotionPrompt(story) {
     `${s}${s && !s.endsWith('.') ? '.' : ''} ` +
     `Every character is in motion at every single moment of the clip — none of them ever stands still, ` +
     `poses, hovers or waits; even while one leads the action the others keep moving through the scene. ` +
+    `The environment is a character too: the ENTIRE scene is in constant vigorous motion at all times — ` +
+    `water flows and ripples, plants sway and whip, drips run, clouds and mist churn, light pulses and ` +
+    `streams — the scenery visibly reacts to every character that passes through it; no region of the ` +
+    `picture is ever calm or frozen; every pixel is alive. ` +
     `The action travels in depth the whole time — from the deep distance up to the frame plane at the ` +
     `very front and back again. ` +
     `The characters interact with the frame — climbing onto the black border, sliding along its strips, ` +
@@ -649,6 +659,7 @@ export function buildSpectacularArcPrompt({ specKey, option, weekOf } = {}) {
   const story = `A chase with real stakes plays out across this one take: ${hero} flees across the full ` +
     `width of the scene with ${companion} in relentless pursuit — weaving through the painted scenery, ` +
     `ducking behind it, breaking cover, diving from the deep distance up to the frame itself and back — ` +
+    `— the whole environment surging in their wake, scenery bending and light churning wherever they pass — ` +
     `until the chase peaks at ${keeper}, where the pursuit ends in one decisive dramatic payoff far ` +
     `from where it began, and the whole world erupts with light.`;
   return composeSpectacularMotionPrompt(story);

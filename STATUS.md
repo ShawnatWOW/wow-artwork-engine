@@ -66,6 +66,19 @@ at a time, "N of 3 reviewed" progress per sign.
 
 ## Changelog (this delivery arc)
 
+- **2026-08-15 — The environment moves too + frame-order measured.** (1) The
+  scenes read static because every environment-motion demand had been stripped
+  in the minimal-contract pass — only characters were compelled to move, and
+  the director cast scenery as static "cover and props". Restored on all three
+  layers: the wrapper ("the environment is a character too… no region ever
+  calm; every pixel is alive"), the director brief (script how the visible
+  scenery moves and reacts — currents, whipping plants, churning mist), and
+  the opening still itself now depicts the scenery mid-motion so the video
+  inherits momentum from frame 1. (2) Frame-order is now MEASURED per render:
+  SSIM of the clip's first and last frames vs the approved still is logged,
+  and a card flag fires whenever the end resembles the still more than the
+  start ("the model animated toward the input") — no more guessing which end
+  of the video the preview became.
 - **2026-08-14 (4) — Frame-eating crop fixed + departure stories.** The cheetah
   render exposed two defects. (1) cropdetect couldn't tell Seedance's letterbox
   padding from the artwork's own painted black frame and cropped INTO the
