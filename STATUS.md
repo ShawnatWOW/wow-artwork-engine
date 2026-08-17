@@ -66,6 +66,15 @@ at a time, "N of 3 reviewed" progress per sign.
 
 ## Changelog (this delivery arc)
 
+- **2026-08-15 (2) — The boundary rule, stated right.** Shawn's clarification
+  after the eagle render: passing IN FRONT of the frame is always allowed —
+  wingtips over the strips, paint bursting across it, even briefly covering
+  it; that IS the pop-out. The ONE inviolable line is the picture's outer
+  edge: nothing may be clipped by the image boundary or fill the whole screen
+  (the eagle's flyby broke exactly that). Wrapper + director brief now state
+  it precisely: "in front of the frame: yes; past the picture's edge: never —
+  even at its closest and largest, a character fits entirely within the
+  picture."
 - **2026-08-15 — The environment moves too + frame-order measured.** (1) The
   scenes read static because every environment-motion demand had been stripped
   in the minimal-contract pass — only characters were compelled to move, and

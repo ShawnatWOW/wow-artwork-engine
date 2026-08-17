@@ -185,8 +185,10 @@ test('the spectacular motion prompt is MINIMAL + one untimed story — no choreo
   // Frame interaction is ONTO the frame, never out of the picture (Shawn,
   // 2026-08-14: leaving the bounds gets cut off by the aspect ratio and
   // ruins the illusion — the 3D read comes from working the edges).
-  assert.match(arc, /climbing onto the black border/);
-  assert.match(arc, /entire form inside the picture/);
+  assert.match(arc, /freely pass IN FRONT of the frame/);
+  assert.match(arc, /never clipped by the image's edge/);
+  assert.match(arc, /never filling the whole screen/);
+  assert.match(arc, /entire silhouette\s+inside the image/);
   assert.doesNotMatch(arc, /bursting out|past the black border|toward the viewer/);
   assert.doesNotMatch(arc, DOMAIN_TERMS);
   assert.doesNotMatch(arc, META_TERMS);
@@ -323,6 +325,7 @@ test('composeSpectacularMotionPrompt wraps ANY story in the fixed contract, rule
   assert.equal(count(/never fade, wash out, or drift/g), 1);
   assert.match(p, /Every character is in motion at every single moment/);
   assert.match(p, /The environment is a character too/);
+  assert.match(p, /ONE inviolable boundary is the picture's outer edge/);
   assert.match(p, /every pixel is alive/);
   assert.match(p, /deep distance up to the frame plane/);
 });

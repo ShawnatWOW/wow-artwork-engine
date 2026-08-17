@@ -98,7 +98,7 @@ everything else is the model's choice.
 | 1 | Black frame flush at the perimeter, all 4 sides, the whole clip | Still prompt paints it; motion prompt maintains it — no compositing anywhere |
 | 2 | One continuous take — zero cuts | Motion prompt (no timestamps/beats anywhere — they read as a shot list) |
 | 3 | Camera never moves, never enters the scene | CAMERA_LOCK + viewpoint rule in motion prompt |
-| 4 | Characters go ONTO the frame — never out of the picture (whole form always inside; the 3D read comes from working the edges) | Motion prompt interaction + containment rules |
+| 4 | Anything may pass IN FRONT of the frame — wingtips over the strips, paint bursting across it, even briefly covering it (that IS the pop-out). The ONE boundary is the picture's outer edge: nothing is ever clipped by the image edge or fills the whole screen | Motion prompt + director brief (clarified 2026-08-15: frame = playground, image edge = law) |
 | 5 | Nothing composited over the still OR the video, ever | Pipeline: frame plate fully removed 2026-08-14 |
 | 6 | Colors never wash out / drift grey | Constancy clause + post-hoc saturation QA warning |
 | 7 | Any characters welcome — creatures, people, living objects; no text/logos/watermarks | Still prompt creative-freedom clause; nudity guardrail before every spend |
