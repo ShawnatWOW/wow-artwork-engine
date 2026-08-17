@@ -345,6 +345,40 @@ export async function regionMeanLuma(input, { width, height, x, y, seconds = 1 }
   }
 }
 
+/**
+ * Grab one frame near the start or end of a clip as a JPEG — the two probes
+ * of the frame-order fidelity check (does the clip START on the approved
+ * still, or end on it?).
+ */
+export async function extractFrameAt({ input, output, position = 'first', offsetS = 0.15 }) {
+  const args = position === 'last'
+    ? ['-y', '-sseof', `-${offsetS + 0.2}`, '-i', input, '-update', '1', '-q:v', '2', output]
+    : ['-y', '-ss', String(offsetS), '-i', input, '-frames:v', '1', '-q:v', '2', output];
+  await run(args);
+  return { output };
+}
+
+/**
+ * SSIM similarity of two images (0..1), both normalized to a small gray
+ * canvas so differing sizes/aspects compare fairly. Returns null when
+ * unmeasurable. Used relatively (first-vs-last), never as an absolute gate.
+ */
+export async function imageSimilarity(a, b) {
+  const args = [
+    '-i', a, '-i', b,
+    '-filter_complex',
+    '[0:v]scale=512:288,setsar=1,format=gray[x];[1:v]scale=512:288,setsar=1,format=gray[y];[x][y]ssim',
+    '-f', 'null', '-',
+  ];
+  try {
+    const { stderr } = await execFileP(FFMPEG(), args, { maxBuffer: 1024 * 1024 * 32 });
+    const m = String(stderr).match(/All:([\d.]+)/);
+    return m ? Number(m[1]) : null;
+  } catch {
+    return null;
+  }
+}
+
 /** ffprobe → { width, height, duration } for an output file. */
 export async function probe(input) {
   const args = [
@@ -423,4 +457,6 @@ export default {
   detectContentCrop,
   computeBarCrop,
   regionMeanLuma,
+  extractFrameAt,
+  imageSimilarity,
 };

@@ -878,7 +878,32 @@ async function animateStill(still, ctx) {
     const drift = await qa.satDrift(raw);
     if (drift.warn) driftWarn = `qa: ${drift.reason}`;
   } catch { /* QA measurement is best-effort; never fail the render on it */ }
-  const qaWarn = [aspectWarn, driftWarn].filter(Boolean).join(' | ') || null;
+
+  // QA: FRAME-ORDER fidelity (Shawn, 2026-08-15: "appearing like the images
+  // are being used as the last frame rather than the first — confirm").
+  // Instead of trusting the fal contract (image_url IS the starting frame),
+  // measure it per render: SSIM of the clip's first and last frames against
+  // the approved still. When the END resembles the still more than the start,
+  // the model animated TOWARD the input — flagged loudly on the card. The
+  // measured pair is logged either way, so every render carries its answer.
+  let orderWarn;
+  if (!String(gen.model || '').startsWith('fixture')) {
+    try {
+      const firstFrame = path.join(dir, 'first.jpg');
+      const lastFrame = path.join(dir, 'last.jpg');
+      await ffmpeg.extractFrameAt({ input: content, output: firstFrame, position: 'first' });
+      await ffmpeg.extractFrameAt({ input: content, output: lastFrame, position: 'last' });
+      const firstSim = await ffmpeg.imageSimilarity(firstFrame, ref);
+      const lastSim = await ffmpeg.imageSimilarity(lastFrame, ref);
+      logger.info({ stillId: still.id, firstSim, lastSim }, 'Frame-order fidelity vs the approved still');
+      if (firstSim !== null && lastSim !== null && lastSim > firstSim + 0.05) {
+        orderWarn = `qa: the clip resembles the approved still MORE at its end (similarity ${lastSim.toFixed(2)}) than at its start (${firstSim.toFixed(2)}) — the model animated toward the input instead of away from it`;
+      }
+    } catch (err) {
+      logger.warn({ stillId: still.id, err: err.message }, 'Frame-order fidelity check failed');
+    }
+  }
+  const qaWarn = [aspectWarn, driftWarn, orderWarn].filter(Boolean).join(' | ') || null;
 
   // Ambient surfaces get a palindrome pass so the clip loops seamlessly on the
   // sign (art review: mismatched endpoints pop every cycle). Doubles duration.

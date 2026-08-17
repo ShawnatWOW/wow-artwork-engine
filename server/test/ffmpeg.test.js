@@ -219,3 +219,23 @@ test('computeBarCrop: pure geometry — letterbox, pillarbox, and no-bars cases'
   assert.equal(ffmpeg.computeBarCrop({ rawWidth: 3840, rawHeight: 1062, wantAspect: AR }), null);
   assert.equal(ffmpeg.computeBarCrop({ rawWidth: 0, rawHeight: 100, wantAspect: AR }), null);
 });
+
+test('imageSimilarity + extractFrameAt: identical frames read ~1.0, different frames lower', async (t) => {
+  if (!(await hasFfmpeg())) return t.skip('ffmpeg not installed');
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'wae-ssim-'));
+  try {
+    const clip = path.join(dir, 'clip.mp4');
+    await motionProvider.generate({ width: 640, height: 360, durationS: 2, output: clip });
+    const first = path.join(dir, 'first.jpg');
+    const last = path.join(dir, 'last.jpg');
+    await ffmpeg.extractFrameAt({ input: clip, output: first, position: 'first' });
+    await ffmpeg.extractFrameAt({ input: clip, output: last, position: 'last' });
+    const same = await ffmpeg.imageSimilarity(first, first);
+    assert.ok(same !== null && same > 0.98, `identical images should read ~1, got ${same}`);
+    // The fixture's box travels the width, so first vs last genuinely differ.
+    const diff = await ffmpeg.imageSimilarity(first, last);
+    assert.ok(diff !== null && diff < same, `moving content must score below identity (${diff} vs ${same})`);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
