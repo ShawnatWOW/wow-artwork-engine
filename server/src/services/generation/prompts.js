@@ -639,10 +639,12 @@ export function composeSpectacularMotionPrompt(story) {
     `picture is ever calm or frozen; every pixel is alive. ` +
     `The action travels in depth the whole time — from the deep distance up to the frame plane at the ` +
     `very front and back again. ` +
-    `The characters interact with the frame — climbing onto the black border, sliding along its strips, ` +
-    `leaning over its inner edge, casting light and moving shadows onto it — and diving back into the ` +
-    `scene. They keep their entire form inside the picture at all times: nothing is ever cut off by the ` +
-    `picture's edge — the drama lives right at the frame, never beyond it. ` +
+    `The characters freely pass IN FRONT of the frame — sweeping over the black border strips, wingtips ` +
+    `and limbs covering them, casting light and moving shadows onto them — and diving back into the ` +
+    `scene; bursts of paint and light may splash across the frame too. ` +
+    `The ONE inviolable boundary is the picture's outer edge: every element keeps its entire silhouette ` +
+    `inside the image at all times — even at its closest and largest, a character still fits completely ` +
+    `within the picture, never clipped by the image's edge, never filling the whole screen. ` +
     `${FRAME_MOTION_RULE} ` +
     `Rapid, exciting, high-energy movement — never static, never jittery. ${CONSTANCY_SPEC}`;
 }
