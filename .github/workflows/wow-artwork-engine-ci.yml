@@ -26,13 +26,16 @@ jobs:
         with:
           node-version: '22'
 
-      # Static build, NOT apt: Ubuntu mirror stalls wedged CI for 15+ minutes
-      # on the apt step (2026-08-18, runs 32087832971/32088712781). The static
-      # tarball needs no package mirrors and installs in seconds.
+      # Static build from GitHub-hosted releases, NOT apt: Ubuntu mirror
+      # stalls wedged CI for 15+ min on the apt step, and johnvansickle.com
+      # resets connections from runners (2026-08-18). BtbN's builds live on
+      # GitHub releases — same network as the runner, installs in seconds.
       - name: Install FFmpeg (static build)
         run: |
-          curl -fsSL --retry 3 https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz | tar -xJ
-          sudo install -m 755 ffmpeg-*-static/ffmpeg ffmpeg-*-static/ffprobe /usr/local/bin/
+          curl -fsSL --retry 3 --retry-all-errors -o /tmp/ffmpeg.tar.xz \
+            https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz
+          tar -xJf /tmp/ffmpeg.tar.xz -C /tmp
+          sudo install -m 755 /tmp/ffmpeg-master-latest-linux64-gpl/bin/ffmpeg /tmp/ffmpeg-master-latest-linux64-gpl/bin/ffprobe /usr/local/bin/
           ffmpeg -version | head -1
 
       - name: Install server deps
