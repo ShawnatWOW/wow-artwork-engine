@@ -47,12 +47,11 @@ const config = {
   // short", 2026-07-14.)
   generation: {
     durationS: num(process.env.GEN_DURATION_S, 15),
-    // TOTAL spectacular clip length. 10s ITERATION MODE (Shawn, 2026-08-14):
-    // "reduce time to 10 seconds until we nail the visuals" — cheap fast
-    // rounds (~$5.40/render vs ~$16.20 at 30s), and shorter clips give
-    // Seedance less room to cut between scenes. GEN_SPECTACULAR_DURATION_S=30
-    // restores the full piece without a deploy once the look is right.
-    spectacularDurationS: num(process.env.GEN_SPECTACULAR_DURATION_S, 10),
+    // TOTAL spectacular clip length. FULL PIECE (Shawn, 2026-08-18: "extend
+    // videos to 30 seconds now") — iteration mode is over; production renders
+    // the complete 30s take (~$16.20/render with Topaz). Set
+    // GEN_SPECTACULAR_DURATION_S=10 to drop back to cheap iteration rounds.
+    spectacularDurationS: num(process.env.GEN_SPECTACULAR_DURATION_S, 30),
     // Optional EON override: set GEN_EON_DURATION_S=30 to render EON pieces at
     // Seedance 2.5's native 30s (halves visible loop repetition on the
     // pillars; ~2x the gen cost). Unset -> EON uses the base duration (15s).
@@ -97,13 +96,12 @@ const config = {
     // (fal.js requests 720p if this is set to 1080p under a 2.5 model).
     resolution: process.env.FAL_RESOLUTION || '720p',
     generateAudio: process.env.FAL_GENERATE_AUDIO === '1', // artwork is silent by default
-    // Topaz AI upscale to 4K-class after Seedance. OFF during visual
-    // iteration (Shawn, 2026-08-14: "remove 4K upscale for now until we get
-    // the visuals down") — renders review faster/cheaper at 720p, conformed
-    // up by plain ffmpeg. FAL_UPSCALE=1 turns it back on for real deliveries;
-    // billboards DO need it at street scale.
+    // Topaz AI upscale to 4K-class after Seedance. ON by default (Shawn,
+    // 2026-08-18: "enable upscale" — real deliveries resume; billboards DO
+    // need it at street scale). FAL_UPSCALE=0 drops back to fast/cheap 720p
+    // review renders (plain ffmpeg conform) for visual iteration.
     upscale: {
-      enabled: process.env.FAL_UPSCALE === undefined ? false : ['1', 'true', 'yes', 'on'].includes(String(process.env.FAL_UPSCALE).toLowerCase()),
+      enabled: process.env.FAL_UPSCALE === undefined ? true : ['1', 'true', 'yes', 'on'].includes(String(process.env.FAL_UPSCALE).toLowerCase()),
       model: process.env.FAL_UPSCALE_MODEL || 'fal-ai/topaz/upscale/video',
       // 4x pairs with the 720p Seedance tier: 1680x720 → 6720x2880, conformed
       // DOWN to the 3840-wide spec (2x left conform upscaling 1.14x in plain

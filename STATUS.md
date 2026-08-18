@@ -66,6 +66,14 @@ at a time, "N of 3 reviewed" progress per sign.
 
 ## Changelog (this delivery arc)
 
+- **2026-08-18 (2) — Production mode: 30-second pieces + 4K upscale.** Iteration mode
+  is over: spectacular clips are back to the full 30s take and the Topaz 4× upscale is
+  ON by default again (~$16.20 per spectacular render, ~10–20 min per video). The old
+  knobs still work in reverse — `GEN_SPECTACULAR_DURATION_S=10` and `FAL_UPSCALE=0`
+  bring back cheap fast iteration rounds. NOTE: these are now the CODE defaults; if the
+  production env file (S3) still carries explicit `GEN_SPECTACULAR_DURATION_S` or
+  `FAL_UPSCALE` values, those win — make sure neither is set there (or set them to
+  30 / 1).
 - **2026-08-18 — Split tracks: option 1 framed, options 2–3 borderless (shipping to
   WOW).** Shawn: "it's already late… I wanna get this out and running to WOW" — so the
   three spectacular options stop being three tries at the same thing. Option 1 keeps the
