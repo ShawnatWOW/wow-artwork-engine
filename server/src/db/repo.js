@@ -75,8 +75,9 @@ export const pgRepo = {
           stage, motion_prompt, source_still_id, remote_url,
           family_id, parent_artwork_id, change_note,
           panel, fal_request_id, upscale_request_id, cost_usd,
-          closing_prompt, closing_key, closing_thumb_key, closing_remote_url, motion_prompt_act2)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31)
+          closing_prompt, closing_key, closing_thumb_key, closing_remote_url, motion_prompt_act2,
+          theme_label)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32)
        RETURNING *`,
       [
         a.runId, a.surface, a.style, a.mediaType, a.specKey,
@@ -95,6 +96,8 @@ export const pgRepo = {
         // Storyboard + two-act spectacular (008).
         a.closingPrompt ?? null, a.closingKey ?? null, a.closingThumbKey ?? null,
         a.closingRemoteUrl ?? null, a.motionPromptAct2 ?? null,
+        // Wild-theme slot label (009) — which randomized theme this design rolled.
+        a.themeLabel ?? null,
       ],
     );
     return rows[0];

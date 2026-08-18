@@ -12,6 +12,7 @@ import { createMemoryRepo } from '../src/db/memoryRepo.js';
 import { createLocalStore } from '../src/services/storage/local.js';
 import { SURFACES } from '../src/services/generation/catalog.js';
 import { motionProvider, stillProvider } from '../src/services/generation/fixture.js';
+import { wildThemeFor } from '../src/services/generation/prompts.js';
 import ffmpeg from '../src/services/ffmpeg.js';
 
 const execFileP = promisify(execFile);
@@ -697,6 +698,28 @@ test('story director: the motion prompt is written from the ACTUAL still when a 
     assert.match(framedStill.motion_prompt, /IN FRONT of the frame/);
     assert.doesNotMatch(borderless.motion_prompt, /IN FRONT of the frame/);
     assert.match(borderless.motion_prompt, /Maximum intensity/);
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
+});
+
+test('wild slot: option 3 rows carry the rolled theme label; options 1-2 carry none', async (t) => {
+  if (!(await hasFfmpeg())) return t.skip('ffmpeg not installed');
+  const { base, repo, store } = await harness();
+  const spectacularOnly = SURFACES.filter((s) => s.key === 'spectacular');
+  try {
+    const { runId } = await runWeek({
+      weekOf: '2026-08-17', triggeredBy: 'test',
+      deps: { repo, store, providers, surfaces: spectacularOnly, optionsPerSurface: 3, duration: 1 },
+    });
+    const stills = await repo.listArtworks(runId);
+    assert.equal(stills.length, 3);
+    const labeled = stills.filter((a) => a.theme_label);
+    assert.equal(labeled.length, 1, 'exactly one design per surface is the wild slot');
+    // The label is the theme wildThemeFor rolled for this batch's seed.
+    const expected = wildThemeFor({ specKey: 'spectacular_wow1_8', option: 3, weekOf: `2026-08-17#run${runId}` });
+    assert.equal(labeled[0].theme_label, expected.label);
+    assert.ok(labeled[0].prompt.includes(expected.style), 'the labeled row is the themed design');
   } finally {
     await rm(base, { recursive: true, force: true });
   }

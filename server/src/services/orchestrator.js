@@ -28,6 +28,7 @@ import { planJobs, POST, SURFACES, SPECS } from './generation/catalog.js';
 import {
   buildStillPrompt, buildClosingStillPrompt, buildMotionPrompt,
   composeSpectacularMotionPrompt, combineSpectacularActs, sanitizeMotionPrompt,
+  wildThemeInfo,
 } from './generation/prompts.js';
 import { directStory } from './generation/director.js';
 import { refineTweak } from './generation/tweak.js';
@@ -154,10 +155,19 @@ async function generateStill(job, ctx) {
     ? (ctx.closingPromptOverride ?? buildClosingStillPrompt({ style: job.style, specKey: job.specKey, option: job.option, weekOf: seed }))
     : null;
   const motionPromptAct2 = isStoryboard ? (ctx.motionPromptAct2Override ?? null) : null;
+  // WILD SLOT (Shawn, 2026-08-18): spectacular option 3 and EON-connected
+  // option 2 roll a randomized era/world theme each batch. The rolled theme's
+  // label is stored on the row so the dashboard can mark the wild design and
+  // say what it rolled. Vary/tweak inherit their source design's label
+  // (the override path keeps the source prompt, hence its theme).
+  const themeLabel = ctx.themeLabelOverride
+    ?? (ctx.promptOverride ? null
+      : wildThemeInfo({ style: job.style, specKey: job.specKey, option: job.option, weekOf: seed })?.label ?? null);
   const lineage = {
     familyId: ctx.familyId ?? null,
     parentArtworkId: ctx.parentArtworkId ?? null,
     changeNote: ctx.changeNote ?? null,
+    themeLabel,
   };
 
   // Guardrail BEFORE the (cheap) still spend — covers BOTH storyboard frames.
@@ -624,6 +634,9 @@ async function spawnVariation({ source, resolvePrompt, triggeredBy, onStart, dep
       // so old designs gain a storyboard on re-roll.
       closingPromptOverride: source.closing_prompt ?? undefined,
       motionPromptAct2Override: source.motion_prompt_act2 ?? undefined,
+      // A variation of a wild-theme design stays that theme (the prompt is
+      // the source's), so its label rides along.
+      themeLabelOverride: source.theme_label ?? null,
       familyId, parentArtworkId: source.id, changeNote,
     });
     await repo.setRunProgress?.(run.id, { phase: 'designs', done: 1, total: 1 });
@@ -973,6 +986,9 @@ async function animateStill(still, ctx) {
   const insertMotion = (extra) => repo.insertArtwork({
     runId, surface: surface.surface, style: surface.style, mediaType: 'video', stage: 'motion',
     sourceStillId: still.id, prompt: still.prompt, motionPrompt, model: gen.model,
+    // The video inherits its still's wild-theme label so the card keeps
+    // saying which theme the wild design rolled.
+    themeLabel: still.theme_label ?? null,
     s3KeyRaw: rawPut.key, error: qaWarn, ...extra,
   });
 

@@ -170,6 +170,157 @@ const SPECTACULAR_FAMILIES = [
 /** The cast as a list (keeper, hero, companion). Pure; exported for tests/UI. */
 export const castList = (family) => [family.cast.keeper, family.cast.hero, family.cast.companion];
 
+// ===========================================================================
+// WILD THEMES (Shawn, 2026-08-18): one slot per screen goes fully off-book —
+// a randomized era/world theme (cyberpunk, the twenties, …) instead of the
+// house psychedelic families. Always DIGITAL ART grounded in that theme,
+// with characters and scenery that belong to it. The wild slots:
+//   spectacular option 3  ·  EON-connected option 2
+// The pick is seeded by the batch (promptSeed salts with the run id), so
+// every "New batch" rolls a fresh theme, yet each run stays reproducible.
+// The chosen theme's LABEL is stored on the artwork row (theme_label) so the
+// dashboard can say which design is the wild one and what it rolled.
+// Vocabulary laws still apply: no meta-art nouns (poster/canvas/…), no
+// placement terms, no drawable seam nouns — same lessons as everywhere else.
+// ===========================================================================
+const WILD_THEMES = [
+  {
+    key: 'cyberpunk',
+    label: 'Cyberpunk',
+    style: 'cyberpunk digital art — a rain-slicked neon megacity of holographic light, chrome towers and electric color',
+    cast: {
+      keeper: 'a colossal chrome mech-dragon coiled around a glowing skyscraper spire',
+      hero: 'a neon-visored courier racing a light-trailing hoverbike',
+      companion: 'a holographic cat with glitching pixel fur',
+    },
+  },
+  {
+    key: 'twenties',
+    label: 'Roaring Twenties',
+    style: '1920s jazz-age art-deco digital art — gleaming gold geometry, champagne sparkle and velvet-black elegance',
+    cast: {
+      keeper: 'a grand gilded gramophone pouring out ribbons of musical light',
+      hero: 'a swing-dancing flapper in a beaded gold dress',
+      companion: 'a top-hatted jazz cat with a shining saxophone',
+    },
+  },
+  {
+    key: 'steampunk',
+    label: 'Steampunk',
+    style: 'steampunk digital art — brass gears, copper pipes, drifting steam and warm amber glow',
+    cast: {
+      keeper: 'a towering brass clockwork elephant venting gentle steam',
+      hero: 'a goggled sky-pirate riding a whirring copper glider',
+      companion: 'a wind-up mechanical hummingbird with ticking gears',
+    },
+  },
+  {
+    key: 'synthwave',
+    label: 'Synthwave',
+    style: 'retro synthwave digital art — a chrome sunset horizon of hot pink, purple and electric blue',
+    cast: {
+      keeper: 'a giant chrome sun setting between mirrored mountains',
+      hero: 'a scarlet turbo roadster streaking neon light',
+      companion: 'a chrome falcon with glowing magenta wings',
+    },
+  },
+  {
+    key: 'wild_west',
+    label: 'Wild West',
+    style: 'wild-west digital art — golden desert light, red canyons and dusty cinematic haze',
+    cast: {
+      keeper: 'a mighty saguaro cactus crowned with blooming desert flowers',
+      hero: 'a poncho-clad gunslinger on a galloping black stallion',
+      companion: 'a swooping red-tailed hawk',
+    },
+  },
+  {
+    key: 'feudal_japan',
+    label: 'Feudal Japan',
+    style: 'feudal-Japan ukiyo-e digital art — ink-brushed mountains, cherry blossoms and lantern-lit dusk',
+    cast: {
+      keeper: 'an ancient cherry tree raining glowing pink petals',
+      hero: 'an armored samurai with a gleaming katana',
+      companion: 'a nine-tailed spirit fox trailing white fire',
+    },
+  },
+  {
+    key: 'ancient_egypt',
+    label: 'Ancient Egypt',
+    style: 'ancient-Egypt digital art — golden sandstone, lapis blue, torchlight and drifting sand',
+    cast: {
+      keeper: 'a colossal golden sphinx with glowing sapphire eyes',
+      hero: 'a winged scarab of polished gold and turquoise',
+      companion: 'a sleek black jackal with gilded markings',
+    },
+  },
+  {
+    key: 'deep_space',
+    label: 'Deep Space',
+    style: 'deep-space opera digital art — vast nebulae, ringed giants and starlight in saturated color',
+    cast: {
+      keeper: 'a ringed lavender gas giant looming vast in the sky',
+      hero: 'a sleek silver starfighter trailing ion light',
+      companion: 'a school of star-glass manta rays swimming the void',
+    },
+  },
+  {
+    key: 'medieval_fantasy',
+    label: 'Medieval Fantasy',
+    style: 'high-fantasy digital art — castle spires, enchanted forests and golden magical light',
+    cast: {
+      keeper: 'an emerald dragon perched on a stone tower',
+      hero: 'a silver-armored knight on a white charger',
+      companion: 'a tiny golden fairy trailing sparkling dust',
+    },
+  },
+  {
+    key: 'lost_atlantis',
+    label: 'Lost Atlantis',
+    style: 'sunken-Atlantis digital art — turquoise depths, marble ruins and shafts of underwater sunlight',
+    cast: {
+      keeper: 'a wise giant sea-turtle carrying a glowing marble temple on its shell',
+      hero: 'a trident-bearing merfolk warrior',
+      companion: 'a flashing school of silver fish',
+    },
+  },
+  {
+    key: 'prehistoric',
+    label: 'Prehistoric',
+    style: 'prehistoric-jungle digital art — giant ferns, volcanic glow and golden primeval mist',
+    cast: {
+      keeper: 'a long-necked brontosaurus towering over the ferns',
+      hero: 'a feathered velociraptor sprinting at full stretch',
+      companion: 'a soaring turquoise pterodactyl',
+    },
+  },
+  {
+    key: 'masquerade',
+    label: 'Masquerade Carnival',
+    style: 'venetian-masquerade digital art — jewel-toned silks, gilded masks and candlelit midnight blues',
+    cast: {
+      keeper: 'a towering harlequin marionette strung with golden light',
+      hero: 'a masked dancer twirling in a peacock-feather gown',
+      companion: 'a white dove trailing glittering confetti',
+    },
+  },
+];
+
+/** Which (style, option) slots roll a wild theme. Pure; exported for tests. */
+export function isWildSlot(style, option) {
+  return (style === 'frame_break' && option === 3) || (style === 'eon_connected' && option === 2);
+}
+
+/** The wild theme one slot rolled — seeded by batch, so every batch differs. Pure. */
+export function wildThemeFor({ specKey, option, weekOf }) {
+  return WILD_THEMES[hash(`wild:${weekOf || 'week'}:${specKey}:${option}`) % WILD_THEMES.length];
+}
+
+/** The wild theme for a job, or null when the slot isn't wild. Pure. */
+export function wildThemeInfo({ style, specKey, option, weekOf }) {
+  return isWildSlot(style, option) ? wildThemeFor({ specKey, option, weekOf }) : null;
+}
+
 // Two-act scene arcs — each one a STORY told through movement, not a motion
 // texture. Live QA 2026-08-10 (Shawn): the old vocabulary ("orbit", "vortex",
 // "figure-eights", "interlocking loops") literalized into characters circling
@@ -250,9 +401,11 @@ export function familyFor({ specKey, option, weekOf }) {
   return SPECTACULAR_FAMILIES[(base + (option - 1)) % SPECTACULAR_FAMILIES.length];
 }
 
-/** The narrative arc for one spectacular option. Pure; exported for tests. */
+/** The narrative arc for one spectacular option. Pure; exported for tests.
+ *  The wild slot (option 3) casts its rolled theme's characters. */
 export function arcFor({ specKey, option, weekOf }) {
-  const f = familyFor({ specKey, option, weekOf });
+  const f = wildThemeInfo({ style: 'frame_break', specKey, option, weekOf })
+    ?? familyFor({ specKey, option, weekOf });
   const arc = SPECTACULAR_ARCS[hash(`arc:${weekOf || 'week'}:${specKey}:${option}`) % SPECTACULAR_ARCS.length];
   return arc(f.cast);
 }
@@ -410,10 +563,15 @@ const ONLY_CAST = (cast) =>
  */
 export function buildStillPrompt({ style, specKey, option, weekOf }) {
   const t = themeFor({ specKey, option, weekOf });
+  // WILD SLOT (Shawn, 2026-08-18): this option rolls a randomized era/world
+  // theme — digital art in that theme, subject/cast pulled from it.
+  const wild = wildThemeInfo({ style, specKey, option, weekOf });
   if (style === 'eon_connected') {
     const tr = travelFor(option);
-    return `An ultra-wide continuous panoramic scene with dynamic motion throughout. Style: ${t.style}. ` +
-      `The single hero subject is ${t.subject}, caught mid-motion and trailing ribbons of glowing light, ` +
+    const st = wild ? wild.style : t.style;
+    const subject = wild ? wild.cast.hero : t.subject;
+    return `An ultra-wide continuous panoramic scene with dynamic motion throughout. Style: ${st}. ` +
+      `The single hero subject is ${subject}, caught mid-motion and trailing ribbons of glowing light, ` +
       `positioned at the ${tr.start} edge, occupying about one third ` +
       `of the frame width and at least 60% of the frame height, with a continuous seamless environment extending ` +
       `across the full width for it to travel through. The background itself is alive with motion — ` +
@@ -437,7 +595,9 @@ export function buildStillPrompt({ style, specKey, option, weekOf }) {
     // smear when animated and the video has no rising action). The gentle
     // frame overlap in each arc's opening keeps the 3D read from second one;
     // the big punches belong to the movements and the ending.
-    const f = familyFor({ specKey, option, weekOf });
+    // Option 3 is the WILD slot: its family/cast come from the rolled theme
+    // instead of the house psychedelic families (Shawn, 2026-08-18).
+    const f = wild ?? familyFor({ specKey, option, weekOf });
     const cast = joinCast(castList(f));
     // SPLIT TRACKS (Shawn, 2026-08-18, shipping to WOW): option 1 keeps the
     // signature painted border (the mastery track); options 2+ are BORDERLESS
@@ -489,7 +649,7 @@ export function buildStillPrompt({ style, specKey, option, weekOf }) {
  */
 export function buildClosingStillPrompt({ style, specKey, option, weekOf }) {
   if (style !== 'frame_break') return null; // storyboard is a spectacular-only feature
-  const f = familyFor({ specKey, option, weekOf });
+  const f = wildThemeInfo({ style, specKey, option, weekOf }) ?? familyFor({ specKey, option, weekOf });
   const cast = joinCast(castList(f));
   const arc = arcFor({ specKey, option, weekOf });
   return `An ultra-wide trompe-l'oeil deep-relief composition in perfectly frontal, dead-centered, ` +
@@ -575,7 +735,9 @@ export function buildMotionPrompt({ style, specKey, option, weekOf }) {
     'Colors, saturation and lighting remain exactly constant for the entire duration; no fading, no color drift.';
   if (style === 'eon_connected') {
     const tr = travelFor(option);
-    const acts = choreographyFor({ specKey, option, weekOf })(t.subject, tr);
+    // Wild slot: the motion names the wild theme's hero, matching the still.
+    const wild = wildThemeInfo({ style, specKey, option, weekOf });
+    const acts = choreographyFor({ specKey, option, weekOf })(wild ? wild.cast.hero : t.subject, tr);
     return `${CAMERA_LOCK} Choreographed whole-scene motion: ${acts}. ` +
       `The journey starts in the ${tr.start} third of the frame in the very first frame and finishes at the ` +
       `${tr.end} edge of the frame only in the final frame; the subject stays inside the frame and keeps ` +
@@ -702,7 +864,12 @@ export function buildSpectacularArcPrompt({ specKey, option, weekOf, framed = tr
   // depth travel, decisive payoff), with NO timestamps and NO numbered beats
   // (those read as a shot list and caused the cuts). The cast names match
   // the design's still, so the story is about the characters in the picture.
-  const f = familyFor({ specKey: specKey ?? 'spectacular_wow1_8', option: option ?? 1, weekOf });
+  const key = specKey ?? 'spectacular_wow1_8';
+  const opt = option ?? 1;
+  // Option 3 is the wild slot — the fallback story stars the wild cast so it
+  // matches the design's still even when the vision director can't run.
+  const f = wildThemeInfo({ style: 'frame_break', specKey: key, option: opt, weekOf })
+    ?? familyFor({ specKey: key, option: opt, weekOf });
   const { keeper, hero, companion } = f.cast;
   const front = framed ? 'up to the frame itself and back' : 'up to the very front and back';
   const story = `A chase with real stakes plays out across this one take: ${hero} flees across the full ` +
@@ -749,9 +916,10 @@ export function combineSpectacularActs(act1, act2) {
   return `${act1} Then, flowing on continuously with no cut or pause, the second act follows. ${act2}`;
 }
 
-export { THEMES, CHOREOGRAPHIES, SOLO_MOTIONS, SPECTACULAR_FAMILIES, SPECTACULAR_ARCS };
+export { THEMES, CHOREOGRAPHIES, SOLO_MOTIONS, SPECTACULAR_FAMILIES, SPECTACULAR_ARCS, WILD_THEMES };
 export default {
   buildStillPrompt, buildClosingStillPrompt, buildMotionPrompt, buildSpectacularArcPrompt,
   composeSpectacularMotionPrompt, buildSpectacularAct, combineSpectacularActs, sanitizeMotionPrompt,
   travelFor, themeFor, choreographyFor, soloMotionFor, familyFor, arcFor, THEMES, SPECTACULAR_FAMILIES,
+  WILD_THEMES, wildThemeFor, wildThemeInfo, isWildSlot,
 };
