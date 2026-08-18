@@ -666,23 +666,37 @@ test('story director: the motion prompt is written from the ACTUAL still when a 
     generate: async (args) => ({ ...(await stillProvider.generate(args)), url: 'https://fal.example/still.png' }),
   };
   const providersWithUrl = { mode: 'fixture', still: urlStill, motion: motionProvider };
-  const directStory = async ({ imageUrl }) => {
-    seen.push(imageUrl);
+  const directStory = async ({ imageUrl, framed }) => {
+    seen.push({ imageUrl, framed });
     return 'THE DIRECTED SHARK STORY: the shark hunts the fish through the painted seaweed';
   };
   const spectacularOnly = SURFACES.filter((s) => s.key === 'spectacular');
   try {
     const { runId } = await runWeek({
       weekOf: '2026-08-17', triggeredBy: 'test',
-      deps: { repo, store, providers: providersWithUrl, surfaces: spectacularOnly, optionsPerSurface: 1, duration: 1, directStory },
+      deps: { repo, store, providers: providersWithUrl, surfaces: spectacularOnly, optionsPerSurface: 2, duration: 1, directStory },
     });
-    const [still] = await repo.listArtworks(runId);
-    assert.deepEqual(seen, ['https://fal.example/still.png'], 'the director is shown the generated still');
-    assert.match(still.motion_prompt, /THE DIRECTED SHARK STORY/, 'the directed story drives the motion prompt');
-    // The fixed contract still wraps the directed story.
-    assert.match(still.motion_prompt, /One single continuous take/);
-    assert.match(still.motion_prompt, /Every character is in motion at every single moment/);
-    assert.ok(still.motion_prompt.startsWith('Fixed camera, locked-off shot:'));
+    const stills = await repo.listArtworks(runId);
+    // Split tracks (2026-08-18): the director is shown every generated still,
+    // and told which track it is directing — option 1 framed, options 2+ not.
+    assert.deepEqual(seen, [
+      { imageUrl: 'https://fal.example/still.png', framed: true },
+      { imageUrl: 'https://fal.example/still.png', framed: false },
+    ], 'the director is shown each generated still with its track');
+    for (const still of stills) {
+      assert.match(still.motion_prompt, /THE DIRECTED SHARK STORY/, 'the directed story drives the motion prompt');
+      // The fixed contract still wraps the directed story.
+      assert.match(still.motion_prompt, /One single continuous take/);
+      assert.match(still.motion_prompt, /Every character is in motion at every single moment/);
+      assert.ok(still.motion_prompt.startsWith('Fixed camera, locked-off shot:'));
+    }
+    // The wrapped contract matches the track. (Artwork rows carry no option
+    // column — the framed track is recognizable by its painted-border still.)
+    const framedStill = stills.find((a) => /matte-black/.test(a.prompt));
+    const borderless = stills.find((a) => !/matte-black/.test(a.prompt));
+    assert.match(framedStill.motion_prompt, /IN FRONT of the frame/);
+    assert.doesNotMatch(borderless.motion_prompt, /IN FRONT of the frame/);
+    assert.match(borderless.motion_prompt, /Maximum intensity/);
   } finally {
     await rm(base, { recursive: true, force: true });
   }
