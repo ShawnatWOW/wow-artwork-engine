@@ -26,8 +26,14 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Install FFmpeg
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      # Static build, NOT apt: Ubuntu mirror stalls wedged CI for 15+ minutes
+      # on the apt step (2026-08-18, runs 32087832971/32088712781). The static
+      # tarball needs no package mirrors and installs in seconds.
+      - name: Install FFmpeg (static build)
+        run: |
+          curl -fsSL --retry 3 https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz | tar -xJ
+          sudo install -m 755 ffmpeg-*-static/ffmpeg ffmpeg-*-static/ffprobe /usr/local/bin/
+          ffmpeg -version | head -1
 
       - name: Install server deps
         working-directory: server
