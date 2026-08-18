@@ -859,12 +859,34 @@ async function animateStill(still, ctx) {
   // motion feel obligated instead of free) — the ending lives in the prompt.
   const totalS = surface.durationS ?? duration;
   const singlePrompt = combineSpectacularActs(motionPrompt, sanitizeMotionPrompt(still.motion_prompt_act2));
+
+  // PRE-LETTERBOXED reference (live QA 2026-08-15, the "missed the mark on
+  // the aspect ratio" render): fed the raw 3.62:1 art, Seedance sometimes
+  // re-stages it as a tiny picture floating in its own canvas instead of
+  // letterboxing — the snake slithered out of the picture into the void.
+  // The aspect decision must be OURS: pad the approved still to 16:9 with
+  // pure black margins (a canvas Seedance natively produces), so frame 1 IS
+  // the padded image with the art spanning full width, and extraction strips
+  // exactly the bars we added. Best-effort: any failure falls back to the
+  // raw still URL (the old behavior).
+  let referenceImageUrl = still.remote_url ?? null;
+  if (referenceImageUrl && still.width && still.height && still.width / still.height > 16 / 9) {
+    try {
+      const paddedRef = path.join(dir, 'ref_letterboxed.png');
+      await ffmpeg.padToAspect({ input: ref, output: paddedRef, width: still.width, height: still.height, aspect: 16 / 9 });
+      referenceImageUrl = (await uploadToFalStorage({ sourcePath: paddedRef, contentType: 'image/png' })).url;
+      logger.info({ stillId: still.id }, 'Seedance reference pre-letterboxed to 16:9');
+    } catch (err) {
+      logger.warn({ stillId: still.id, err: err.message }, 'Reference letterboxing failed — sending the raw still');
+    }
+  }
+
   const raw0 = path.join(dir, 'raw.mp4');
   const gen = await providers.motion.generate({
     width: surface.gen.width, height: surface.gen.height, ratio: surface.gen.ratio,
     durationS: totalS, fps, output: raw0, prompt: singlePrompt,
     referenceImage: ref,                       // local file — fixture mode
-    referenceImageUrl: still.remote_url ?? null, // fal-hosted URL — live Seedance
+    referenceImageUrl,                         // fal-hosted URL — live Seedance
   });
   const raw = raw0; // the model output the QA + ledger read
   const extracted = await extractContent(raw, gen.model);

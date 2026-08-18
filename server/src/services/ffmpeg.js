@@ -379,6 +379,32 @@ export async function imageSimilarity(a, b) {
   }
 }
 
+/**
+ * Canvas for letterboxing `width`x`height` content into `aspect` with pure
+ * black margins, centered. Used to PRE-pad the Seedance reference to a canvas
+ * the model can natively produce (live QA 2026-08-15: fed the raw 3.62:1 art,
+ * Seedance sometimes re-staged it as a tiny picture floating in its own
+ * canvas instead of letterboxing — the aspect decision must be OURS). Pure.
+ */
+export function computePadCanvas({ width, height, aspect } = {}) {
+  if (!width || !height || !aspect) return null;
+  const even = (n) => Math.max(2, Math.round(n / 2) * 2); // dimensions
+  const off = (n) => Math.max(0, Math.round(n / 2) * 2); // offsets may be 0
+  let canvasW = width;
+  let canvasH = height;
+  if (width / height >= aspect) canvasH = even(width / aspect);
+  else canvasW = even(height * aspect);
+  return { width: canvasW, height: canvasH, x: off((canvasW - width) / 2), y: off((canvasH - height) / 2) };
+}
+
+/** Letterbox an image into `aspect` with centered pure-black margins. */
+export async function padToAspect({ input, output, width, height, aspect }) {
+  const c = computePadCanvas({ width, height, aspect });
+  if (!c) throw new Error('padToAspect needs width/height/aspect');
+  await run(['-y', '-i', input, '-vf', `pad=${c.width}:${c.height}:${c.x}:${c.y}:black`, output]);
+  return { output, ...c };
+}
+
 /** ffprobe → { width, height, duration } for an output file. */
 export async function probe(input) {
   const args = [
@@ -459,4 +485,6 @@ export default {
   regionMeanLuma,
   extractFrameAt,
   imageSimilarity,
+  computePadCanvas,
+  padToAspect,
 };

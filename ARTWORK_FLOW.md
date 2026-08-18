@@ -36,7 +36,11 @@ every rule, and the exact text sent to the AI models.
 
 8. **Guardrail again** on the stored motion prompt, before the expensive spend.
 9. **One Seedance 2.5 call.** Inputs, exactly:
-   - `image_url` — the approved still (raw model output)
+   - `image_url` — the approved still, **pre-letterboxed by us to 16:9** *(2026-08-15:
+     fed the raw 3.62:1 art, Seedance sometimes re-staged it as a tiny picture floating
+     in its own canvas — the aspect decision is now OURS: pure black margins we add,
+     art spanning full width, a canvas the model natively produces; extraction strips
+     exactly the bars we added)*
    - `prompt` — the stored motion prompt (full text below)
    - `duration` — **10s right now** (iteration mode; env `GEN_SPECTACULAR_DURATION_S=30`
      restores the full piece). EON pieces: 15s.

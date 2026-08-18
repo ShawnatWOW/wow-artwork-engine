@@ -66,6 +66,17 @@ at a time, "N of 3 reviewed" progress per sign.
 
 ## Changelog (this delivery arc)
 
+- **2026-08-15 (3) — The aspect decision is ours: pre-letterboxed references.**
+  video_2 "completely missed the mark on the aspect ratio": given the raw
+  3.62:1 art, Seedance re-staged it as a tiny framed picture floating in its
+  own ~square canvas (the snake slithered out of the picture into the void),
+  and the never-stretch rule delivered it honestly tiny. Fix: the engine now
+  pads the approved still to EXACTLY 16:9 with pure black margins before
+  sending — a canvas Seedance natively produces — so frame 1 is our padded
+  image with the art spanning full width, and extraction strips precisely the
+  bars we added. The motion prompt declares the margins dead space (nothing
+  enters or lights them; the picture band never moves or resizes). Best-effort
+  with fallback to the raw still URL.
 - **2026-08-15 (2) — The boundary rule, stated right.** Shawn's clarification
   after the eagle render: passing IN FRONT of the frame is always allowed —
   wingtips over the strips, paint bursting across it, even briefly covering

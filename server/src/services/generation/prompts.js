@@ -645,6 +645,9 @@ export function composeSpectacularMotionPrompt(story) {
     `The ONE inviolable boundary is the picture's outer edge: every element keeps its entire silhouette ` +
     `inside the image at all times — even at its closest and largest, a character still fits completely ` +
     `within the picture, never clipped by the image's edge, never filling the whole screen. ` +
+    `The picture may sit letterboxed between pure black margins above and below; those margins are outside ` +
+    `the picture entirely — dead space that stays pure black for the whole clip; nothing ever enters, ` +
+    `crosses, or lights them, and the picture band never moves, shrinks, or resizes between them. ` +
     `${FRAME_MOTION_RULE} ` +
     `Rapid, exciting, high-energy movement — never static, never jittery. ${CONSTANCY_SPEC}`;
 }
