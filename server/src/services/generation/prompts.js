@@ -439,17 +439,36 @@ export function buildStillPrompt({ style, specKey, option, weekOf }) {
     // the big punches belong to the movements and the ending.
     const f = familyFor({ specKey, option, weekOf });
     const cast = joinCast(castList(f));
-    const arc = arcFor({ specKey, option, weekOf });
-    return `An ultra-wide trompe-l'oeil deep-relief composition in perfectly frontal, dead-centered, ` +
-      `symmetrical one-point perspective. Style: ${f.style}. ` +
-      `${FRAME_GEOMETRY} ${FRAME_STYLE} ` +
+    // SPLIT TRACKS (Shawn, 2026-08-18, shipping to WOW): option 1 keeps the
+    // signature painted border (the mastery track); options 2+ are BORDERLESS
+    // full-bleed pieces built to ship now — pure immersive scenery, maximum
+    // motion and story.
+    if (option === 1) {
+      const arc = arcFor({ specKey, option, weekOf });
+      return `An ultra-wide trompe-l'oeil deep-relief composition in perfectly frontal, dead-centered, ` +
+        `symmetrical one-point perspective. Style: ${f.style}. ` +
+        `${FRAME_GEOMETRY} ${FRAME_STYLE} ` +
+        `The scene is home to an ensemble of characters: ${cast}. ` +
+        `Beyond that cast there is full creative freedom — any characters and scenery that serve the ` +
+        `scene are welcome: creatures, people, living objects, anything with personality. ` +
+        `This is how the story opens: ${arc.opening}. ` +
+        `Whatever moves onto the frame's inner edge is rendered IN FRONT of the black strips, partially ` +
+        `covering them and casting soft shadows onto them — unmistakably closer to the viewer than the ` +
+        `frame plane. ${FRAME_CONTAINMENT} ` +
+        `${CAST_POISE} ${CONTRAST} ${SAFE}`;
+    }
+    const { keeper, hero, companion } = f.cast;
+    const [near, far] = option % 2 === 0 ? ['left', 'right'] : ['right', 'left'];
+    return `An ultra-wide cinematic full-bleed composition with sweeping 3D depth. Style: ${f.style}. ` +
+      `The scene fills the ENTIRE picture edge to edge and corner to corner — one continuous, deep, ` +
+      `living world with no border, no frame, no vignette, no dark edges: pure immersive scenery ` +
+      `everywhere. ` +
       `The scene is home to an ensemble of characters: ${cast}. ` +
       `Beyond that cast there is full creative freedom — any characters and scenery that serve the ` +
       `scene are welcome: creatures, people, living objects, anything with personality. ` +
-      `This is how the story opens: ${arc.opening}. ` +
-      `Whatever moves onto the frame's inner edge is rendered IN FRONT of the black strips, partially ` +
-      `covering them and casting soft shadows onto them — unmistakably closer to the viewer than the ` +
-      `frame plane. ${FRAME_CONTAINMENT} ` +
+      `This is how the story opens: ${keeper} dominates the ${near} third mid-motion while ${hero} ` +
+      `streaks in from the far ${far} edge trailing light and ${companion} sweeps through the deep ` +
+      `middle distance — the whole scene already surging. ` +
       `${CAST_POISE} ${CONTRAST} ${SAFE}`;
   }
   // eon_single: tall portrait composition, composed to wrap (the left band is
@@ -568,7 +587,10 @@ export function buildMotionPrompt({ style, specKey, option, weekOf }) {
       `${NO_SEAMS} ${CONSTANCY}`;
   }
   if (style === 'frame_break') {
-    return buildSpectacularArcPrompt({ specKey, option, weekOf });
+    // SPLIT TRACKS (Shawn, 2026-08-18): only option 1 carries the painted
+    // border; options 2+ are borderless full-bleed → framed motion rules
+    // would describe a frame that isn't there.
+    return buildSpectacularArcPrompt({ specKey, option, weekOf, framed: option === 1 });
   }
   const solo = soloMotionFor({ specKey, option, weekOf })(t.subject);
   return `${CAMERA_LOCK} Vivid ambient motion: ${solo}. ` +
@@ -623,9 +645,10 @@ const FRAME_MOTION_RULE =
  * Used by both the vision-directed story (director.js — written from the
  * actual generated still) and the template fallback below. Pure.
  */
-export function composeSpectacularMotionPrompt(story) {
+export function composeSpectacularMotionPrompt(story, { framed = true } = {}) {
   const s = String(story || '').trim();
-  return `${CAMERA_LOCK} One single continuous take for the entire clip — no cuts, no shot changes, ` +
+  const shared =
+    `${CAMERA_LOCK} One single continuous take for the entire clip — no cuts, no shot changes, ` +
     `no new angles, no transitions of any kind, ever. ` +
     `The clip begins exactly on this picture's frozen moment and immediately moves AWAY from it — the ` +
     `story never returns to, recreates, or ends on the arrangement shown at the start; the final moment ` +
@@ -636,23 +659,43 @@ export function composeSpectacularMotionPrompt(story) {
     `The environment is a character too: the ENTIRE scene is in constant vigorous motion at all times — ` +
     `water flows and ripples, plants sway and whip, drips run, clouds and mist churn, light pulses and ` +
     `streams — the scenery visibly reacts to every character that passes through it; no region of the ` +
-    `picture is ever calm or frozen; every pixel is alive. ` +
-    `The action travels in depth the whole time — from the deep distance up to the frame plane at the ` +
-    `very front and back again. ` +
-    `The characters freely pass IN FRONT of the frame — sweeping over the black border strips, wingtips ` +
-    `and limbs covering them, casting light and moving shadows onto them — and diving back into the ` +
-    `scene; bursts of paint and light may splash across the frame too. ` +
-    `The ONE inviolable boundary is the picture's outer edge: every element keeps its entire silhouette ` +
-    `inside the image at all times — even at its closest and largest, a character still fits completely ` +
-    `within the picture, never clipped by the image's edge, never filling the whole screen. ` +
+    `picture is ever calm or frozen; every pixel is alive. `;
+  const margins =
     `The picture may sit letterboxed between pure black margins above and below; those margins are outside ` +
     `the picture entirely — dead space that stays pure black for the whole clip; nothing ever enters, ` +
-    `crosses, or lights them, and the picture band never moves, shrinks, or resizes between them. ` +
-    `${FRAME_MOTION_RULE} ` +
+    `crosses, or lights them, and the picture band never moves, shrinks, or resizes between them. `;
+  if (framed) {
+    return shared +
+      `The action travels in depth the whole time — from the deep distance up to the frame plane at the ` +
+      `very front and back again. ` +
+      `The characters freely pass IN FRONT of the frame — sweeping over the black border strips, wingtips ` +
+      `and limbs covering them, casting light and moving shadows onto them — and diving back into the ` +
+      `scene; bursts of paint and light may splash across the frame too. ` +
+      `The ONE inviolable boundary is the picture's outer edge: every element keeps its entire silhouette ` +
+      `inside the image at all times — even at its closest and largest, a character still fits completely ` +
+      `within the picture, never clipped by the image's edge, never filling the whole screen. ` +
+      margins +
+      `${FRAME_MOTION_RULE} ` +
+      `Rapid, exciting, high-energy movement — never static, never jittery. ${CONSTANCY_SPEC}`;
+  }
+  // BORDERLESS track (Shawn, 2026-08-18): full-bleed cinematography — no frame
+  // to protect, so characters may sweep in and out across the picture's edges
+  // like any cinematic shot. What stays banned is a character swelling so
+  // close that it fills the whole screen and blots out the scene.
+  return shared +
+    `The action travels in depth the whole time — from the deep distance right up to the very front, ` +
+    `close to the viewer, and back again. ` +
+    `The scene is full-bleed with no frame or border: characters may sweep in and out across the ` +
+    `picture's edges freely, entering and exiting the shot like living things crossing a window. ` +
+    `No single character ever fills the whole screen or blots out the scene — even at its closest ` +
+    `and largest, the world around it stays visible. ` +
+    margins +
+    `Maximum intensity: this is the most kinetic, most breathtaking version of this scene possible — ` +
+    `relentless speed, dramatic near-misses, explosive turns, the whole world surging with the story. ` +
     `Rapid, exciting, high-energy movement — never static, never jittery. ${CONSTANCY_SPEC}`;
 }
 
-export function buildSpectacularArcPrompt({ specKey, option, weekOf } = {}) {
+export function buildSpectacularArcPrompt({ specKey, option, weekOf, framed = true } = {}) {
   // TEMPLATE story — the fallback when the vision director (director.js)
   // can't run (no OpenAI key, fixture mode, or a failed call). A chase with
   // real stakes (Shawn, 2026-08-14: story = pursuit, scenery used as cover,
@@ -661,13 +704,14 @@ export function buildSpectacularArcPrompt({ specKey, option, weekOf } = {}) {
   // the design's still, so the story is about the characters in the picture.
   const f = familyFor({ specKey: specKey ?? 'spectacular_wow1_8', option: option ?? 1, weekOf });
   const { keeper, hero, companion } = f.cast;
+  const front = framed ? 'up to the frame itself and back' : 'up to the very front and back';
   const story = `A chase with real stakes plays out across this one take: ${hero} flees across the full ` +
     `width of the scene with ${companion} in relentless pursuit — weaving through the painted scenery, ` +
-    `ducking behind it, breaking cover, diving from the deep distance up to the frame itself and back — ` +
+    `ducking behind it, breaking cover, diving from the deep distance ${front} — ` +
     `— the whole environment surging in their wake, scenery bending and light churning wherever they pass — ` +
     `until the chase peaks at ${keeper}, where the pursuit ends in one decisive dramatic payoff far ` +
     `from where it began, and the whole world erupts with light.`;
-  return composeSpectacularMotionPrompt(story);
+  return composeSpectacularMotionPrompt(story, { framed });
 }
 
 /**

@@ -66,6 +66,17 @@ at a time, "N of 3 reviewed" progress per sign.
 
 ## Changelog (this delivery arc)
 
+- **2026-08-18 — Split tracks: option 1 framed, options 2–3 borderless (shipping to
+  WOW).** Shawn: "it's already late… I wanna get this out and running to WOW" — so the
+  three spectacular options stop being three tries at the same thing. Option 1 keeps the
+  signature trompe-l'oeil painted border and all frame rules (the mastery track). Options
+  2 and 3 are now borderless full-bleed cinematic scenes — no frame, no vignette, scenery
+  to every edge — with the vision director and the motion contract switched to a
+  maximum-intensity variant (relentless speed, dramatic near-misses, a genuinely exciting
+  story). Frame rules drop out for the borderless tracks; edges become free entrances and
+  exits, and only a character filling the whole screen stays banned. Shared law is
+  unchanged for all three: one take, camera lock, departure-shaped stories, living
+  environment, letterbox-margin dead space, color constancy, and every QA instrument.
 - **2026-08-15 (3) — The aspect decision is ours: pre-letterboxed references.**
   video_2 "completely missed the mark on the aspect ratio": given the raw
   3.62:1 art, Seedance re-staged it as a tiny framed picture floating in its

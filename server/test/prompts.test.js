@@ -315,6 +315,72 @@ test('NO prompt contains placement/hardware or meta-artwork terms, all pass guar
   }
 });
 
+// ---- Split tracks (Shawn, 2026-08-18, shipping to WOW): option 1 keeps the
+// painted border (mastery track); options 2+ are borderless full-bleed built
+// for intense motion and story.
+
+test('split tracks: option 1 still keeps the painted frame, options 2+ are borderless full-bleed', () => {
+  const framedStill = buildStillPrompt({ ...JOB, option: 1 });
+  assert.match(framedStill, /matte-black frame/);
+  assert.match(framedStill, /flush with the picture's edges on all sides/);
+  for (const option of [2, 3]) {
+    const still = buildStillPrompt({ ...JOB, option });
+    // Full-bleed: the scene owns every pixel — no frame vocabulary at all.
+    assert.match(still, /full-bleed/);
+    assert.match(still, /edge to edge and corner to corner/);
+    assert.match(still, /no border, no frame, no vignette/);
+    assert.doesNotMatch(still, /matte-black/);
+    assert.doesNotMatch(still, /trompe-l'oeil/);
+    // Still names the whole cast, keeps creative freedom + the shared clauses.
+    const f = familyFor({ ...JOB, option });
+    for (const member of castList(f)) assert.ok(still.includes(member), `borderless still must name ${member}`);
+    assert.match(still, /full creative freedom/);
+    assert.match(still, /This is how the story opens/);
+    assert.match(still, /never an all-white or all-black scene/);
+    assert.match(still, /No text, no logos, no watermarks/);
+    assert.doesNotMatch(still, DOMAIN_TERMS);
+    assert.doesNotMatch(still, META_TERMS);
+    assert.ok(checkPrompt(still).allowed);
+    // Deterministic, and distinct from the framed track.
+    assert.equal(still, buildStillPrompt({ ...JOB, option }));
+    assert.notEqual(still, framedStill);
+  }
+  // Options 2 and 3 mirror sides so they don't read as clones.
+  assert.notEqual(buildStillPrompt({ ...JOB, option: 2 }), buildStillPrompt({ ...JOB, option: 3 }));
+});
+
+test('split tracks: borderless motion drops the frame rules, keeps the contract, adds intensity', () => {
+  const framed = buildMotionPrompt({ ...JOB, option: 1 });
+  assert.match(framed, /freely pass IN FRONT of the frame/);
+  assert.match(framed, /stays perfectly fixed for the whole clip/);
+  for (const option of [2, 3]) {
+    const p = buildMotionPrompt({ ...JOB, option });
+    // The shared contract survives: camera lock leads, one take, departure,
+    // every-character motion, living environment, letterbox margins, anti-drift.
+    assert.ok(p.startsWith('Fixed camera, locked-off shot:'), 'camera lock must lead');
+    assert.match(p, /One single continuous take/);
+    assert.match(p, /immediately moves AWAY from it/);
+    assert.match(p, /Every character is in motion at every single moment/);
+    assert.match(p, /The environment is a character too/);
+    assert.match(p, /margins are outside\s+the picture entirely/);
+    assert.match(p, /never fade, wash out, or drift/);
+    // No frame to talk about: every frame rule is gone.
+    assert.doesNotMatch(p, /IN FRONT of the frame/);
+    assert.doesNotMatch(p, /matte-black/);
+    assert.doesNotMatch(p, /stays perfectly fixed for the whole clip/);
+    assert.doesNotMatch(p, /frame plane/);
+    // Full-bleed edge law: edges are free crossings; only screen-filling is banned.
+    assert.match(p, /sweep in and out across the\s+picture's edges freely/);
+    assert.match(p, /No single character ever fills the whole screen/);
+    // The shipping tracks push intensity and story.
+    assert.match(p, /Maximum intensity/);
+    assert.doesNotMatch(p, DOMAIN_TERMS);
+    assert.doesNotMatch(p, META_TERMS);
+    assert.ok(checkPrompt(p).allowed);
+    assert.equal(p, buildMotionPrompt({ ...JOB, option }));
+  }
+});
+
 test('composeSpectacularMotionPrompt wraps ANY story in the fixed contract, rules once', () => {
   const p = composeSpectacularMotionPrompt('The shark hunts the fish through the seaweed');
   assert.ok(p.startsWith('Fixed camera, locked-off shot:'));

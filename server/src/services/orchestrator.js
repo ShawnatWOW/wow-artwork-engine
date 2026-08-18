@@ -202,8 +202,12 @@ async function generateStill(job, ctx) {
     // mode, bad output) the template chase story stands. Overrides (vary/
     // tweak) keep their design's stored story.
     if (job.style === 'frame_break' && !ctx.motionPromptOverride && referenceUrl) {
-      const story = await (ctx.directStory ?? directStory)({ imageUrl: referenceUrl });
-      if (story) motionPrompt = composeSpectacularMotionPrompt(story);
+      // SPLIT TRACKS (Shawn, 2026-08-18): only option 1 carries the painted
+      // border; options 2+ are borderless full-bleed — the director and the
+      // motion contract both switch variants on this flag.
+      const framed = job.option === 1;
+      const story = await (ctx.directStory ?? directStory)({ imageUrl: referenceUrl, framed });
+      if (story) motionPrompt = composeSpectacularMotionPrompt(story, { framed });
     }
 
     const priorStills = (await repo.listArtworks(runId)).filter((a) => a.stage === 'still').length;

@@ -1,8 +1,26 @@
 # Artwork Automation — Exact Criteria & Flow
 
-**As deployed 2026-08-14** (10-second iteration mode). This is the complete, honest map of
-what happens between "New batch" and a file landing in Jeff's Drive folder — every step,
-every rule, and the exact text sent to the AI models.
+**As deployed 2026-08-18** (10-second iteration mode · split tracks). This is the complete,
+honest map of what happens between "New batch" and a file landing in Jeff's Drive folder —
+every step, every rule, and the exact text sent to the AI models.
+
+## Split tracks (Shawn, 2026-08-18 — shipping to WOW)
+
+The three spectacular options are no longer three tries at the same thing:
+
+- **Option 1 — the FRAMED track (mastery)**: the signature trompe-l'oeil painted black
+  border, all the frame rules below. This is where the border illusion keeps being
+  perfected.
+- **Options 2 & 3 — the BORDERLESS tracks (shipping)**: full-bleed cinematic scenes with
+  no frame at all — the scene owns every pixel, edge to edge. Built to go out to WOW now:
+  the director and the motion contract both switch to a maximum-intensity variant focused
+  on relentless speed and a genuinely exciting story. Frame rules don't apply; characters
+  may sweep in and out across the picture's edges like any cinematic shot, and the only
+  ban is a single character filling the whole screen and blotting out the scene.
+
+Everything below that mentions the frame applies to option 1 only; everything else
+(one take, camera lock, departure, living environment, letterbox handling, QA, color
+constancy) applies to all three.
 
 ---
 
@@ -84,6 +102,18 @@ every rule, and the exact text sent to the AI models.
 *(Style family + cast + opening tableau now rotate per BATCH — every "New batch" gets fresh
 subjects and environments; the frame and containment language is identical every time.)*
 
+### Still prompt — spectacular options 2 & 3 (borderless, 2026-08-18)
+
+> An ultra-wide cinematic full-bleed composition with sweeping 3D depth. Style: *[family
+> style]*. The scene fills the ENTIRE picture edge to edge and corner to corner — one
+> continuous, deep, living world with no border, no frame, no vignette, no dark edges:
+> pure immersive scenery everywhere. *[cast + creative freedom + opening tableau: keeper
+> dominating one third mid-motion, hero streaking in from the far edge trailing light,
+> companion sweeping through the deep middle distance — the whole scene already surging]*
+> […mid-motion, contrast and no-text clauses as above.]
+
+*(Options 2 and 3 mirror which side the keeper holds, so they don't read as clones.)*
+
 ### Motion prompt — spectacular (per-design: the story is written FROM the design's still)
 
 > Fixed camera, locked-off shot […] **One single continuous take — no cuts, no shot changes, no new angles, no transitions, ever.** ***[STORY — written by the vision director from the actual still: a hunt/chase/journey using the real characters and real painted scenery as cover, traveling between the deep distance and the frame plane, ending in a decisive payoff. Template fallback: "A chase with real stakes plays out across this one take: [hero] flees across the full width of the scene with [companion] in relentless pursuit — weaving through the painted scenery, ducking behind it, breaking cover, diving from the deep distance up to the frame itself and back — until the chase peaks at [keeper], where the pursuit ends in one decisive dramatic payoff and the whole world erupts with light."]*** **The clip begins exactly on the picture's frozen moment and immediately moves AWAY from it — the story never returns to, recreates, or ends on the arrangement shown at the start (arrival-shaped stories made the model animate TOWARD the still, turning the preview into the last frame).** **Every character is in motion at every single moment of the clip — none of them ever stands still, poses, hovers or waits. The environment is a character too: the ENTIRE scene is in constant vigorous motion — water flows, plants whip, drips run, mist churns, light pulses — the scenery visibly reacts to every character passing through it; no region of the picture is ever calm; every pixel is alive.** **The action travels in depth the whole time — from the deep distance up to the frame plane at the very front and back again.** The characters interact with the frame — climbing onto the black border, sliding along its strips, leaning over its inner edge, casting light and moving shadows onto it — with their entire form inside the picture at all times. The matte-black frame stays perfectly fixed […] The viewpoint never travels into the scene. **Rapid, exciting, high-energy movement — never static, never jittery.** Saturation stays rich and maxed for the entire duration.
@@ -93,16 +123,31 @@ first-frame=last-frame line is gone), one take, characters work ONTO the frame w
 whole form always inside the picture, rapid + exciting motion welcomed, colors held —
 everything else is the model's choice.
 
+### Motion prompt — spectacular options 2 & 3 (borderless variant)
+
+Same contract minus every frame rule, plus a maximum-intensity clause. The story is still
+written by the vision director from the actual still (its brief switches to the borderless
+edition: full-bleed, free edge entries/exits, "the most exciting ten seconds of a great
+film"). The wrapper keeps: camera lock, one take, departure, every-character motion,
+living environment, letterbox-margin dead space, anti-drift. It swaps in:
+
+> The scene is full-bleed with no frame or border: characters may sweep in and out across
+> the picture's edges freely, entering and exiting the shot like living things crossing a
+> window. No single character ever fills the whole screen or blots out the scene — even at
+> its closest and largest, the world around it stays visible. […] Maximum intensity: this
+> is the most kinetic, most breathtaking version of this scene possible — relentless
+> speed, dramatic near-misses, explosive turns, the whole world surging with the story.
+
 ---
 
 ## The criteria (what "correct" means)
 
 | # | Criterion | Enforced by |
 |---|---|---|
-| 1 | Black frame flush at the perimeter, all 4 sides, the whole clip | Still prompt paints it; motion prompt maintains it — no compositing anywhere |
+| 1 | **Option 1 only:** black frame flush at the perimeter, all 4 sides, the whole clip. **Options 2–3:** NO frame anywhere — pure full-bleed scenery to every edge | Still prompt paints it (or bans it); motion prompt maintains it — no compositing anywhere |
 | 2 | One continuous take — zero cuts | Motion prompt (no timestamps/beats anywhere — they read as a shot list) |
 | 3 | Camera never moves, never enters the scene | CAMERA_LOCK + viewpoint rule in motion prompt |
-| 4 | Anything may pass IN FRONT of the frame — wingtips over the strips, paint bursting across it, even briefly covering it (that IS the pop-out). The ONE boundary is the picture's outer edge: nothing is ever clipped by the image edge or fills the whole screen | Motion prompt + director brief (clarified 2026-08-15: frame = playground, image edge = law) |
+| 4 | **Option 1:** anything may pass IN FRONT of the frame — wingtips over the strips, paint bursting across it, even briefly covering it (that IS the pop-out). The ONE boundary is the picture's outer edge: nothing is ever clipped by the image edge or fills the whole screen. **Options 2–3:** edges are free crossings (normal cinematography); only a character filling the whole screen stays banned | Motion prompt + director brief (clarified 2026-08-15: frame = playground, image edge = law; split 2026-08-18) |
 | 5 | Nothing composited over the still OR the video, ever | Pipeline: frame plate fully removed 2026-08-14 |
 | 6 | Colors never wash out / drift grey | Constancy clause + post-hoc saturation QA warning |
 | 7 | Any characters welcome — creatures, people, living objects; no text/logos/watermarks | Still prompt creative-freedom clause; nudity guardrail before every spend |
@@ -137,3 +182,7 @@ everything else is the model's choice.
   first-frame-weight parameters, or an automated cut-detector QA gate that auto-rejects
   and re-rolls a clip containing a scene change (scdet — the same detector used to find
   the 9.67s cut — costs nothing and could save a bad $5 render from reaching review).
+- **08-18 (split tracks):** "it's already late — I wanna get this out and running to WOW"
+  → option 1 stays the framed mastery track; options 2 & 3 go borderless full-bleed,
+  tuned for maximum intensity and story, ready to ship while the border keeps being
+  mastered on option 1.
