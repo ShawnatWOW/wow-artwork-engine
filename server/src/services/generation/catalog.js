@@ -71,10 +71,10 @@ export const SURFACES = [
     //              frame instead of moving freely. The ending is left free.
     //              Flip back to true to restore the closing-still flow.
     // durationS  — the piece's TOTAL length, one native Seedance 2.5 call
-    //              (stitching removed 2026-08-10). Currently the 10s
-    //              iteration length (config.spectacularDurationS; Shawn,
-    //              2026-08-14 — cheap rounds until the visuals are nailed);
-    //              GEN_SPECTACULAR_DURATION_S=30 restores the full piece.
+    //              (stitching removed 2026-08-10). The full 30s piece
+    //              (config.spectacularDurationS; Shawn, 2026-08-18 —
+    //              production mode); GEN_SPECTACULAR_DURATION_S=10 drops
+    //              back to cheap iteration rounds.
     storyboard: false,
     durationS: config.generation.spectacularDurationS,
     // No ping-pong: continuous kinetic motion throughout (user: "whole scene active")

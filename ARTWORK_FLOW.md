@@ -1,8 +1,8 @@
 # Artwork Automation — Exact Criteria & Flow
 
-**As deployed 2026-08-18** (10-second iteration mode · split tracks). This is the complete,
-honest map of what happens between "New batch" and a file landing in Jeff's Drive folder —
-every step, every rule, and the exact text sent to the AI models.
+**As deployed 2026-08-18** (full 30-second pieces + 4K upscale · split tracks). This is the
+complete, honest map of what happens between "New batch" and a file landing in Jeff's Drive
+folder — every step, every rule, and the exact text sent to the AI models.
 
 ## Split tracks (Shawn, 2026-08-18 — shipping to WOW)
 
@@ -60,13 +60,14 @@ constancy) applies to all three.
      art spanning full width, a canvas the model natively produces; extraction strips
      exactly the bars we added)*
    - `prompt` — the stored motion prompt (full text below)
-   - `duration` — **10s right now** (iteration mode; env `GEN_SPECTACULAR_DURATION_S=30`
-     restores the full piece). EON pieces: 15s.
+   - `duration` — **30s** (the full piece; env `GEN_SPECTACULAR_DURATION_S=10` drops back
+     to cheap iteration rounds). EON pieces: 15s.
    - `resolution: 720p` · `aspect_ratio: auto` · `generate_audio: false`
    - **No end frame.** Nothing else. No stitching exists anywhere.
-10. **No upscale for now** *(2026-08-14)*. Topaz is OFF during visual iteration — renders
-    come back faster and cheaper at 720p. `FAL_UPSCALE=1` re-enables the 4K pass for real
-    deliveries once the visuals are down.
+10. **Topaz 4K upscale — ON** *(re-enabled 2026-08-18)*. The 720p Seedance render is
+    upscaled 4× by Topaz before download (billboards need it at street scale). Best-effort:
+    a failed upscale delivers the un-upscaled clip rather than losing the paid generation.
+    `FAL_UPSCALE=0` turns it back off for fast/cheap visual iteration.
 11. **Letterbox extraction: geometry + proof, never-stretch** *(2026-08-14, rounds 2+4)*.
     Seedance can't output the extreme 3.6:1, so it letterboxes the art in a taller canvas.
     The bars' position is computed from GEOMETRY (design aspect vs raw canvas) — never
@@ -82,8 +83,8 @@ constancy) applies to all three.
 13. **Conform.** Exact-fit scale to delivery spec (spectacular 3840×1062). **Nothing is
     composited onto the video** — the file ships exactly as the model made it.
     (EON masters are instead sliced into each pillar's spine + face panels.)
-    During iteration (no Topaz) the 720p render is plain-scaled up — expect softness;
-    that's the accepted trade until the visuals are locked.
+    With Topaz on, the conform scales DOWN from the 4K-class upscale — crisp at
+    street scale.
 14. **Ledger.** Exact cost recorded per row from fal's token formula + the real model string.
 
 ### Phase 3 — Ship
@@ -160,12 +161,12 @@ living environment, letterbox-margin dead space, anti-drift. It swaps in:
 
 | Setting | Value now | Change via |
 |---|---|---|
-| Spectacular length | **10s** (iteration mode) | `GEN_SPECTACULAR_DURATION_S` (30 = full piece) |
+| Spectacular length | **30s** (full piece) | `GEN_SPECTACULAR_DURATION_S` (10 = iteration mode) |
 | EON length | 15s | `GEN_EON_DURATION_S` |
 | Motion model | Seedance 2.5 @720p | `FAL_SEEDANCE_MODEL` / `FAL_RESOLUTION` |
-| Upscale | **OFF** (iteration) | `FAL_UPSCALE=1` re-enables Topaz 4× |
-| Cost per spectacular render | **~$4.60** at 10s, no upscale (~$16.20 at 30s + Topaz) | — |
-| Time per video | ~3–6 min at 10s, no upscale | — |
+| Upscale | **ON** — Topaz 4× to 4K-class | `FAL_UPSCALE=0` turns it off for iteration |
+| Cost per spectacular render | **~$16.20** at 30s + Topaz (~$4.60 at 10s, no upscale) | — |
+| Time per video | ~10–20 min at 30s + Topaz | — |
 | Still / design | $0.03, ~20–40s | — |
 
 ## Iteration log (why things are the way they are)
@@ -186,3 +187,6 @@ living environment, letterbox-margin dead space, anti-drift. It swaps in:
   → option 1 stays the framed mastery track; options 2 & 3 go borderless full-bleed,
   tuned for maximum intensity and story, ready to ship while the border keeps being
   mastered on option 1.
+- **08-18 (production mode):** iteration mode over — spectaculars back to the full 30s
+  piece and Topaz 4K upscale re-enabled for real deliveries (~$16.20/render).
+  `GEN_SPECTACULAR_DURATION_S=10` + `FAL_UPSCALE=0` bring back cheap iteration rounds.
