@@ -153,6 +153,9 @@ export function createMemoryRepo({ persistPath = null } = {}) {
         closing_thumb_key: a.closingThumbKey ?? null,
         closing_remote_url: a.closingRemoteUrl ?? null,
         motion_prompt_act2: a.motionPromptAct2 ?? null,
+        // Wild-theme slot label (009_theme_label.sql) — which randomized theme
+        // this design rolled; null for house-style rows.
+        theme_label: a.themeLabel ?? null,
         created_at: new Date().toISOString(), // pg stamps this via DEFAULT now()
       };
       artworks.push(row);

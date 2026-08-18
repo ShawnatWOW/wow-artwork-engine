@@ -22,6 +22,25 @@ Everything below that mentions the frame applies to option 1 only; everything el
 (one take, camera lock, departure, living environment, letterbox handling, QA, color
 constancy) applies to all three.
 
+## Wild-theme slots (Shawn, 2026-08-18)
+
+Two slots go fully off-book every batch — a **randomized era/world theme** instead of
+the house psychedelic families, always **digital art grounded in that theme** with
+characters and scenery that belong to it:
+
+- **Spectacular option 3** (also borderless — the wild theme replaces its style family
+  and cast; the vision director still writes the story from the actual still).
+- **EON-connected option 2** (the wild theme's hero travels the triptych; the wrap/seam
+  and travel rules are unchanged).
+
+The pool (12 themes): Cyberpunk, Roaring Twenties, Steampunk, Synthwave, Wild West,
+Feudal Japan, Ancient Egypt, Deep Space, Medieval Fantasy, Lost Atlantis, Prehistoric,
+Masquerade Carnival. The pick is seeded by the batch id — every "New batch" rolls fresh,
+each run stays reproducible. The rolled theme's name is stored on the row
+(`theme_label`) and the dashboard shows a **🎲 Random theme: <name>** badge next to that
+generation, so the reviewer always knows which design is the wild one and what it
+rolled. Variations/tweaks of a wild design inherit its theme and label.
+
 ---
 
 ## The flow, end to end

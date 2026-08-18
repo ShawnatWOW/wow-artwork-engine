@@ -66,6 +66,16 @@ at a time, "N of 3 reviewed" progress per sign.
 
 ## Changelog (this delivery arc)
 
+- **2026-08-18 (3) — Wild-theme slots.** Spectacular option 3 and EON-connected option 2
+  now roll a RANDOMIZED era/world theme every batch (Cyberpunk, Roaring Twenties,
+  Steampunk, Synthwave, Wild West, Feudal Japan, Ancient Egypt, Deep Space, Medieval
+  Fantasy, Lost Atlantis, Prehistoric, Masquerade Carnival) — always digital art in that
+  theme with theme-relevant characters, instead of the house psychedelic families. The
+  rolled theme's name is stored on the row (`theme_label`, migration 009) and the
+  dashboard shows a "🎲 Random theme: <name>" badge next to that generation. Wild picks
+  are batch-seeded (fresh every "New batch", reproducible per run); vary/tweak inherit
+  the source's theme. All other rules (borderless track, one take, camera lock, QA)
+  unchanged.
 - **2026-08-18 (2) — Production mode: 30-second pieces + 4K upscale.** Iteration mode
   is over: spectacular clips are back to the full 30s take and the Topaz 4× upscale is
   ON by default again (~$16.20 per spectacular render, ~10–20 min per video). The old
