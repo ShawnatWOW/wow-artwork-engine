@@ -326,6 +326,7 @@ test('composeSpectacularMotionPrompt wraps ANY story in the fixed contract, rule
   assert.match(p, /Every character is in motion at every single moment/);
   assert.match(p, /The environment is a character too/);
   assert.match(p, /ONE inviolable boundary is the picture's outer edge/);
+  assert.match(p, /margins are outside\s+the picture entirely/);
   assert.match(p, /every pixel is alive/);
   assert.match(p, /deep distance up to the frame plane/);
 });

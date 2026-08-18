@@ -26,8 +26,17 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Install FFmpeg
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      # Static build from GitHub-hosted releases, NOT apt: Ubuntu mirror
+      # stalls wedged CI for 15+ min on the apt step, and johnvansickle.com
+      # resets connections from runners (2026-08-18). BtbN's builds live on
+      # GitHub releases — same network as the runner, installs in seconds.
+      - name: Install FFmpeg (static build)
+        run: |
+          curl -fsSL --retry 3 --retry-all-errors -o /tmp/ffmpeg.tar.xz \
+            https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz
+          tar -xJf /tmp/ffmpeg.tar.xz -C /tmp
+          sudo install -m 755 /tmp/ffmpeg-master-latest-linux64-gpl/bin/ffmpeg /tmp/ffmpeg-master-latest-linux64-gpl/bin/ffprobe /usr/local/bin/
+          ffmpeg -version | head -1
 
       - name: Install server deps
         working-directory: server

@@ -239,3 +239,18 @@ test('imageSimilarity + extractFrameAt: identical frames read ~1.0, different fr
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test('computePadCanvas: letterboxes wide art into 16:9 with centered black margins', () => {
+  // The spectacular's 4096x1132 art inside a 16:9 canvas: full width, bars
+  // above and below.
+  const c = ffmpeg.computePadCanvas({ width: 4096, height: 1132, aspect: 16 / 9 });
+  assert.equal(c.width, 4096);
+  assert.ok(Math.abs(c.height - 4096 / (16 / 9)) <= 2);
+  assert.equal(c.x, 0);
+  assert.ok(c.y > 0 && Math.abs(c.height - 1132 - 2 * c.y) <= 2, 'margins centered');
+  // Content already matching the aspect needs no growth on that axis.
+  const s = ffmpeg.computePadCanvas({ width: 1920, height: 1080, aspect: 16 / 9 });
+  assert.equal(s.width, 1920);
+  assert.equal(s.height, 1080);
+  assert.equal(ffmpeg.computePadCanvas({ width: 0, height: 10, aspect: 1 }), null);
+});
