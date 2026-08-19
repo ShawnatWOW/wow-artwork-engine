@@ -6,6 +6,7 @@
 // person (Scott/Shawn) rather than a no-reply. Pure Node crypto, no SDK.
 
 import crypto from 'node:crypto';
+import { readFile } from 'node:fs/promises';
 
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 
@@ -13,9 +14,31 @@ export function b64url(input) {
   return Buffer.from(input).toString('base64').replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
 }
 
-/** Parse a service-account key from a JSON string or object. */
-export function parseServiceAccount(sa) {
-  return typeof sa === 'string' ? JSON.parse(sa) : sa;
+/**
+ * Resolve a service-account key from any of the shapes it actually ships in:
+ * an object, inline JSON, a FILE PATH, or base64-encoded JSON.
+ * The path form is how the key lives on the production EC2
+ * (GOOGLE_SERVICE_ACCOUNT_JSON=/home/…/key.json) — blind JSON.parse of that
+ * value was the real cause of the first Send-to-Jeff failure (2026-08-19:
+ * `Unexpected token '/', "/home/ec2-"… is not valid JSON`).
+ */
+export async function parseServiceAccount(sa) {
+  if (!sa) throw new Error('Service-account key missing.');
+  if (typeof sa !== 'string') return sa;
+  const s = sa.trim();
+  if (s.startsWith('{')) return JSON.parse(s);
+  if (s.startsWith('/') || s.startsWith('./') || s.endsWith('.json')) {
+    try {
+      return JSON.parse(await readFile(s, 'utf8'));
+    } catch (err) {
+      throw new Error(`GOOGLE_SERVICE_ACCOUNT_JSON looks like a file path (${s}) but could not be read as a key file: ${err.message}`);
+    }
+  }
+  try {
+    return JSON.parse(Buffer.from(s, 'base64').toString('utf8'));
+  } catch {
+    throw new Error('GOOGLE_SERVICE_ACCOUNT_JSON is not inline JSON, a readable .json file path, or base64-encoded JSON.');
+  }
 }
 
 /**
@@ -26,7 +49,7 @@ export function parseServiceAccount(sa) {
  * @returns {Promise<string>} access token
  */
 export async function accessToken({ saJson, scope, subject }) {
-  const sa = parseServiceAccount(saJson);
+  const sa = await parseServiceAccount(saJson);
   const now = Math.floor(Date.now() / 1000);
   const header = b64url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
   const claim = b64url(JSON.stringify({

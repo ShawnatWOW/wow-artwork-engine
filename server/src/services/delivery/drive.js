@@ -9,9 +9,9 @@
 import { stat } from 'node:fs/promises';
 import { createReadStream } from 'node:fs';
 import { basename } from 'node:path';
-import crypto from 'node:crypto';
 import config from '../../config/index.js';
 import logger from '../../config/logger.js';
+import { accessToken as saAccessToken } from './googleAuth.js';
 
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 // RESUMABLE upload (2026-08-19): the old uploadType=multipart endpoint caps the
@@ -23,41 +23,9 @@ const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const RESUMABLE_URL = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&supportsAllDrives=true';
 const SCOPE = 'https://www.googleapis.com/auth/drive.file';
 
-function b64url(input) {
-  return Buffer.from(input).toString('base64').replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
-}
-
-// Service account → signed JWT → access token.
-async function tokenFromServiceAccount(saJson) {
-  const sa = typeof saJson === 'string' ? JSON.parse(saJson) : saJson;
-  const now = Math.floor(Date.now() / 1000);
-  const header = b64url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
-  const claim = b64url(
-    JSON.stringify({
-      iss: sa.client_email,
-      scope: SCOPE,
-      aud: TOKEN_URL,
-      iat: now,
-      exp: now + 3600,
-    }),
-  );
-  const signature = crypto
-    .createSign('RSA-SHA256')
-    .update(`${header}.${claim}`)
-    .sign(sa.private_key, 'base64')
-    .replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
-  const assertion = `${header}.${claim}.${signature}`;
-  const res = await fetch(TOKEN_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
-      assertion,
-    }),
-  });
-  if (!res.ok) throw new Error(`Drive SA token failed: ${res.status} ${await res.text()}`);
-  return (await res.json()).access_token;
-}
+// Service-account auth lives in googleAuth.js (shared with the Gmail send —
+// one parser, one JWT flow, one place that understands inline-JSON / file-path
+// / base64 key shapes).
 
 // OAuth refresh token → access token.
 async function tokenFromRefresh({ oauthClientId, oauthClientSecret, oauthRefreshToken }) {
@@ -76,7 +44,7 @@ async function tokenFromRefresh({ oauthClientId, oauthClientSecret, oauthRefresh
 }
 
 async function getAccessToken(cfg = config.drive) {
-  if (cfg.serviceAccountJson) return tokenFromServiceAccount(cfg.serviceAccountJson);
+  if (cfg.serviceAccountJson) return saAccessToken({ saJson: cfg.serviceAccountJson, scope: SCOPE });
   if (cfg.oauthRefreshToken) return tokenFromRefresh(cfg);
   throw new Error(
     'Google Drive not configured. Set GOOGLE_SERVICE_ACCOUNT_JSON or the GOOGLE_OAUTH_* vars.',
