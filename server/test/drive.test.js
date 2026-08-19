@@ -76,3 +76,26 @@ test('deliver: a refused init or upload surfaces the Google error text', async (
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+// --- service-account key shapes (the REAL first Send-to-Jeff failure:
+// GOOGLE_SERVICE_ACCOUNT_JSON held a file path and was blind-JSON.parse'd) ---
+
+import { parseServiceAccount } from '../src/services/delivery/googleAuth.js';
+
+test('parseServiceAccount accepts object, inline JSON, file path, and base64', async () => {
+  const key = { client_email: 'sa@proj.iam.gserviceaccount.com', private_key: 'pk' };
+  assert.deepEqual(await parseServiceAccount(key), key);
+  assert.deepEqual(await parseServiceAccount(JSON.stringify(key)), key);
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'wae-sa-'));
+  const file = path.join(dir, 'key.json');
+  await writeFile(file, JSON.stringify(key));
+  try {
+    assert.deepEqual(await parseServiceAccount(file), key, 'file path form (how the EC2 stores it)');
+    assert.deepEqual(await parseServiceAccount(Buffer.from(JSON.stringify(key)).toString('base64')), key, 'base64 form');
+    await assert.rejects(() => parseServiceAccount('/nonexistent/key.json'), /could not be read/);
+    await assert.rejects(() => parseServiceAccount('definitely not a key'), /not inline JSON/);
+    await assert.rejects(() => parseServiceAccount(''), /missing/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
