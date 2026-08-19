@@ -99,3 +99,12 @@ test('parseServiceAccount accepts object, inline JSON, file path, and base64', a
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+import { normalizeFolderId } from '../src/services/delivery/drive.js';
+
+test('normalizeFolderId: bare id, pasted browser URL, and ?id= form all resolve', () => {
+  assert.equal(normalizeFolderId('1OxABCdef_-123'), '1OxABCdef_-123');
+  assert.equal(normalizeFolderId('https://drive.google.com/drive/folders/1OxABCdef_-123?usp=sharing'), '1OxABCdef_-123');
+  assert.equal(normalizeFolderId('https://drive.google.com/open?id=1OxABCdef_-123'), '1OxABCdef_-123');
+  assert.equal(normalizeFolderId('  1OxABCdef_-123  '), '1OxABCdef_-123');
+});
