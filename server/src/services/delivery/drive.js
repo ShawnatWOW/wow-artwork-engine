@@ -6,14 +6,21 @@
 // resumable/multipart upload. Gated on config — throws clearly if unconfigured,
 // matching the generation-provider pattern (no silent failures).
 
-import { readFile } from 'node:fs/promises';
+import { stat } from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
 import { basename } from 'node:path';
 import crypto from 'node:crypto';
 import config from '../../config/index.js';
 import logger from '../../config/logger.js';
 
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
-const UPLOAD_URL = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true';
+// RESUMABLE upload (2026-08-19): the old uploadType=multipart endpoint caps the
+// whole request at ~5 MB — fine for the 10s/720p iteration files, but the real
+// deliveries (30s + Topaz 4K) are hundreds of MB, and Google rejected them,
+// which surfaced as the Send-to-Jeff 500. Resumable = one small JSON init that
+// returns a session URI, then the bytes PUT to it STREAMED from disk — no size
+// cap that matters here, and no whole-video Buffer in memory.
+const RESUMABLE_URL = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&supportsAllDrives=true';
 const SCOPE = 'https://www.googleapis.com/auth/drive.file';
 
 function b64url(input) {
@@ -84,28 +91,36 @@ export async function deliver({ filePath, fileName, mimeType = 'video/mp4' }, cf
   if (!cfg.folderId) throw new Error('GOOGLE_DRIVE_FOLDER_ID not set.');
   const name = fileName || basename(filePath);
   const token = await getAccessToken(cfg);
-  const data = await readFile(filePath);
+  const { size } = await stat(filePath);
 
-  const boundary = `wae-${crypto.randomUUID()}`;
-  const metadata = JSON.stringify({ name, parents: [cfg.folderId] });
-  const body = Buffer.concat([
-    Buffer.from(`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metadata}\r\n`),
-    Buffer.from(`--${boundary}\r\nContent-Type: ${mimeType}\r\n\r\n`),
-    data,
-    Buffer.from(`\r\n--${boundary}--`),
-  ]);
-
-  const res = await fetch(`${UPLOAD_URL}&fields=id,name,webViewLink`, {
+  // 1. Init the resumable session — a tiny JSON request that carries the
+  //    metadata and answers with the one-time upload URI.
+  const init = await fetch(`${RESUMABLE_URL}&fields=id,name,webViewLink`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${token}`,
-      'Content-Type': `multipart/related; boundary=${boundary}`,
+      'Content-Type': 'application/json; charset=UTF-8',
+      'X-Upload-Content-Type': mimeType,
+      'X-Upload-Content-Length': String(size),
     },
-    body,
+    body: JSON.stringify({ name, parents: [cfg.folderId] }),
+  });
+  if (!init.ok) throw new Error(`Drive upload init failed: ${init.status} ${await init.text()}`);
+  const session = init.headers.get('location');
+  if (!session) throw new Error('Drive upload init returned no session URI.');
+
+  // 2. Stream the bytes from disk in one PUT — a 300 MB delivery costs no more
+  //    memory than a small one. duplex:'half' is undici's requirement for
+  //    stream bodies.
+  const res = await fetch(session, {
+    method: 'PUT',
+    headers: { 'Content-Type': mimeType, 'Content-Length': String(size) },
+    body: createReadStream(filePath),
+    duplex: 'half',
   });
   if (!res.ok) throw new Error(`Drive upload failed: ${res.status} ${await res.text()}`);
   const out = await res.json();
-  logger.info({ id: out.id, name: out.name }, 'Delivered to Drive');
+  logger.info({ id: out.id, name: out.name, bytes: size }, 'Delivered to Drive');
   return { ...out, method: 'drive' };
 }
 
