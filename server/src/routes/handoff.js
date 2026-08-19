@@ -10,6 +10,7 @@
 // send; offline writes report as not sent.
 
 import { Router } from 'express';
+import logger from '../config/logger.js';
 import { deliveryPreflight, previewHandoff, sendRun } from '../services/delivery/handoff.js';
 import { getRepo } from '../db/index.js';
 
@@ -44,7 +45,12 @@ router.post('/runs/:id/handoff', async (req, res, next) => {
   } catch (err) {
     if (/No approved pieces/.test(err.message)) return res.status(409).json({ error: 'nothing_to_send', message: err.message });
     if (/not found/.test(err.message)) return res.status(404).json({ error: 'run_not_found' });
-    next(err);
+    // Delivery failures must reach the reviewer's dialog with the REAL reason
+    // (2026-08-19: an oversized Drive upload surfaced as a bare "status code
+    // 500" — undiagnosable from the screen). The dashboard proxy forwards
+    // `message` verbatim; the generic handler would strip it.
+    logger.error({ runId: req.params.id, err: err.message }, 'Handoff failed');
+    return res.status(502).json({ error: 'handoff_failed', message: `Delivery failed: ${err.message}` });
   }
 });
 
