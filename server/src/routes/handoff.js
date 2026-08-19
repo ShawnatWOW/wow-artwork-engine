@@ -44,7 +44,10 @@ router.post('/runs/:id/handoff', async (req, res, next) => {
     res.json(result);
   } catch (err) {
     if (/No approved pieces/.test(err.message)) return res.status(409).json({ error: 'nothing_to_send', message: err.message });
-    if (/not found/.test(err.message)) return res.status(404).json({ error: 'run_not_found' });
+    // ONLY the run lookup maps to 404. The old loose /not found/ regex also
+    // captured Google's own "File not found: <folder>" and relabeled a Drive
+    // failure as run_not_found, hiding the real reason (2026-08-19).
+    if (/^Run \d+ not found$/.test(err.message)) return res.status(404).json({ error: 'run_not_found' });
     // Delivery failures must reach the reviewer's dialog with the REAL reason
     // (2026-08-19: an oversized Drive upload surfaced as a bare "status code
     // 500" — undiagnosable from the screen). The dashboard proxy forwards

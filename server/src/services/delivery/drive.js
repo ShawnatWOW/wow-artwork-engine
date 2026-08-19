@@ -55,8 +55,21 @@ async function getAccessToken(cfg = config.drive) {
  * Upload a file to the configured Drive folder.
  * @returns {Promise<{ id, name, webViewLink, method }>}
  */
+/**
+ * Accept GOOGLE_DRIVE_FOLDER_ID as a bare id OR a pasted browser URL
+ * (https://drive.google.com/drive/folders/<id>?usp=…). Production shipped the
+ * URL form and Drive answered "File not found: <the whole url>" (2026-08-19) —
+ * extract the id instead of making config paste-perfection a delivery outage.
+ */
+export function normalizeFolderId(value) {
+  const s = String(value || '').trim();
+  const m = /\/folders\/([A-Za-z0-9_-]+)/.exec(s) || /[?&]id=([A-Za-z0-9_-]+)/.exec(s);
+  return m ? m[1] : s;
+}
+
 export async function deliver({ filePath, fileName, mimeType = 'video/mp4' }, cfg = config.drive) {
   if (!cfg.folderId) throw new Error('GOOGLE_DRIVE_FOLDER_ID not set.');
+  const folderId = normalizeFolderId(cfg.folderId);
   const name = fileName || basename(filePath);
   const token = await getAccessToken(cfg);
   const { size } = await stat(filePath);
@@ -71,7 +84,7 @@ export async function deliver({ filePath, fileName, mimeType = 'video/mp4' }, cf
       'X-Upload-Content-Type': mimeType,
       'X-Upload-Content-Length': String(size),
     },
-    body: JSON.stringify({ name, parents: [cfg.folderId] }),
+    body: JSON.stringify({ name, parents: [folderId] }),
   });
   if (!init.ok) throw new Error(`Drive upload init failed: ${init.status} ${await init.text()}`);
   const session = init.headers.get('location');
