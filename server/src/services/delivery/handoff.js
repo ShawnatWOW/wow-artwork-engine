@@ -178,8 +178,22 @@ export async function sendRun({ runId, sender, recipient, subject, body, test = 
       email = { status: 'offline', emlPath };
     }
 
+    // 3. Mark the delivered pieces SENT. Until now only the delivery ROW
+    //    recorded this, never the artwork — so the dashboard's whole 'sent'
+    //    state was unreachable: the "Send N to Jeff" button stayed armed after
+    //    a successful hand-off and a second click re-uploaded every file to
+    //    Drive and re-emailed Jeff (UX audit 2026-08-19). Only pieces whose
+    //    file actually landed are marked; an offline (local-copy) run leaves
+    //    them approved so the real send still has to happen.
+    const landed = links.filter((l) => l.status === 'sent');
+    for (const l of landed) {
+      await repo.updateArtwork(l.a.id, { status: 'sent' }).catch((err) => {
+        logger.warn({ runId, artworkId: l.a.id, err: err.message }, 'Could not mark artwork sent');
+      });
+    }
+
     const delivered = useDrive && email.status === 'sent';
-    logger.info({ runId, count: items.length, drive: useDrive ? 'live' : 'offline', email: email.status, delivered }, 'Handoff finished');
+    logger.info({ runId, count: items.length, sentCount: landed.length, drive: useDrive ? 'live' : 'offline', email: email.status, delivered }, 'Handoff finished');
     return {
       runId, delivered, count: items.length, from, to,
       drive: useDrive ? 'live' : 'offline',
