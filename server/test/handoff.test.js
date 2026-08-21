@@ -123,3 +123,40 @@ test('sendRun refuses when there is nothing approved', async () => {
     await rm(base, { recursive: true, force: true });
   }
 });
+
+// A delivered piece must be marked SENT on the artwork itself, not only on the
+// delivery row (UX audit 2026-08-19): the dashboard's whole 'sent' state hung
+// off artwork.status, so after a real hand-off the "Send N to Jeff" button
+// stayed armed and a second click re-uploaded every file and re-emailed Jeff.
+test('sendRun LIVE marks the delivered artworks sent, so a second send has nothing to resend', async () => {
+  const { base, repo, store, run } = await runWithApprovedMotion();
+  const calls = { upload: 0, send: 0 };
+  const driveMock = { deliver: async () => { calls.upload += 1; return { id: 'f1', webViewLink: 'https://drive/f1' }; } };
+  const gmailMock = { sendMail: async () => { calls.send += 1; return { sent: true, messageId: 'm1' }; }, buildMimeMessage };
+  const LIVE = { drive: { configured: true }, gmail: { configured: true, senders: ['scott@wowmedia.com'], to: 'jeff@wowmedia.com' }, overall: 'live', missing: [] };
+  try {
+    await sendRun({ runId: run.id, deps: { repo, store, drive: driveMock, gmail: gmailMock, preflight: LIVE } });
+    const motion = (await repo.listArtworks(run.id)).find((a) => a.stage === 'motion');
+    assert.equal(motion.status, 'sent', 'the delivered piece is marked sent');
+    // Re-sending finds nothing approved — no duplicate upload, no duplicate email.
+    await assert.rejects(
+      () => sendRun({ runId: run.id, deps: { repo, store, drive: driveMock, gmail: gmailMock, preflight: LIVE } }),
+      /No approved pieces/,
+    );
+    assert.equal(calls.upload, 1, 'file uploaded exactly once');
+    assert.equal(calls.send, 1, 'Jeff emailed exactly once');
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
+});
+
+test('sendRun OFFLINE leaves pieces approved — a local copy is not a delivery', async () => {
+  const { base, repo, store, run } = await runWithApprovedMotion();
+  try {
+    await sendRun({ runId: run.id, deps: { repo, store, localDir: path.join(base, 'handoff'), preflight: OFFLINE } });
+    const motion = (await repo.listArtworks(run.id)).find((a) => a.stage === 'motion');
+    assert.equal(motion.status, 'approved', 'still needs a real send');
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
+});
