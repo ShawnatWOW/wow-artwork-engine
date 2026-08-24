@@ -132,9 +132,10 @@ test('Phase 2: animateRun animates ONLY approved stills, conformed to spec, link
     );
     for (const panel of eon) {
       p = await ffmpeg.probe(store.localPath(panel.s3_key_final));
-      const want = panel.panel.endsWith('spine') ? 320 : 1280;
+      // Panel-native per Jeff (2026-08-21): spine 64x384, face 256x384.
+      const want = panel.panel.endsWith('spine') ? 64 : 256;
       assert.equal(p.width, want, `${panel.style}/${panel.panel} width`);
-      assert.equal(p.height, 1920);
+      assert.equal(p.height, 384);
       assert.equal(panel.spec_key, panel.panel.endsWith('spine') ? 'eon_spine' : 'eon_face');
     }
     // One sequence per wrapped master (connected + single). The connected one

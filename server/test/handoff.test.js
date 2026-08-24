@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { buildMimeMessage, assertAllowed } from '../src/services/delivery/gmail.js';
-import { deliveryPreflight, defaultDraft, sendRun } from '../src/services/delivery/handoff.js';
+import { deliveryPreflight, defaultDraft, previewHandoff, sendRun } from '../src/services/delivery/handoff.js';
 import { createMemoryRepo } from '../src/db/memoryRepo.js';
 import { createLocalStore } from '../src/services/storage/local.js';
 
@@ -156,6 +156,83 @@ test('sendRun OFFLINE leaves pieces approved — a local copy is not a delivery'
     await sendRun({ runId: run.id, deps: { repo, store, localDir: path.join(base, 'handoff'), preflight: OFFLINE } });
     const motion = (await repo.listArtworks(run.id)).find((a) => a.stage === 'motion');
     assert.equal(motion.status, 'approved', 'still needs a real send');
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
+});
+
+// --- EON master delivery (Jeff, 2026-08-21: "send it as one master file") ---
+
+async function runWithApprovedEonSet() {
+  const base = await mkdtemp(path.join(os.tmpdir(), 'wae-handoff-'));
+  const repo = createMemoryRepo();
+  const store = createLocalStore({ baseDir: base });
+  const run = await repo.createRun({ weekOf: '2026-08-24', triggeredBy: 'test' });
+  const vid = path.join(base, 'src.mp4'); await writeFile(vid, Buffer.alloc(1024, 7));
+  const th = path.join(base, 'src.jpg'); await writeFile(th, Buffer.alloc(256, 3));
+  await store.put({ key: 'runs/1/master.mp4', sourcePath: vid });
+  await store.put({ key: 'runs/1/thumb.jpg', sourcePath: th });
+  const ids = {};
+  for (const pod of [1, 2, 3]) {
+    for (const [kind, w] of [['spine', 64], ['face', 256]]) {
+      await store.put({ key: `runs/1/pod${pod}_${kind}.mp4`, sourcePath: vid });
+      const a = await repo.insertArtwork({
+        runId: run.id, surface: 'eon', style: 'eon_connected', mediaType: 'video', stage: 'motion',
+        specKey: `eon_${kind}`, panel: `pod${pod}_${kind}`, width: w, height: 384, status: 'approved',
+        s3KeyFinal: `runs/1/pod${pod}_${kind}.mp4`, thumbnailKey: 'runs/1/thumb.jpg',
+      });
+      ids[`pod${pod}_${kind}`] = a.id;
+    }
+  }
+  await repo.insertEonSequence({
+    runId: run.id, masterS3Key: 'runs/1/master.mp4',
+    face1ArtworkId: ids.pod1_face, face2ArtworkId: ids.pod2_face, face3ArtworkId: ids.pod3_face,
+    spine1ArtworkId: ids.pod1_spine, spine2ArtworkId: ids.pod2_spine, spine3ArtworkId: ids.pod3_spine,
+  });
+  return { base, repo, store, run };
+}
+
+test('an approved EON set ships as ONE 960x384 master file, not six panels', async () => {
+  const { base, repo, store, run } = await runWithApprovedEonSet();
+  const localDir = path.join(base, 'handoff');
+  try {
+    const preview = await previewHandoff({ runId: run.id, deps: { repo } });
+    assert.equal(preview.items.length, 1, 'the set is ONE deliverable');
+    assert.equal(preview.items[0].panel, 'master');
+    assert.equal(preview.items[0].width, 960);
+    assert.equal(preview.items[0].height, 384);
+    assert.match(preview.draft.subject, /1 ready/);
+    assert.match(preview.draft.body, /one master file \(960x384/);
+
+    const result = await sendRun({ runId: run.id, deps: { repo, store, localDir, preflight: OFFLINE } });
+    assert.equal(result.count, 1, 'Jeff receives one file');
+    const files = (await readdir(localDir)).filter((f) => f.endsWith('.mp4'));
+    assert.equal(files.length, 1);
+    assert.match(files[0], /_master_960x384_/, `master filename says what it is: ${files[0]}`);
+    assert.doesNotMatch(files[0], /pod\d/, 'no per-panel files');
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
+});
+
+test('a LIVE master delivery marks every panel of the set sent — nothing to double-send', async () => {
+  const { base, repo, store, run } = await runWithApprovedEonSet();
+  const calls = { upload: 0 };
+  const driveMock = { deliver: async ({ fileName }) => { calls.upload += 1; calls.name = fileName; return { id: 'f1', webViewLink: 'https://drive/f1' }; } };
+  const gmailMock = { sendMail: async () => ({ sent: true, messageId: 'm1' }), buildMimeMessage };
+  const LIVE = { drive: { configured: true }, gmail: { configured: true, senders: ['scott@wowmedia.com'], to: 'jeff@wowmedia.com' }, overall: 'live', missing: [] };
+  try {
+    await sendRun({ runId: run.id, deps: { repo, store, drive: driveMock, gmail: gmailMock, preflight: LIVE } });
+    assert.equal(calls.upload, 1, 'one upload for the whole set');
+    assert.match(calls.name, /_master_960x384_/);
+    const motions = (await repo.listArtworks(run.id)).filter((a) => a.stage === 'motion');
+    assert.equal(motions.length, 6);
+    assert.ok(motions.every((m) => m.status === 'sent'), 'all six panels marked sent');
+    await assert.rejects(
+      () => sendRun({ runId: run.id, deps: { repo, store, drive: driveMock, gmail: gmailMock, preflight: LIVE } }),
+      /No approved pieces/,
+    );
+    assert.equal(calls.upload, 1, 'no duplicate upload');
   } finally {
     await rm(base, { recursive: true, force: true });
   }

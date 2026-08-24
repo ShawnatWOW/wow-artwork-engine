@@ -3,14 +3,16 @@ import assert from 'node:assert/strict';
 
 import { SPECS, SURFACES, POST, EON_POD, POD_WIDTH, planJobs } from '../src/services/generation/catalog.js';
 
-test('SPECS match the locked Build Plan §4 pixel dimensions', () => {
+test('SPECS: spectacular stays 4K-class; EON is Jeff\'s panel-native (2026-08-21 email)', () => {
   assert.deepEqual(SPECS.spectacular_wow1_8, { surface: 'spectacular', width: 3840, height: 1062 });
-  assert.deepEqual(SPECS.eon_face, { surface: 'eon', width: 1280, height: 1920 });
-  assert.deepEqual(SPECS.eon_spine, { surface: 'eon', width: 320, height: 1920 });
+  // Jeff, verbatim: "Spines: 64w x 384h each · Faces: 256w x 384h each ·
+  // Total master size: 960w x 384".
+  assert.deepEqual(SPECS.eon_face, { surface: 'eon', width: 256, height: 384 });
+  assert.deepEqual(SPECS.eon_spine, { surface: 'eon', width: 64, height: 384 });
   // Wrapped masters: a pod is its spine + its face, so the 3-pod master is
-  // 3 x 1600 and a single pod is its own 1600-wide master.
-  assert.deepEqual(SPECS.eon_master_3pod, { surface: 'eon', width: 4800, height: 1920 });
-  assert.deepEqual(SPECS.eon_master_pod, { surface: 'eon', width: 1600, height: 1920 });
+  // 3 x 320 and a single pod is its own 320-wide master.
+  assert.deepEqual(SPECS.eon_master_3pod, { surface: 'eon', width: 960, height: 384 });
+  assert.deepEqual(SPECS.eon_master_pod, { surface: 'eon', width: 320, height: 384 });
 });
 
 test('a pod slab is spine + face, and each pod is exactly one third of the 3-pod master', () => {
