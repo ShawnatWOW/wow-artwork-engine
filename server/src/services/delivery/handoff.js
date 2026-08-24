@@ -59,6 +59,10 @@ export function defaultDraft({ recipient, weekOf, items }) {
     `${items.length} approved piece(s) for the week of ${weekOf} are in the Drive folder, sized to spec and ready to run:`,
     '',
     ...items.map((i) => {
+      // An EON set arrives as ONE master strip (Jeff, 2026-08-21) — say so.
+      if (i.panel === 'master') {
+        return `- ${i.surface} / ${i.style} — one master file (${i.width}x${i.height}: spine 64 + face 256 per pillar, left to right)`;
+      }
       const panel = panelName(i);
       return `- ${i.surface} / ${i.style}${panel ? ` — ${panel}` : ''} (${i.width}x${i.height})`;
     }),
@@ -74,18 +78,67 @@ function approvedMotions(artworks) {
   return artworks.filter((a) => a.stage === 'motion' && a.status === 'approved');
 }
 
+/**
+ * Group a run's approved motion rows into the FILES Jeff receives.
+ * - spectacular → one file per approved video (unchanged)
+ * - EON → ONE wrapped master per pillar set (Jeff, 2026-08-21: "If you are
+ *   able to send it as one master file that would speed up the turnaround
+ *   time"). The master (spines + faces side by side, 960×384 for the 3-pillar
+ *   set, 320×384 for a single) is already rendered and stored on the
+ *   eon_sequences row; the per-panel rows stay for review, but delivery ships
+ *   the master once and marks every panel of the set sent.
+ * A set counts as approved when any of its panels is (the dashboard approves
+ * them as a group). Legacy EON rows with no sequence fall back to per-file.
+ * Pure.
+ */
+export function deliverables(artworks, sequences = []) {
+  const approved = approvedMotions(artworks);
+  const byId = new Map(artworks.map((a) => [a.id, a]));
+  const units = [];
+  const claimed = new Set();
+  for (const seq of sequences) {
+    const panelIds = [
+      seq.face1_artwork_id, seq.face2_artwork_id, seq.face3_artwork_id,
+      seq.spine1_artwork_id, seq.spine2_artwork_id, seq.spine3_artwork_id,
+    ].filter((id) => id != null);
+    const panels = panelIds.map((id) => byId.get(id)).filter(Boolean);
+    const approvedPanels = panels.filter((p) => p.status === 'approved');
+    if (!seq.master_s3_key || approvedPanels.length === 0) continue;
+    for (const id of panelIds) claimed.add(id);
+    const sample = approvedPanels[0];
+    // Master dims = the panels laid side by side (64 + 256 per pillar).
+    const width = panels.reduce((w, p) => w + (p.width || 0), 0);
+    units.push({ kind: 'master', sequence: seq, panels, sample, width, height: sample.height });
+  }
+  for (const a of approved) {
+    if (!claimed.has(a.id)) units.push({ kind: 'file', artwork: a });
+  }
+  return units;
+}
+
+/** One deliverable → the item shape the draft/dialog render. Pure. */
+function unitItem(u) {
+  return u.kind === 'master'
+    ? { id: u.sample.id, surface: u.sample.surface, style: u.sample.style, panel: 'master', width: u.width, height: u.height }
+    : { id: u.artwork.id, surface: u.artwork.surface, style: u.artwork.style, panel: u.artwork.panel ?? null, width: u.artwork.width, height: u.artwork.height };
+}
+
 /** Draft + attachments + preflight for the run's approved pieces. */
 export async function previewHandoff({ runId, deps = {} }) {
   const repo = deps.repo || getRepo();
   const run = await repo.getRun(runId);
   if (!run) throw new Error(`Run ${runId} not found`);
-  const items = approvedMotions(await repo.listArtworks(runId));
+  const [artworks, sequences] = await Promise.all([
+    repo.listArtworks(runId),
+    repo.listEonSequences(runId),
+  ]);
+  const items = deliverables(artworks, sequences).map(unitItem);
   const preflight = deliveryPreflight();
   return {
     run,
     preflight,
     draft: defaultDraft({ recipient: preflight.gmail.to, weekOf: run.week_of, items }),
-    items: items.map((a) => ({ id: a.id, surface: a.surface, style: a.style, panel: a.panel ?? null, width: a.width, height: a.height })),
+    items,
   };
 }
 
@@ -102,8 +155,13 @@ export async function sendRun({ runId, sender, recipient, subject, body, test = 
 
   const run = await repo.getRun(runId);
   if (!run) throw new Error(`Run ${runId} not found`);
-  const items = approvedMotions(await repo.listArtworks(runId));
-  if (!items.length) throw new Error('No approved pieces to send. Approve at least one animated piece first.');
+  const [artworks, sequences] = await Promise.all([
+    repo.listArtworks(runId),
+    repo.listEonSequences(runId),
+  ]);
+  const units = deliverables(artworks, sequences);
+  const items = units.map(unitItem);
+  if (!units.length) throw new Error('No approved pieces to send. Approve at least one animated piece first.');
 
   const from = sender || config.publish.from;
   const to = test ? from : (recipient || config.publish.to); // test = send to yourself
@@ -118,14 +176,19 @@ export async function sendRun({ runId, sender, recipient, subject, body, test = 
   const links = [];
   const attachments = [];
   try {
-    // 1. Deliver each file (Drive live, or a local copy offline).
-    for (const a of items) {
+    // 1. Deliver each unit (Drive live, or a local copy offline). An EON set
+    //    is ONE unit: its wrapped master file (Jeff, 2026-08-21).
+    for (const u of units) {
+      const a = u.kind === 'master' ? u.sample : u.artwork;
+      const sourceKey = u.kind === 'master' ? u.sequence.master_s3_key : a.s3_key_final;
       const localFinal = path.join(workDir, `artwork_${a.id}.mp4`);
-      await writeFile(localFinal, await store.getBuffer(a.s3_key_final));
-      // The panel segment (pod1_spine / pod1_face …) is what tells Jeff which
-      // EON panel a file drives — without it the spine and face files for one
-      // pod are indistinguishable in the Drive folder.
-      const fileName = `WOW_${run.week_of}_${a.surface}_${a.style}${a.panel ? `_${a.panel}` : ''}_${a.width}x${a.height}_${a.id}.mp4`;
+      await writeFile(localFinal, await store.getBuffer(sourceKey));
+      // Spectacular files name the piece; a master file says it IS the whole
+      // strip. (Per-panel names — pod1_spine … — only appear for legacy EON
+      // rows that predate sequences.)
+      const fileName = u.kind === 'master'
+        ? `WOW_${run.week_of}_${a.surface}_${a.style}_master_${u.width}x${u.height}_${u.sequence.id}.mp4`
+        : `WOW_${run.week_of}_${a.surface}_${a.style}${a.panel ? `_${a.panel}` : ''}_${a.width}x${a.height}_${a.id}.mp4`;
 
       let method; let destination; let link = null; let status;
       if (useDrive) {
@@ -141,7 +204,10 @@ export async function sendRun({ runId, sender, recipient, subject, body, test = 
         artworkId: a.id, method, destination, status,
         sentAt: status === 'sent' ? new Date().toISOString() : null,
       });
-      links.push({ a, fileName, link, destination, deliveryId: row.id, status });
+      // A master delivery covers EVERY panel of its set — they all get marked
+      // sent together, since Jeff received the whole strip in one file.
+      const coveredIds = u.kind === 'master' ? u.panels.map((p) => p.id) : [a.id];
+      links.push({ a, fileName, link, destination, deliveryId: row.id, status, coveredIds, master: u.kind === 'master' });
 
       // Attach the small thumbnail preview (link the heavy video).
       if (a.thumbnail_key) {
@@ -154,6 +220,7 @@ export async function sendRun({ runId, sender, recipient, subject, body, test = 
 
     // 2. Email Jeff — Drive links + thumbnails.
     const linkLines = links.map((l) => {
+      if (l.master) return `- ${l.a.surface}/${l.a.style} — master strip: ${l.link || l.destination}`;
       const panel = panelName(l.a);
       return `- ${l.a.surface}/${l.a.style}${panel ? ` — ${panel}` : ''}: ${l.link || l.destination}`;
     });
@@ -187,15 +254,17 @@ export async function sendRun({ runId, sender, recipient, subject, body, test = 
     //    them approved so the real send still has to happen.
     const landed = links.filter((l) => l.status === 'sent');
     for (const l of landed) {
-      await repo.updateArtwork(l.a.id, { status: 'sent' }).catch((err) => {
-        logger.warn({ runId, artworkId: l.a.id, err: err.message }, 'Could not mark artwork sent');
-      });
+      for (const id of l.coveredIds) {
+        await repo.updateArtwork(id, { status: 'sent' }).catch((err) => {
+          logger.warn({ runId, artworkId: id, err: err.message }, 'Could not mark artwork sent');
+        });
+      }
     }
 
     const delivered = useDrive && email.status === 'sent';
-    logger.info({ runId, count: items.length, sentCount: landed.length, drive: useDrive ? 'live' : 'offline', email: email.status, delivered }, 'Handoff finished');
+    logger.info({ runId, count: units.length, sentCount: landed.length, drive: useDrive ? 'live' : 'offline', email: email.status, delivered }, 'Handoff finished');
     return {
-      runId, delivered, count: items.length, from, to,
+      runId, delivered, count: units.length, from, to,
       drive: useDrive ? 'live' : 'offline',
       email: email.status,
       detail: email,

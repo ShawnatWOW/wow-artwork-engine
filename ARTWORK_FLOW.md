@@ -99,17 +99,21 @@ rolled. Variations/tweaks of a wild design inherit its theme and label.
     the approved still, logged on every render — a card flag fires whenever the END
     resembles the still more than the start ("the model animated toward the input"), so
     the first-frame-vs-last-frame question is answered with data, not eyeballing.
-13. **Conform.** Exact-fit scale to delivery spec (spectacular 3840×1062). **Nothing is
-    composited onto the video** — the file ships exactly as the model made it.
-    (EON masters are instead sliced into each pillar's spine + face panels.)
-    With Topaz on, the conform scales DOWN from the 4K-class upscale — crisp at
-    street scale.
+13. **Conform.** Exact-fit scale to delivery spec — spectacular 3840×1062; EON at
+    **Jeff's panel-native sizes** *(2026-08-21 email: spine 64×384, face 256×384,
+    3-pillar master 960×384)*. **Nothing is composited onto the video** — the file
+    ships exactly as the model made it. EON masters are still sliced into per-panel
+    files for the review screen, but **delivery to Jeff is the ONE master file** —
+    spines + faces side by side in a single 960×384 strip (320×384 for a single
+    pillar), which he asked for to speed up his turnaround. EON also skips the Topaz
+    pass (720p already exceeds 384px output — pure savings); the spectacular keeps it.
 14. **Ledger.** Exact cost recorded per row from fal's token formula + the real model string.
 
 ### Phase 3 — Ship
 
-15. Scott approves videos → **Send to Jeff** → Google Drive upload (per-panel filenames) +
-    Gmail notification + Sent-history log.
+15. Scott approves videos → **Send to Jeff** → Google Drive upload — the spectacular as
+    its own file, each EON set as ONE wrapped master strip — + Gmail notification +
+    Sent-history log.
 
 ---
 
@@ -174,7 +178,7 @@ living environment, letterbox-margin dead space, anti-drift. It swaps in:
 | 8 | Fresh subjects + environments every batch | Prompt seed now salts with the batch id — no weekly repetition |
 | 9 | Failures are visible, never masked, never stretched | Black padding extracted (cropdetect); true aspect mismatch → padded + flagged, no distortion |
 | 11 | The motion has a story — beginning, journey, payoff — with zero timestamps | One untimed story sentence naming the design's own cast |
-| 10 | Delivery: exact pixels (3840×1062; EON panels 320/1280×1920) | Conform exact-fit (Topaz 4× returns via `FAL_UPSCALE=1` for real deliveries) |
+| 10 | Delivery: exact pixels (spectacular 3840×1062; EON one master 960×384 — spine 64 + face 256 per pillar, per Jeff 2026-08-21) | Conform exact-fit; EON ships the single wrapped master and skips Topaz |
 
 ## Current knobs & numbers
 

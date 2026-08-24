@@ -23,8 +23,8 @@ then expensive **4K videos** only on the designs Scott approves.
 | Sign | Final output | Look |
 |---|---|---|
 | **Spectacular** (street billboard) | 4K 3840×1062 | 3D "pop-out" — subject bursts out of a black frame painted into the art |
-| **EON — 3-pillar set** | one wide master → 3 pillars, each a **face 1280×1920 + spine 320×1920** | the artwork travels pillar-to-pillar and wraps around each corner |
-| **EON — single pillar** | one pillar — **face 1280×1920 + spine 320×1920** | standalone vertical piece, wrapping its own corner |
+| **EON — 3-pillar set** | ONE master strip **960×384** (per pillar: spine 64×384 + face 256×384 — Jeff's panel-native, 2026-08-21) | the artwork travels pillar-to-pillar and wraps around each corner |
+| **EON — single pillar** | ONE master strip **320×384** (spine 64×384 + face 256×384) | standalone vertical piece, wrapping its own corner |
 
 Every EON pillar has a narrow LED **spine** down its left side facing oncoming
 drivers. Both the spine and the face are cut from **one** design, so the artwork
@@ -65,6 +65,18 @@ at a time, "N of 3 reviewed" progress per sign.
 ---
 
 ## Changelog (this delivery arc)
+
+- **2026-08-21 — EON goes panel-native, delivered as ONE master file (Jeff's email).**
+  Jeff: "Spines: 64w x 384h each · Faces: 256w x 384h each · Total master size:
+  960w x 384 … If you are able to send it as one master file that would speed up
+  the turnaround time." Done on all counts: EON specs are now his exact LED
+  resolutions (aspects unchanged — spine 1:6, face 2:3, 20/80 pod split, so
+  compositions are untouched), and Send-to-Jeff ships each approved pillar set as
+  ONE wrapped master strip (960×384 for the 3-pillar, 320×384 for a single)
+  instead of six per-panel files. Panel files still exist for the review screen's
+  wrap preview; a master delivery marks every panel of its set sent. Bonus: EON
+  renders now skip the Topaz 4K pass (720p already exceeds 384px output) —
+  meaningfully cheaper per EON video. The spectacular is unchanged (4K, Topaz).
 
 - **2026-08-18 (3) — Wild-theme slots.** Spectacular option 3 and EON-connected option 2
   now roll a RANDOMIZED era/world theme every batch (Cyberpunk, Roaring Twenties,

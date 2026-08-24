@@ -904,6 +904,10 @@ async function animateStill(still, ctx) {
     durationS: totalS, fps, output: raw0, prompt: singlePrompt,
     referenceImage: ref,                       // local file — fixture mode
     referenceImageUrl,                         // fal-hosted URL — live Seedance
+    // EON delivers at Jeff's panel-native 960×384 (2026-08-21) — a 720p
+    // Seedance render is already ~2x that, so the Topaz 4K pass is pure spend
+    // with zero visible benefit. The spectacular keeps it (3840-wide spec).
+    skipUpscale: surface.post === POST.EON_SLICE,
   });
   const raw = raw0; // the model output the QA + ledger read
   const extracted = await extractContent(raw, gen.model);
