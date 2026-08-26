@@ -24,3 +24,24 @@ test('every catalog gen size is already Seedream-valid (no scaling surprises liv
       `${s.key} gen ${s.gen.width}x${s.gen.height} would be rescaled to ${fitted.width}x${fitted.height}`);
   }
 });
+
+// --- Seedance moderation refusal → plain language (2026-08-26) --------------
+
+import { videoUrlOf } from '../src/services/generation/fal.js';
+
+test('videoUrlOf translates a content_policy_violation into reviewer language', () => {
+  const refusal = {
+    detail: [{
+      loc: ['body', 'image_url'],
+      msg: 'The images or videos provided may contain likenesses of real people or other private information that cannot be processed.',
+      type: 'content_policy_violation',
+    }],
+  };
+  assert.throws(() => videoUrlOf(refusal, 'Seedance'),
+    /looks too much like a real person[\s\S]*Replace or Tweak/,
+    'the card must say what happened and what fixes it');
+  // Other failures keep the raw detail path.
+  assert.throws(() => videoUrlOf({ detail: 'boom' }, 'Seedance'), /returned no video url: boom/);
+  // A good result still returns its url.
+  assert.equal(videoUrlOf({ video: { url: 'https://v/x.mp4' } }, 'Seedance'), 'https://v/x.mp4');
+});

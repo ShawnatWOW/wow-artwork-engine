@@ -77,9 +77,23 @@ async function queueRun({ model, body, label, pollMs = 6000, timeoutMs = 900000 
 }
 
 /** Pull the output video URL out of a fal result, or throw with fal's detail. */
-function videoUrlOf(result, label) {
+export function videoUrlOf(result, label) {
   const url = result?.video?.url || result?.videos?.[0]?.url || result?.output?.video?.url;
   if (!url) {
+    // ByteDance's anti-deepfake moderation refuses images containing what
+    // reads as a PHOTOGRAPH of a person — fictional characters included
+    // (proven live 2026-08-26: the same still passed at preview detail,
+    // refused at full 4K). Raw JSON on the card told the reviewer nothing and
+    // made "Try again" look like the move, but the same image is refused every
+    // time — say what happened and what actually fixes it.
+    if (JSON.stringify(result).includes('content_policy_violation')) {
+      throw new Error(
+        `${label} refused this image: a character looks too much like a real person ` +
+        `(the video model's anti-deepfake filter — it cannot tell a photoreal fictional ` +
+        `character from a photo). "Try again" resends the same image and will be refused ` +
+        `again — Replace or Tweak the design so characters are clearly stylized, not photoreal.`,
+      );
+    }
     // fal's queue marks even bad model paths COMPLETED, with the real error in
     // `detail` — surface it instead of a vague "no video url".
     const detail = typeof result?.detail === 'string' ? result.detail : JSON.stringify(result).slice(0, 200);

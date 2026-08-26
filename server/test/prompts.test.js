@@ -261,6 +261,11 @@ test('still prompts carry the contrast clause and the text/logo negatives', () =
     // type stays banned on billboard art.
     assert.doesNotMatch(still, /No people, no faces/);
     assert.match(still, /No text, no logos, no watermarks/);
+    // …but never PHOTOREAL humans (2026-08-26): ByteDance's anti-deepfake
+    // filter refuses to animate photograph-grade human likenesses — fictional
+    // or not — so every still demands stylized characters. Proven live with
+    // the Atlantis merfolk (passed at preview detail, refused at full 4K).
+    assert.match(still, /never a photorealistic human likeness/, `missing stylization guard: ${job.style}`);
   }
 });
 

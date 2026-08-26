@@ -482,8 +482,21 @@ const CONTRAST =
   'strong tonal separation readable from far away in direct sunlight; never an all-white or all-black scene.';
 // Humans and any characters are allowed (Shawn, 2026-08-14) — only
 // text/logos/watermarks stay banned (billboard art must never carry stray type).
+// NO PHOTOREAL PEOPLE (2026-08-26, proven live): ByteDance's anti-deepfake
+// moderation refuses to animate any image containing what reads as a
+// photograph of a person — fictional or not (loc: image_url,
+// "likenesses of real people", reason: partner_validation_failed). Controlled
+// test: the SAME Atlantis merfolk still passed at 1280px preview detail and
+// was refused at the full 4096px master, benign prompt both times — the
+// trigger is photograph-grade human detail in the image, nothing else. Humans
+// stay allowed (Shawn, 2026-08-14); they must simply be STYLIZED. Positive
+// description leads; the negation tail stays short (drawable nouns inside
+// negations literalize — the "bands" lesson).
 const SAFE =
-  'Ultra high detail. No text, no logos, no watermarks.';
+  'Ultra high detail. No text, no logos, no watermarks. ' +
+  'The whole picture is stylized painterly digital art, never photographic: any person or ' +
+  'humanoid character is a clearly stylized animated-film character with illustrated ' +
+  'features — never a photorealistic human likeness.';
 // Energy clause for standalone stills — the subject should feel alive even as
 // a still frame. (Kept off the connected master, whose environment must stay
 // clean and uniform for the travel illusion.)

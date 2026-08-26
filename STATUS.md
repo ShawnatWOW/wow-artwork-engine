@@ -66,6 +66,17 @@ at a time, "N of 3 reviewed" progress per sign.
 
 ## Changelog (this delivery arc)
 
+- **2026-08-26 — Photoreal humans stylized (Seedance refusals fixed).** Two wild-theme
+  designs (the Atlantis merfolk, the Deep Space crowd) were refused by ByteDance's
+  anti-deepfake moderation: it blocks animating any image containing what reads as a
+  PHOTOGRAPH of a person — fictional or not. Proven with a controlled test: the same
+  merfolk still passed at 1280px preview detail and was refused at the full 4096px
+  master, benign prompt both times. Fix at the source: every still prompt now demands
+  stylized painterly characters ("never a photorealistic human likeness") — humans stay
+  allowed, just illustrated. And the card now translates the refusal into plain language
+  ("a character looks too much like a real person… Replace or Tweak the design — Try
+  again resends the same image and will be refused again") instead of raw JSON.
+
 - **2026-08-21 — EON goes panel-native, delivered as ONE master file (Jeff's email).**
   Jeff: "Spines: 64w x 384h each · Faces: 256w x 384h each · Total master size:
   960w x 384 … If you are able to send it as one master file that would speed up
