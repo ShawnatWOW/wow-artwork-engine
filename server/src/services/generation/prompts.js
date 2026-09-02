@@ -230,7 +230,12 @@ const WILD_THEMES = [
     style: 'wild-west digital art — golden desert light, red canyons and dusty cinematic haze',
     cast: {
       keeper: 'a mighty saguaro cactus crowned with blooming desert flowers',
-      hero: 'a poncho-clad gunslinger on a galloping black stallion',
+      // Was 'a poncho-clad gunslinger' (2026-09-02): "gunslinger" seeded
+      // rifles on every background figure Seedream invented — armed
+      // semi-realistic men are exactly ByteDance's moderation boundary, and
+      // guns don't belong on a WOW street billboard anyway. A lasso rider
+      // keeps the theme, loses the firearms.
+      hero: 'a lasso-swinging cowgirl on a galloping black stallion',
       companion: 'a swooping red-tailed hawk',
     },
   },
@@ -493,7 +498,7 @@ const CONTRAST =
 // description leads; the negation tail stays short (drawable nouns inside
 // negations literalize — the "bands" lesson).
 const SAFE =
-  'Ultra high detail. No text, no logos, no watermarks. ' +
+  'Ultra high detail. No text, no logos, no watermarks, no weapons. ' +
   'The whole picture is stylized painterly digital art, never photographic: any person or ' +
   'humanoid character is a clearly stylized animated-film character with illustrated ' +
   'features — never a photorealistic human likeness.';

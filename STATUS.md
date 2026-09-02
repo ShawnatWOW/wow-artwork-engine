@@ -66,6 +66,18 @@ at a time, "N of 3 reviewed" progress per sign.
 
 ## Changelog (this delivery arc)
 
+- **2026-09-02 — Boundary refusals: retry once + de-weaponized Wild West.** The Wild
+  West wild-theme still was refused by ByteDance's likeness filter — but a full
+  forensic ablation (the exact image, its regions, the padded production copy, even a
+  byte-faithful replica with the real motion prompt) passed 6/6 on resubmission. So
+  unlike the deterministic merfolk case, this was a NOISY boundary refusal: the
+  semi-realistic armed riflemen Seedream invented in the mid-ground sit right at the
+  filter's threshold. Three fixes: (1) Seedance calls now auto-retry ONCE on a
+  content-policy refusal (flakes become renders; true refusals refuse twice, unbilled);
+  (2) the Wild West hero is now a lasso-swinging cowgirl — "gunslinger" was seeding
+  rifles on every background figure, and guns don't belong on a WOW billboard anyway;
+  (3) every still prompt now bans weapons outright. Card copy updated to match.
+
 - **2026-08-26 — Photoreal humans stylized (Seedance refusals fixed).** Two wild-theme
   designs (the Atlantis merfolk, the Deep Space crowd) were refused by ByteDance's
   anti-deepfake moderation: it blocks animating any image containing what reads as a

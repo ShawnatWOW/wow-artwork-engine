@@ -90,8 +90,10 @@ export function videoUrlOf(result, label) {
       throw new Error(
         `${label} refused this image: a character looks too much like a real person ` +
         `(the video model's anti-deepfake filter — it cannot tell a photoreal fictional ` +
-        `character from a photo). "Try again" resends the same image and will be refused ` +
-        `again — Replace or Tweak the design so characters are clearly stylized, not photoreal.`,
+        `character from a photo). It was retried automatically and refused twice; ` +
+        `"Try again" is free and occasionally passes (the filter is noisy at the boundary), ` +
+        `but a design refused repeatedly needs a Replace or Tweak so characters are ` +
+        `clearly stylized, not photoreal.`,
       );
     }
     // fal's queue marks even bad model paths COMPLETED, with the real error in
@@ -156,7 +158,7 @@ export const motionProvider = {
     if (!config.fal.key) throw new Error('FAL_KEY not set. Live motion generation is disabled until the key is configured.');
     if (!referenceImageUrl) throw new Error('Seedance needs referenceImageUrl (image-to-video) — generate/approve a Seedream still first.');
 
-    const { result, requestId } = await queueRun({
+    const runOnce = () => queueRun({
       model: config.fal.seedanceModel,
       label: 'Seedance',
       pollMs,
@@ -177,6 +179,18 @@ export const motionProvider = {
         aspect_ratio: 'auto',
       },
     });
+    let { result, requestId } = await runOnce();
+    // ByteDance's likeness moderation is NOISY at the boundary (measured live
+    // 2026-09-02: the refused Wild West still passed 6/6 resubmissions,
+    // including a byte-faithful replica of the refused request — while the
+    // truly photoreal merfolk was refused deterministically every time). One
+    // retry converts those borderline flakes into finished renders; a real
+    // refusal simply refuses twice (refusals are unbilled) and surfaces the
+    // plain-language card error.
+    if (JSON.stringify(result).includes('content_policy_violation')) {
+      logger.warn({ requestId }, 'Seedance content-policy refusal — retrying once (boundary refusals are flaky)');
+      ({ result, requestId } = await runOnce());
+    }
     let videoUrl = videoUrlOf(result, 'Seedance');
     let model = MODEL_MOTION;
     let upscaleJobId = null;
