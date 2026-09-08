@@ -5,8 +5,8 @@ import {
   buildStillPrompt, buildClosingStillPrompt, buildMotionPrompt, buildSpectacularArcPrompt,
   composeSpectacularMotionPrompt,
   buildSpectacularAct, combineSpectacularActs, sanitizeMotionPrompt, castList,
-  travelFor, themeFor, choreographyFor, familyFor, arcFor, THEMES, CHOREOGRAPHIES, SPECTACULAR_FAMILIES,
-  WILD_THEMES, wildThemeFor, wildThemeInfo, isWildSlot,
+  travelFor, choreographyFor, arcFor, CHOREOGRAPHIES, SPECTACULAR_FAMILIES,
+  WILD_THEMES, STYLE_POOL, styleFor,
 } from '../src/services/generation/prompts.js';
 import { checkPrompt } from '../src/services/guardrails.js';
 import { planJobs } from '../src/services/generation/catalog.js';
@@ -76,31 +76,26 @@ test('travelFor cycles the in-frame direction across options', () => {
   assert.equal(travelFor(1).start, 'right');
 });
 
-test('every prompt names concrete non-human subjects (themes for EON, casts for spectacular)', () => {
+test('every prompt names its rolled cast — one pool, every surface, every option', () => {
   // Live finding: "a hero subject" alone rendered photoreal people 3/3, which
-  // Seedance refuses to animate. Subjects must be NAMED — EON surfaces name
-  // their theme subject; the spectacular names its whole ensemble cast.
-  const subjects = new Set(THEMES.map((t) => t.subject));
+  // Seedance refuses to animate. Subjects must be NAMED. Since 2026-09-08 the
+  // name always comes from the design's own rolled style, so the still and its
+  // motion can never describe different creatures.
   for (const job of planJobs({ optionsPerSurface: 3 })) {
     const args = { style: job.style, specKey: job.specKey, option: job.option, weekOf: '2026-08-10' };
-    // Wild slots (2026-08-18) cast their rolled theme's characters instead of
-    // the house pool — asserted separately in the wild-theme tests below.
-    const wild = wildThemeInfo(args);
+    const rolled = styleFor(args);
     if (job.style === 'frame_break') {
-      const f = wild ?? familyFor(args);
       const still = buildStillPrompt(args);
       const closing = buildClosingStillPrompt(args);
-      for (const member of castList(f)) {
+      for (const member of castList(rolled)) {
         assert.ok(still.includes(member), `opening still must name ${member}`);
         assert.ok(closing.includes(member), `closing still must name ${member}`);
       }
-      // Motion acts reference the cast through the arc's story beats.
       const act1 = buildSpectacularAct({ ...args, act: 1 });
-      assert.ok(castList(f).some((m) => act1.includes(m)), 'act 1 must name the cast');
+      assert.ok(castList(rolled).some((m) => act1.includes(m)), 'act 1 must name the cast');
     } else {
-      const t = themeFor(args);
-      const subject = wild ? wild.cast.hero : t.subject;
-      if (!wild) assert.ok(subjects.has(t.subject));
+      // EON surfaces star the rolled cast's hero.
+      const subject = rolled.cast.hero;
       assert.ok(buildStillPrompt(args).includes(subject), `still must name ${subject}`);
       assert.ok(buildMotionPrompt(args).includes(subject), `motion must name ${subject}`);
     }
@@ -109,16 +104,20 @@ test('every prompt names concrete non-human subjects (themes for EON, casts for 
 
 // ---- Spectacular v2: storyboard, two acts, distinct families (Scott, 2026-08-05)
 
-test('spectacular options draw guaranteed-distinct style families', () => {
-  for (const weekOf of ['2026-08-10', '2026-08-17', '2026-08-24']) {
-    const fams = [1, 2, 3].map((option) => familyFor({ specKey: 'spectacular_wow1_8', option, weekOf }).key);
-    assert.equal(new Set(fams).size, 3, `options collided on a family: ${fams}`);
+test('the 3 options of a sign are ALWAYS three different styles', () => {
+  // They are what Scott compares side by side, on every surface.
+  for (const specKey of ['spectacular_wow1_8', 'eon_master_3pod', 'eon_master_pod']) {
+    for (let run = 1; run <= 25; run += 1) {
+      const weekOf = `2026-09-07#run${run}`;
+      const keys = [1, 2, 3].map((option) => styleFor({ specKey, option, weekOf }).key);
+      assert.equal(new Set(keys).size, 3, `${specKey} run ${run} collided: ${keys}`);
+    }
   }
 });
 
 test('spectacular still is an ensemble: multiple named characters, verified frame geometry', () => {
   const still = buildStillPrompt({ ...JOB, option: 1 });
-  const f = familyFor({ ...JOB, option: 1 });
+  const f = styleFor({ ...JOB, option: 1 });
   assert.ok(castList(f).length >= 2, 'a cast has at least two characters');
   // The verified geometry formula (live-tested 2026-08-04) must survive edits.
   assert.match(still, /flush with the picture's edges on all sides/);
@@ -233,8 +232,8 @@ test('closing still + acts rotate deterministically and vary across weeks', () =
     buildClosingStillPrompt({ ...args, weekOf: '2026-08-10' }),
   );
   const weeks = ['2026-08-10', '2026-08-17', '2026-08-24', '2026-08-31', '2026-09-07', '2026-09-14', '2026-09-21', '2026-09-28'];
-  const fams = new Set(weeks.map((weekOf) => familyFor({ ...args, weekOf }).key));
-  assert.ok(fams.size >= 3, `expected ≥3 distinct families across 8 weeks, got ${fams.size}`);
+  const fams = new Set(weeks.map((weekOf) => styleFor({ ...args, weekOf }).key));
+  assert.ok(fams.size >= 3, `expected ≥3 distinct styles across 8 weeks, got ${fams.size}`);
   const arcs = new Set(weeks.map((weekOf) => arcFor({ ...args, weekOf }).act1));
   assert.ok(arcs.size >= 2, `expected ≥2 distinct arcs across 8 weeks, got ${arcs.size}`);
 });
@@ -342,8 +341,7 @@ test('split tracks: option 1 still keeps the painted frame, options 2+ are borde
     assert.doesNotMatch(still, /matte-black/);
     assert.doesNotMatch(still, /trompe-l'oeil/);
     // Still names the whole cast, keeps creative freedom + the shared clauses.
-    // (Option 3 is the wild slot — its cast comes from the rolled theme.)
-    const f = wildThemeInfo({ ...JOB, option }) ?? familyFor({ ...JOB, option });
+    const f = styleFor({ ...JOB, option });
     for (const member of castList(f)) assert.ok(still.includes(member), `borderless still must name ${member}`);
     assert.match(still, /full creative freedom/);
     assert.match(still, /This is how the story opens/);
@@ -392,108 +390,104 @@ test('split tracks: borderless motion drops the frame rules, keeps the contract,
   }
 });
 
-// ---- Wild-theme slots (Shawn, 2026-08-18): spectacular option 3 and
-// EON-connected option 2 roll a randomized era/world theme each batch.
+// ---- Randomized styles (Shawn, 2026-09-08: "make all of the styles on the
+// page randomly generate… so Scott can always have a random style for each
+// generation"). Started as one-off "wild slots" 2026-08-18; now every design.
 
-test('wild slots: spectacular options 1 + 3, and EON-connected option 2', () => {
-  // Option 1 joined the pool 2026-09-08 — the framed track wore one genre
-  // (house psychedelic) every week, so it read as the same piece each time.
-  assert.equal(isWildSlot('frame_break', 1), true);
-  assert.equal(isWildSlot('frame_break', 3), true);
-  assert.equal(isWildSlot('eon_connected', 2), true);
-  for (const [style, option] of [['frame_break', 2], ['eon_connected', 1], ['eon_connected', 3], ['eon_single', 1], ['eon_single', 2], ['eon_single', 3]]) {
-    assert.equal(isWildSlot(style, option), false, `${style} option ${option} must not be wild`);
-    assert.equal(wildThemeInfo({ style, specKey: 'x', option, weekOf: 'w' }), null);
+test('EVERY design on the page rolls its own style — no surface has a default', () => {
+  const seen = new Map();
+  for (const job of planJobs({ optionsPerSurface: 3 })) {
+    const args = { style: job.style, specKey: job.specKey, option: job.option, weekOf: '2026-09-07#run40' };
+    const rolled = styleFor(args);
+    assert.ok(rolled?.label, `${job.style} option ${job.option} rolled nothing`);
+    assert.ok(buildStillPrompt(args).includes(rolled.style), `${job.style} opt ${job.option} must wear its rolled style`);
+    seen.set(`${job.specKey}#${job.option}`, rolled.label);
   }
+  assert.equal(seen.size, 9, 'a batch is 9 designs');
+  // A batch should feel varied, not one look repeated across the page.
+  assert.ok(new Set(seen.values()).size >= 6, `batch looked repetitive: ${[...seen.values()].join(', ')}`);
 });
 
-test('the two spectacular wild slots never roll the SAME theme in one batch', () => {
-  // A shared seed with only the option hashed in put both on e.g. Cyberpunk
-  // in ~8% of batches — two cards, one world, no variety.
-  for (let run = 1; run <= 40; run += 1) {
-    const args = { specKey: 'spectacular_wow1_8', weekOf: `2026-09-07#run${run}` };
-    const one = wildThemeFor({ ...args, option: 1 });
-    const three = wildThemeFor({ ...args, option: 3 });
-    assert.notEqual(one.key, three.key, `run ${run}: options 1 and 3 both rolled ${one.key}`);
+test('the style pool is deep enough, and every entry is usable by every surface', () => {
+  // 9 designs a batch: a thin pool repeats within a week or two.
+  assert.ok(STYLE_POOL.length >= 24, `pool too small for 9 draws a batch: ${STYLE_POOL.length}`);
+  assert.equal(new Set(STYLE_POOL.map((t) => t.key)).size, STYLE_POOL.length, 'duplicate keys in the pool');
+  for (const t of STYLE_POOL) {
+    assert.ok(t.label?.length > 2, `${t.key}: needs a human-readable label for the card badge`);
+    // Spectacular needs the full cast; EON uses cast.hero as its subject.
+    for (const role of ['keeper', 'hero', 'companion']) {
+      assert.ok(t.cast?.[role]?.length > 8, `${t.key}: missing ${role}`);
+    }
   }
+  // The house psychedelic look is still in the mix, just no longer a default.
+  for (const f of SPECTACULAR_FAMILIES) {
+    assert.ok(STYLE_POOL.some((t) => t.key === f.key), `${f.key} dropped out of the pool`);
+  }
+  for (const t of WILD_THEMES) assert.match(t.style, /digital art/, `${t.key}: era themes are digital art`);
 });
 
-test('the framed track (option 1) wears the rolled theme but KEEPS its 3D border', () => {
+test('a rolled style survives into the still, the motion and the closing frame', () => {
   const args = { ...JOB, option: 1, weekOf: '2026-09-07#run40' };
-  const wild = wildThemeFor(args);
+  const rolled = styleFor(args);
   const still = buildStillPrompt(args);
   // The randomized world drives style + cast…
-  assert.ok(still.includes(wild.style), 'option 1 must carry the rolled theme style');
-  for (const member of castList(wild)) assert.ok(still.includes(member), `still must name ${member}`);
-  // …while every piece of the signature pop-out survives.
+  assert.ok(still.includes(rolled.style), 'the still must carry the rolled style');
+  for (const member of castList(rolled)) assert.ok(still.includes(member), `still must name ${member}`);
+  // …while every piece of the framed signature survives on option 1.
   assert.match(still, /trompe-l'oeil/);
   assert.match(still, /matte-black frame/);
   assert.match(still, /flush with the picture's edges on all sides/);
   assert.match(still, /IN FRONT of the black strips/);
   assert.match(still, /never a photorealistic human likeness/);
   assert.ok(checkPrompt(still).allowed);
-  // Its motion prompt stays the FRAMED contract, cast from the same theme.
   const motion = buildMotionPrompt(args);
   assert.match(motion, /freely pass IN FRONT of the frame/);
-  assert.ok(castList(wild).some((m) => motion.includes(m)), 'framed story names the rolled cast');
-  // The look actually changes batch to batch (the whole point).
-  const seeds = Array.from({ length: 10 }, (_, i) => `2026-09-07#run${i + 1}`);
-  const picked = new Set(seeds.map((weekOf) => wildThemeFor({ ...JOB, option: 1, weekOf }).key));
-  assert.ok(picked.size >= 3, `expected >=3 distinct themes across 10 batches, got ${picked.size}`);
+  assert.ok(castList(rolled).some((m) => motion.includes(m)), 'framed story names the rolled cast');
+  assert.ok(buildClosingStillPrompt(args).includes(rolled.style), 'closing frame keeps the same world');
 });
 
-test('wild themes: every entry is a labeled digital-art theme with a themed cast', () => {
-  assert.ok(WILD_THEMES.length >= 10, 'a wide enough pool to feel random');
-  for (const t of WILD_THEMES) {
-    assert.ok(t.label?.length > 2, `${t.key}: needs a human-readable label`);
-    assert.match(t.style, /digital art/, `${t.key}: every wild theme is digital art in that theme`);
-    for (const role of ['keeper', 'hero', 'companion']) {
-      assert.ok(t.cast[role]?.length > 8, `${t.key}: missing ${role}`);
+test('borderless spectacular (options 2-3) wears its rolled style with no frame', () => {
+  for (const option of [2, 3]) {
+    const args = { ...JOB, option };
+    const rolled = styleFor(args);
+    const still = buildStillPrompt(args);
+    assert.ok(still.includes(rolled.style), `option ${option} must carry its rolled style`);
+    for (const member of castList(rolled)) assert.ok(still.includes(member), `still must name ${member}`);
+    assert.match(still, /full-bleed/);
+    assert.doesNotMatch(still, /matte-black/);
+    assert.ok(checkPrompt(still).allowed);
+    const motion = buildMotionPrompt(args);
+    assert.ok(castList(rolled).some((m) => motion.includes(m)), 'fallback story names the rolled cast');
+    assert.match(motion, /Maximum intensity/);
+  }
+});
+
+test('EON surfaces star their rolled hero and keep the wrap/travel contract', () => {
+  for (const [style, specKey] of [['eon_connected', 'eon_master_3pod'], ['eon_single', 'eon_master_pod']]) {
+    for (const option of [1, 2, 3]) {
+      const args = { style, specKey, option, weekOf: '2026-08-10' };
+      const rolled = styleFor(args);
+      const still = buildStillPrompt(args);
+      const motion = buildMotionPrompt(args);
+      assert.ok(still.includes(rolled.style), `${style} opt ${option}: still must carry the rolled style`);
+      assert.ok(still.includes(rolled.cast.hero), `${style} opt ${option}: still must star the rolled hero`);
+      assert.ok(motion.includes(rolled.cast.hero), `${style} opt ${option}: motion must move the same hero`);
+      assert.match(still, /unbroken continuous environment|seamless/);
+      assert.ok(checkPrompt(still).allowed && checkPrompt(motion).allowed);
     }
   }
+  // The connected triptych keeps its full-traversal choreography.
+  const m = buildMotionPrompt({ style: 'eon_connected', specKey: 'eon_master_3pod', option: 2, weekOf: '2026-08-10' });
+  assert.match(m, /starts in the left third of the frame/);
+  assert.match(m, /saturation and lighting remain exactly constant/);
 });
 
-test('wild spectacular (option 3): themed borderless still + matching motion, rotates per batch', () => {
-  const args = { ...JOB, option: 3 };
-  const wild = wildThemeFor(args);
-  const still = buildStillPrompt(args);
-  // The wild theme replaces the house family: its style and full cast are in
-  // the still, and it stays a borderless full-bleed piece.
-  assert.ok(still.includes(wild.style), 'still must carry the wild theme style');
-  for (const member of castList(wild)) assert.ok(still.includes(member), `still must name ${member}`);
-  assert.match(still, /full-bleed/);
-  assert.doesNotMatch(still, /matte-black/);
-  assert.ok(checkPrompt(still).allowed);
-  // The fallback motion story stars the same wild cast (director path is
-  // per-still and theme-agnostic).
-  const motion = buildMotionPrompt(args);
-  assert.ok(castList(wild).some((m) => motion.includes(m)), 'fallback story must name the wild cast');
-  assert.match(motion, /Maximum intensity/);
-  // Deterministic per batch seed, and the theme actually rotates across batches.
-  assert.equal(wildThemeFor(args), wild);
-  const seeds = Array.from({ length: 10 }, (_, i) => `2026-08-17#run${i + 1}`);
-  const picked = new Set(seeds.map((weekOf) => wildThemeFor({ ...args, weekOf }).key));
-  assert.ok(picked.size >= 3, `expected ≥3 distinct wild themes across 10 batches, got ${picked.size}`);
-});
-
-test('wild EON-connected (option 2): themed hero travels the triptych, other options untouched', () => {
-  const args = { style: 'eon_connected', specKey: 'eon_master_3pod', option: 2, weekOf: '2026-08-10' };
-  const wild = wildThemeFor(args);
-  const still = buildStillPrompt(args);
-  const motion = buildMotionPrompt(args);
-  assert.ok(still.includes(wild.style), 'still must carry the wild theme style');
-  assert.ok(still.includes(wild.cast.hero), 'still must star the wild theme hero');
-  assert.ok(motion.includes(wild.cast.hero), 'motion must move the same hero');
-  // The travel/seam/constancy contract is unchanged.
-  assert.match(still, /continuous seamless environment/);
-  assert.match(motion, /starts in the left third of the frame/);
-  assert.match(motion, /saturation and lighting remain exactly constant/);
-  assert.ok(checkPrompt(still).allowed && checkPrompt(motion).allowed);
-  // Options 1 and 3 keep the house themes.
-  for (const option of [1, 3]) {
-    const t = themeFor({ ...args, option });
-    assert.ok(buildStillPrompt({ ...args, option }).includes(t.subject), `option ${option} keeps its house subject`);
-  }
+test('styles are deterministic per batch and actually rotate between batches', () => {
+  const args = { ...JOB, option: 1 };
+  assert.equal(styleFor({ ...args, weekOf: 'w1' }).key, styleFor({ ...args, weekOf: 'w1' }).key);
+  const seeds = Array.from({ length: 10 }, (_, i) => `2026-09-07#run${i + 1}`);
+  const picked = new Set(seeds.map((weekOf) => styleFor({ ...args, weekOf }).key));
+  assert.ok(picked.size >= 4, `expected >=4 distinct styles across 10 batches, got ${picked.size}`);
 });
 
 test('composeSpectacularMotionPrompt wraps ANY story in the fixed contract, rules once', () => {

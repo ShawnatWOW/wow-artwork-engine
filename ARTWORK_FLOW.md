@@ -22,31 +22,35 @@ Everything below that mentions the frame applies to option 1 only; everything el
 (one take, camera lock, departure, living environment, letterbox handling, QA, color
 constancy) applies to all three.
 
-## Wild-theme slots (Shawn, 2026-08-18)
+## Every style is randomized (Shawn, 2026-09-08)
 
-Two slots go fully off-book every batch — a **randomized era/world theme** instead of
-the house psychedelic families, always **digital art grounded in that theme** with
-characters and scenery that belong to it:
+**All nine designs in a batch roll their own style.** No surface has a default look
+any more — one pool, one picker, every slot:
 
-- **Spectacular option 1** — the FRAMED track *(joined 2026-09-08)*. Keeps the painted
-  trompe-l'oeil 3D border and every frame rule; only its style + cast are randomized, so
-  the pop-out signature now arrives in a different world each batch.
-- **Spectacular option 3** (borderless — the wild theme replaces its style family
-  and cast; the vision director still writes the story from the actual still).
-- **EON-connected option 2** (the wild theme's hero travels the triptych; the wrap/seam
-  and travel rules are unchanged).
+- **Spectacular option 1** keeps the painted trompe-l'oeil 3D border; only the world it
+  wears is rolled.
+- **Spectacular options 2 & 3** stay borderless full-bleed, each in its own rolled world.
+- **All three EON options** (3-pillar and single) star their rolled style's hero, with the
+  wrap/seam and travel rules untouched.
 
-Spectacular **option 2** deliberately stays on the house psychedelic families, so one
-batch spans three different looks. The two spectacular wild slots are guaranteed to roll
-**different** themes (the batch picks a base index and each option strides from it).
+**The pool (28 styles).** 20 era/world themes — Cyberpunk, Roaring Twenties, Steampunk,
+Synthwave, Wild West, Feudal Japan, Ancient Egypt, Deep Space, Medieval Fantasy, Lost
+Atlantis, Prehistoric, Masquerade Carnival, Art Deco Metropolis, Nordic Myth,
+Bioluminescent Rainforest, Retro Space Race, Silk Road Bazaar, Arctic Aurora, Solarpunk
+Garden City, Papercraft Storybook — plus the 8 house psychedelic families (Liquid Chrome,
+Neon Botanical, Cosmic Candy, Stained Glass, Wet Paint, Deep Sea, Ultraviolet, Cosmic
+Tie-Dye), which are now simply entries in the pool: the WOW signature look still comes up
+often, it just no longer owns any slot.
 
-The pool (12 themes): Cyberpunk, Roaring Twenties, Steampunk, Synthwave, Wild West,
-Feudal Japan, Ancient Egypt, Deep Space, Medieval Fantasy, Lost Atlantis, Prehistoric,
-Masquerade Carnival. The pick is seeded by the batch id — every "New batch" rolls fresh,
-each run stays reproducible. The rolled theme's name is stored on the row
-(`theme_label`) and the dashboard shows a **🎲 Random theme: <name>** badge next to that
-generation, so the reviewer always knows which designs are randomized and what they
-rolled. Variations/tweaks of a wild design inherit its theme and label.
+Each style ships a matching cast in three roles (keeper / hero / companion). The
+spectacular uses the whole ensemble; the EON surfaces star the hero. Because the still
+and its motion prompt read the SAME roll, they can never describe different creatures.
+
+**Guarantees.** The pick is seeded by the batch id, so every "New batch" rolls fresh while
+a given run always rebuilds identically. The three options of one sign are **always three
+different styles** — they are what Scott compares side by side. Each design's style name
+is stored on the row (`theme_label`) and shown as a **🎲 Random theme: <name>** badge on
+its card. Variations and tweaks inherit their source design's style and label.
 
 ---
 

@@ -53,20 +53,10 @@ const WRAP_BAND_SINGLE =
   'Keep the hero subject\'s head and finest detail out of the left fifth of the frame; background color and ' +
   'texture flow evenly through it.';
 
-// (style, subject) pairs — the subject is a concrete, characterful, non-human
-// creature or object with personality. Rotated deterministically by week + option.
-const THEMES = [
-  { style: 'kaleidoscopic fractal mandalas in electric rainbow hues', subject: 'a blooming fractal lotus with petals of living rainbow glass' },
-  { style: 'swirling liquid-marble psychedelia in hot pink, electric blue and acid green', subject: 'a serpent of liquid chrome streaked with rainbow oil' },
-  { style: 'melting rainbow gradients with glossy dripping liquid forms', subject: 'a playful shape-shifting creature of molten rainbow glass' },
-  { style: '1960s psychedelic swirl art with pulsing paisley waves', subject: 'a strutting technicolor peacock with a fanned kaleidoscope tail' },
-  { style: 'ultraviolet blacklight neon glow, trippy and vivid', subject: 'a dancing cluster of glowing neon mushrooms' },
-  { style: 'day-glo tropical jungle psychedelia, hyper-saturated', subject: 'a giant day-glo orchid with curling luminous tendrils' },
-  { style: 'holographic oil-slick iridescence with prismatic flares', subject: 'a crystal butterfly with kaleidoscope stained-glass wings' },
-  { style: 'cosmic tie-dye nebula bursting with saturated color', subject: 'a cosmic koi fish swimming through swirls of stardust' },
-  { style: 'vibrating op-art waves in clashing complementary colors', subject: 'a pulsing electric jellyfish with trailing neon tentacles' },
-  { style: 'acid-bright chrome pop surrealism', subject: 'a mischievous mirrored octopus dripping rainbow paint' },
-];
+// NOTE (2026-09-08): the old per-surface pools are gone. THEMES (an EON-only
+// list of style+subject pairs) and familyFor (a spectacular-only default over
+// SPECTACULAR_FAMILIES) were retired when every slot started rolling from the
+// single STYLE_POOL below — one pool, one picker, no surface-specific defaults.
 
 // In-frame travel direction per option (frame edges only — never placement).
 const TRAVELS = [
@@ -86,7 +76,8 @@ const TRAVELS = [
 // Style families × matching ensemble casts. Every family is hyper-colorful and
 // built for constant motion; every cast member is a NAMED non-human creature
 // (vague subjects collapse to humanoids, which Seedance moderation refuses).
-// The 3 weekly options are guaranteed DIFFERENT families — see familyFor().
+// Since 2026-09-08 these are simply entries in STYLE_POOL — the WOW signature
+// psychedelic look still comes up often, it just no longer owns any slot.
 // Every family casts three named non-human characters into fixed NARRATIVE
 // ROLES (story overhaul 2026-08-11), so every arc beat has a clear lead:
 //   keeper    — the large, rooted presence at the heart of the scene
@@ -95,6 +86,7 @@ const TRAVELS = [
 const SPECTACULAR_FAMILIES = [
   {
     key: 'liquid_chrome',
+    label: 'Liquid Chrome',
     style: 'liquid-chrome psychedelia — molten mirror surfaces streaked with hot pink, electric blue and acid green',
     cast: {
       keeper: 'a mirrored octopus dripping rainbow paint',
@@ -104,6 +96,7 @@ const SPECTACULAR_FAMILIES = [
   },
   {
     key: 'neon_botanical',
+    label: 'Neon Botanical',
     style: 'neon botanical jungle — day-glo flora, luminous vines and hyper-saturated tropical light',
     cast: {
       keeper: 'a giant day-glo orchid with curling luminous tendrils',
@@ -113,6 +106,7 @@ const SPECTACULAR_FAMILIES = [
   },
   {
     key: 'cosmic_candy',
+    label: 'Cosmic Candy',
     style: 'cosmic candy — glossy sugar-glass surfaces, swirling nebula taffy and hyper-sweet saturated color',
     cast: {
       keeper: 'a gummy comet whale trailing sparkling sugar dust',
@@ -122,6 +116,7 @@ const SPECTACULAR_FAMILIES = [
   },
   {
     key: 'stained_glass',
+    label: 'Stained Glass',
     style: 'stained-glass kaleidoscope — jewel-toned translucent facets refracting brilliant light',
     cast: {
       keeper: 'a stained-glass phoenix perched with wings spread wide',
@@ -131,6 +126,7 @@ const SPECTACULAR_FAMILIES = [
   },
   {
     key: 'wet_paint',
+    label: 'Wet Paint',
     style: 'wet-paint pop surrealism — thick glossy paint in collision, splashing and swirling in saturated color',
     cast: {
       keeper: 'a dripping-rainbow cobra risen in a gleaming coil',
@@ -140,6 +136,7 @@ const SPECTACULAR_FAMILIES = [
   },
   {
     key: 'deep_sea',
+    label: 'Deep Sea',
     style: 'iridescent deep-sea bioluminescence — electric glowing life against rich abyssal color',
     cast: {
       keeper: 'a pulsing electric jellyfish with trailing neon tentacles',
@@ -149,6 +146,7 @@ const SPECTACULAR_FAMILIES = [
   },
   {
     key: 'ultraviolet',
+    label: 'Ultraviolet',
     style: 'ultraviolet blacklight neon — trippy UV glow, vivid and electric',
     cast: {
       keeper: 'a dancing cluster of glowing neon mushrooms',
@@ -158,6 +156,7 @@ const SPECTACULAR_FAMILIES = [
   },
   {
     key: 'cosmic_tiedye',
+    label: 'Cosmic Tie-Dye',
     style: 'cosmic tie-dye nebula — swirling stardust bursting with saturated color',
     cast: {
       keeper: 'a stardust dragon serpent wound through the deep distance',
@@ -171,7 +170,7 @@ const SPECTACULAR_FAMILIES = [
 export const castList = (family) => [family.cast.keeper, family.cast.hero, family.cast.companion];
 
 // ===========================================================================
-// WILD THEMES (Shawn, 2026-08-18): one slot per screen goes fully off-book —
+// ERA/WORLD THEMES (Shawn, 2026-08-18; every slot since 2026-09-08) —
 // a randomized era/world theme (cyberpunk, the twenties, …) instead of the
 // house psychedelic families. Always DIGITAL ART grounded in that theme,
 // with characters and scenery that belong to it. The wild slots:
@@ -309,35 +308,117 @@ const WILD_THEMES = [
       companion: 'a white dove trailing glittering confetti',
     },
   },
+  // Pool widened 2026-09-08 when EVERY slot went random: 9 designs a batch
+  // burn through a small pool fast, and Scott would have seen the same worlds
+  // repeat within a couple of weeks.
+  {
+    key: 'art_deco',
+    label: 'Art Deco Metropolis',
+    style: 'art-deco metropolis digital art — gilded skyscraper geometry, emerald glass and sunburst chrome',
+    cast: {
+      keeper: 'a colossal gilded clock tower crowned with sunburst rays',
+      hero: 'a streamlined chrome airship trailing golden vapor',
+      companion: 'a brass-winged art-deco eagle',
+    },
+  },
+  {
+    key: 'nordic_myth',
+    label: 'Nordic Myth',
+    style: 'nordic-myth digital art — frost-lit fjords, runic gold and vast aurora skies',
+    cast: {
+      keeper: 'a colossal ice-bark world tree glowing with runes',
+      hero: 'a great antlered elk wreathed in aurora light',
+      companion: 'a pair of storm-black ravens trailing sparks',
+    },
+  },
+  {
+    key: 'bioluminescent',
+    label: 'Bioluminescent Rainforest',
+    style: 'bioluminescent-rainforest digital art — glowing fungi, luminous mist and jewel-bright canopy night',
+    cast: {
+      keeper: 'a vast glowing strangler-fig tree lit from within',
+      hero: 'a luminous emerald tree frog leaping between vines',
+      companion: 'a swarm of drifting cyan fireflies',
+    },
+  },
+  {
+    key: 'space_race',
+    label: 'Retro Space Race',
+    style: 'retro space-race digital art — 1960s tailfin rockets, atomic starbursts and optimistic candy color',
+    cast: {
+      keeper: 'a chrome-finned rocket standing tall on a launch gantry',
+      hero: 'a bubble-helmeted rover bounding across red dust',
+      companion: 'a spinning sputnik satellite trailing ribbons',
+    },
+  },
+  {
+    key: 'silk_road',
+    label: 'Silk Road Bazaar',
+    style: 'silk-road-bazaar digital art — saffron canopies, patterned lanterns and warm spice-market light',
+    cast: {
+      keeper: 'a great striped bazaar canopy hung with glowing lanterns',
+      hero: 'a bejeweled caravan camel draped in embroidered silks',
+      companion: 'a bolt of shimmering silk unfurling on the wind',
+    },
+  },
+  {
+    key: 'arctic_aurora',
+    label: 'Arctic Aurora',
+    style: 'arctic-aurora digital art — glacier blues, mirrored ice and rippling green-violet skies',
+    cast: {
+      keeper: 'a towering cathedral of blue glacier ice',
+      hero: 'a great white bear padding across a mirrored ice sheet',
+      companion: 'an arctic fox trailing a shimmer of frost',
+    },
+  },
+  {
+    key: 'solarpunk',
+    label: 'Solarpunk Garden City',
+    style: 'solarpunk digital art — sunlit greenhouse towers, hanging gardens and warm optimistic light',
+    cast: {
+      keeper: 'a spiraling greenhouse tower overflowing with vines',
+      hero: 'a glass-winged dragonfly glider skimming the canopy',
+      companion: 'a hummingbird drone trailing pollen sparks',
+    },
+  },
+  {
+    key: 'papercraft',
+    label: 'Papercraft Storybook',
+    style: 'papercraft-storybook digital art — layered cut-paper scenery, soft felt textures and pop-up-book depth',
+    cast: {
+      keeper: 'a great cut-paper mountain unfolding in layered ridges',
+      hero: 'a folded-paper crane gliding on visible creases',
+      companion: 'a felt fox tumbling through paper grass',
+    },
+  },
 ];
 
-/** Which (style, option) slots roll a wild theme. Pure; exported for tests.
- *  Spectacular option 1 joined the wild pool 2026-09-08 (Shawn: the randomized
- *  option 3 "is actually really good — apply that same concept to the first
- *  one… so Scott can always get different variations"). The house
- *  SPECTACULAR_FAMILIES all live in one genre — psychedelic saturated
- *  creatures — so rotating them changed the cast but never the WORLD, and the
- *  framed track read as the same piece every week. Option 1 keeps its painted
- *  3D border; only the style/cast it wears is now drawn from the wild pool.
- *  Option 2 stays on the house families, so a batch spans three looks. */
-export function isWildSlot(style, option) {
-  return (style === 'frame_break' && (option === 1 || option === 3))
-    || (style === 'eon_connected' && option === 2);
-}
+// THE STYLE POOL — every design in every batch draws from this one list
+// (Shawn, 2026-09-08: "make all of the styles on the page randomly generate…
+// so Scott can always have a random style for each generation"). It is the 20
+// era/world themes plus the 8 house psychedelic families, which are now just
+// more entries in the pool rather than a separate default — so the WOW signature
+// look still comes up regularly, it simply no longer OWNS any slot.
+//
+// History: randomization arrived slot by slot — spectacular option 3 and
+// EON-connected option 2 (2026-08-18), spectacular option 1 (2026-09-08), and
+// now all nine. The old per-surface pools (THEMES, and SPECTACULAR_FAMILIES as
+// a default) are retired; SPECTACULAR_FAMILIES survives only as pool entries.
+export const STYLE_POOL = [...WILD_THEMES, ...SPECTACULAR_FAMILIES];
 
-/** The wild theme one slot rolled — seeded by batch, so every batch differs.
- *  The two spectacular wild slots (1 and 3) are GUARANTEED different themes:
- *  the batch picks a base index and the option strides from it, the same
- *  trick familyFor uses. A shared seed with only the option in the hash could
- *  land both on Cyberpunk in the same batch (~8% of batches). Pure. */
-export function wildThemeFor({ specKey, option, weekOf }) {
-  const base = hash(`wild:${weekOf || 'week'}:${specKey}`);
-  return WILD_THEMES[(base + (option ?? 1)) % WILD_THEMES.length];
-}
-
-/** The wild theme for a job, or null when the slot isn't wild. Pure. */
-export function wildThemeInfo({ style, specKey, option, weekOf }) {
-  return isWildSlot(style, option) ? wildThemeFor({ specKey, option, weekOf }) : null;
+/**
+ * The style one design rolled — seeded by BATCH, strided by option.
+ * Two guarantees that matter to a reviewer:
+ *   - every "New batch" rolls fresh (the seed carries the run id), yet a given
+ *     run always rebuilds identically;
+ *   - the 3 options of one sign are ALWAYS different worlds — they are what
+ *     Scott compares side by side. (A hash including the option instead would
+ *     collide inside a surface a few percent of the time.)
+ * Pure; exported for the UI/tests.
+ */
+export function styleFor({ specKey, option, weekOf }) {
+  const base = hash(`style:${weekOf || 'week'}:${specKey}`);
+  return STYLE_POOL[(base + (option ?? 1)) % STYLE_POOL.length];
 }
 
 // Two-act scene arcs — each one a STORY told through movement, not a motion
@@ -410,21 +491,10 @@ const SPECTACULAR_ARCS = [
 /** Join a cast list into prose: "a, b and c". Pure. */
 const joinCast = (cast) => `${cast.slice(0, -1).join(', ')} and ${cast.at(-1)}`;
 
-/**
- * The style family for one spectacular option. Consecutive options are
- * GUARANTEED different families: the week picks a base index, the option
- * strides from it. Pure; exported for the UI/tests.
- */
-export function familyFor({ specKey, option, weekOf }) {
-  const base = hash(`fam:${weekOf || 'week'}:${specKey}`);
-  return SPECTACULAR_FAMILIES[(base + (option - 1)) % SPECTACULAR_FAMILIES.length];
-}
-
 /** The narrative arc for one spectacular option. Pure; exported for tests.
  *  The wild slot (option 3) casts its rolled theme's characters. */
 export function arcFor({ specKey, option, weekOf }) {
-  const f = wildThemeInfo({ style: 'frame_break', specKey, option, weekOf })
-    ?? familyFor({ specKey, option, weekOf });
+  const f = styleFor({ specKey, option, weekOf });
   const arc = SPECTACULAR_ARCS[hash(`arc:${weekOf || 'week'}:${specKey}:${option}`) % SPECTACULAR_ARCS.length];
   return arc(f.cast);
 }
@@ -478,11 +548,6 @@ function hash(str) {
     h = Math.imul(h, 0x01000193);
   }
   return h >>> 0;
-}
-
-/** The (style, subject) theme for one option. Pure; exported for the UI/tests. */
-export function themeFor({ specKey, option, weekOf }) {
-  return THEMES[hash(`${weekOf || 'week'}:${specKey}:${option}`) % THEMES.length];
 }
 
 /** The 3-act journey for one connected option. Pure; exported for tests. */
@@ -594,15 +659,14 @@ const ONLY_CAST = (cast) =>
  * @param {{ style, specKey, option, weekOf }} job
  */
 export function buildStillPrompt({ style, specKey, option, weekOf }) {
-  const t = themeFor({ specKey, option, weekOf });
-  // WILD SLOT (Shawn, 2026-08-18): this option rolls a randomized era/world
-  // theme — digital art in that theme, subject/cast pulled from it.
-  const wild = wildThemeInfo({ style, specKey, option, weekOf });
+  // EVERY design rolls its own style now (Shawn, 2026-09-08). One picker, one
+  // pool, all three surfaces — the EON surfaces use the rolled cast's hero as
+  // their single subject, the spectacular uses the whole cast.
+  const s = styleFor({ specKey, option, weekOf });
   if (style === 'eon_connected') {
     const tr = travelFor(option);
-    const st = wild ? wild.style : t.style;
-    const subject = wild ? wild.cast.hero : t.subject;
-    return `An ultra-wide continuous panoramic scene with dynamic motion throughout. Style: ${st}. ` +
+    const subject = s.cast.hero;
+    return `An ultra-wide continuous panoramic scene with dynamic motion throughout. Style: ${s.style}. ` +
       `The single hero subject is ${subject}, caught mid-motion and trailing ribbons of glowing light, ` +
       `positioned at the ${tr.start} edge, occupying about one third ` +
       `of the frame width and at least 60% of the frame height, with a continuous seamless environment extending ` +
@@ -627,12 +691,9 @@ export function buildStillPrompt({ style, specKey, option, weekOf }) {
     // smear when animated and the video has no rising action). The gentle
     // frame overlap in each arc's opening keeps the 3D read from second one;
     // the big punches belong to the movements and the ending.
-    // Options 1 and 3 are WILD slots: their style/cast come from the rolled
-    // theme instead of the house psychedelic families (option 3 since
-    // 2026-08-18; option 1 joined 2026-09-08 so the framed track stops
-    // looking like the same piece every week). Option 2 keeps the house
-    // families, so one batch spans three genuinely different looks.
-    const f = wild ?? familyFor({ specKey, option, weekOf });
+    // The rolled style supplies the world and the cast; the frame rules below
+    // are what stay constant on this track.
+    const f = s;
     const cast = joinCast(castList(f));
     // SPLIT TRACKS (Shawn, 2026-08-18, shipping to WOW): option 1 keeps the
     // signature painted border (the mastery track); options 2+ are BORDERLESS
@@ -668,8 +729,8 @@ export function buildStillPrompt({ style, specKey, option, weekOf }) {
   }
   // eon_single: tall portrait composition, composed to wrap (the left band is
   // cut away onto the pod's spine — see WRAP_BAND_SINGLE).
-  return `A tall vertical scene. Style: ${t.style}. ` +
-    `The single hero subject is ${t.subject}, filling most of the frame height with a strong central focal point ` +
+  return `A tall vertical scene. Style: ${s.style}. ` +
+    `The single hero subject is ${s.cast.hero}, filling most of the frame height with a strong central focal point ` +
     `and bold silhouette, centred in the right four-fifths of the frame. ` +
     `${WRAP_BAND_SINGLE} ${ENERGY} ${CONTRAST} ${SAFE}`;
 }
@@ -684,7 +745,7 @@ export function buildStillPrompt({ style, specKey, option, weekOf }) {
  */
 export function buildClosingStillPrompt({ style, specKey, option, weekOf }) {
   if (style !== 'frame_break') return null; // storyboard is a spectacular-only feature
-  const f = wildThemeInfo({ style, specKey, option, weekOf }) ?? familyFor({ specKey, option, weekOf });
+  const f = styleFor({ specKey, option, weekOf });
   const cast = joinCast(castList(f));
   const arc = arcFor({ specKey, option, weekOf });
   return `An ultra-wide trompe-l'oeil deep-relief composition in perfectly frontal, dead-centered, ` +
@@ -765,14 +826,14 @@ const CAMERA_LOCK =
  * @param {{ style, specKey, option, weekOf }} job
  */
 export function buildMotionPrompt({ style, specKey, option, weekOf }) {
-  const t = themeFor({ specKey, option, weekOf });
+  // Same roll as the still, so the motion always names the subject that was
+  // actually painted (one picker, one seed — they cannot drift apart).
+  const s = styleFor({ specKey, option, weekOf });
   const CONSTANCY =
     'Colors, saturation and lighting remain exactly constant for the entire duration; no fading, no color drift.';
   if (style === 'eon_connected') {
     const tr = travelFor(option);
-    // Wild slot: the motion names the wild theme's hero, matching the still.
-    const wild = wildThemeInfo({ style, specKey, option, weekOf });
-    const acts = choreographyFor({ specKey, option, weekOf })(wild ? wild.cast.hero : t.subject, tr);
+    const acts = choreographyFor({ specKey, option, weekOf })(s.cast.hero, tr);
     return `${CAMERA_LOCK} Choreographed whole-scene motion: ${acts}. ` +
       `The journey starts in the ${tr.start} third of the frame in the very first frame and finishes at the ` +
       `${tr.end} edge of the frame only in the final frame; the subject stays inside the frame and keeps ` +
@@ -789,7 +850,7 @@ export function buildMotionPrompt({ style, specKey, option, weekOf }) {
     // would describe a frame that isn't there.
     return buildSpectacularArcPrompt({ specKey, option, weekOf, framed: option === 1 });
   }
-  const solo = soloMotionFor({ specKey, option, weekOf })(t.subject);
+  const solo = soloMotionFor({ specKey, option, weekOf })(s.cast.hero);
   return `${CAMERA_LOCK} Vivid ambient motion: ${solo}. ` +
     `${NO_SEAMS} Relentless, high-velocity, premium movement — never static, never jittery. ${CONSTANCY}`;
 }
@@ -903,8 +964,7 @@ export function buildSpectacularArcPrompt({ specKey, option, weekOf, framed = tr
   const opt = option ?? 1;
   // Option 3 is the wild slot — the fallback story stars the wild cast so it
   // matches the design's still even when the vision director can't run.
-  const f = wildThemeInfo({ style: 'frame_break', specKey: key, option: opt, weekOf })
-    ?? familyFor({ specKey: key, option: opt, weekOf });
+  const f = styleFor({ specKey: key, option: opt, weekOf });
   const { keeper, hero, companion } = f.cast;
   const front = framed ? 'up to the frame itself and back' : 'up to the very front and back';
   const story = `A chase with real stakes plays out across this one take: ${hero} flees across the full ` +
@@ -951,10 +1011,10 @@ export function combineSpectacularActs(act1, act2) {
   return `${act1} Then, flowing on continuously with no cut or pause, the second act follows. ${act2}`;
 }
 
-export { THEMES, CHOREOGRAPHIES, SOLO_MOTIONS, SPECTACULAR_FAMILIES, SPECTACULAR_ARCS, WILD_THEMES };
+export { CHOREOGRAPHIES, SOLO_MOTIONS, SPECTACULAR_FAMILIES, SPECTACULAR_ARCS, WILD_THEMES };
 export default {
   buildStillPrompt, buildClosingStillPrompt, buildMotionPrompt, buildSpectacularArcPrompt,
   composeSpectacularMotionPrompt, buildSpectacularAct, combineSpectacularActs, sanitizeMotionPrompt,
-  travelFor, themeFor, choreographyFor, soloMotionFor, familyFor, arcFor, THEMES, SPECTACULAR_FAMILIES,
-  WILD_THEMES, wildThemeFor, wildThemeInfo, isWildSlot,
+  travelFor, choreographyFor, soloMotionFor, arcFor, SPECTACULAR_FAMILIES,
+  WILD_THEMES, STYLE_POOL, styleFor,
 };
