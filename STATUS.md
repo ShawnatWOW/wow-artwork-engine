@@ -66,6 +66,18 @@ at a time, "N of 3 reviewed" progress per sign.
 
 ## Changelog (this delivery arc)
 
+- **2026-09-08 — The framed track gets randomized styles too.** Shawn: the randomized
+  option 3 "is actually really good — apply that same concept to the first one… so Scott
+  can always get different variations." Spectacular **option 1** now draws its style and
+  cast from the same 12-theme wild pool (Cyberpunk, Roaring Twenties, Wild West, Feudal
+  Japan…) while keeping every bit of its signature painted 3D border. The house
+  SPECTACULAR_FAMILIES all live in one genre — psychedelic saturated creatures — so
+  rotating them changed the cast but never the WORLD, which is why the framed card read
+  as the same piece every week. Options 1 and 3 are guaranteed to roll DIFFERENT themes
+  in a batch (previously a shared seed could land both on the same one ~8% of the time),
+  and option 2 stays on the house families, so a batch now spans three distinct looks.
+  Both wild cards show their "🎲 Random theme: <name>" badge.
+
 - **2026-09-02 — Boundary refusals: retry once + de-weaponized Wild West.** The Wild
   West wild-theme still was refused by ByteDance's likeness filter — but a full
   forensic ablation (the exact image, its regions, the padded production copy, even a
