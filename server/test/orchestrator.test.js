@@ -704,7 +704,7 @@ test('story director: the motion prompt is written from the ACTUAL still when a 
   }
 });
 
-test('wild slot: option 3 rows carry the rolled theme label; options 1-2 carry none', async (t) => {
+test('wild slots: spectacular options 1 + 3 carry rolled theme labels, and they differ', async (t) => {
   if (!(await hasFfmpeg())) return t.skip('ffmpeg not installed');
   const { base, repo, store } = await harness();
   const spectacularOnly = SURFACES.filter((s) => s.key === 'spectacular');
@@ -716,11 +716,21 @@ test('wild slot: option 3 rows carry the rolled theme label; options 1-2 carry n
     const stills = await repo.listArtworks(runId);
     assert.equal(stills.length, 3);
     const labeled = stills.filter((a) => a.theme_label);
-    assert.equal(labeled.length, 1, 'exactly one design per surface is the wild slot');
-    // The label is the theme wildThemeFor rolled for this batch's seed.
-    const expected = wildThemeFor({ specKey: 'spectacular_wow1_8', option: 3, weekOf: `2026-08-17#run${runId}` });
-    assert.equal(labeled[0].theme_label, expected.label);
-    assert.ok(labeled[0].prompt.includes(expected.style), 'the labeled row is the themed design');
+    // Option 1 joined the wild pool 2026-09-08; option 2 keeps the house
+    // families, so a batch spans three genuinely different looks.
+    assert.equal(labeled.length, 2, 'options 1 and 3 are the wild slots');
+    const seed = `2026-08-17#run${runId}`;
+    for (const option of [1, 3]) {
+      const expected = wildThemeFor({ specKey: 'spectacular_wow1_8', option, weekOf: seed });
+      const row = stills.find((a) => a.prompt.includes(expected.style));
+      assert.ok(row, `no design carries option ${option}'s rolled style`);
+      assert.equal(row.theme_label, expected.label);
+    }
+    // Two wild cards in one batch must never show the same world.
+    assert.notEqual(labeled[0].theme_label, labeled[1].theme_label);
+    // The framed track keeps its painted border while wearing the theme.
+    const framed = stills.find((a) => /matte-black frame/.test(a.prompt));
+    assert.ok(framed?.theme_label, 'the framed design is themed too');
   } finally {
     await rm(base, { recursive: true, force: true });
   }

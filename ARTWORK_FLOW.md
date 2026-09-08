@@ -28,17 +28,24 @@ Two slots go fully off-book every batch — a **randomized era/world theme** ins
 the house psychedelic families, always **digital art grounded in that theme** with
 characters and scenery that belong to it:
 
-- **Spectacular option 3** (also borderless — the wild theme replaces its style family
+- **Spectacular option 1** — the FRAMED track *(joined 2026-09-08)*. Keeps the painted
+  trompe-l'oeil 3D border and every frame rule; only its style + cast are randomized, so
+  the pop-out signature now arrives in a different world each batch.
+- **Spectacular option 3** (borderless — the wild theme replaces its style family
   and cast; the vision director still writes the story from the actual still).
 - **EON-connected option 2** (the wild theme's hero travels the triptych; the wrap/seam
   and travel rules are unchanged).
+
+Spectacular **option 2** deliberately stays on the house psychedelic families, so one
+batch spans three different looks. The two spectacular wild slots are guaranteed to roll
+**different** themes (the batch picks a base index and each option strides from it).
 
 The pool (12 themes): Cyberpunk, Roaring Twenties, Steampunk, Synthwave, Wild West,
 Feudal Japan, Ancient Egypt, Deep Space, Medieval Fantasy, Lost Atlantis, Prehistoric,
 Masquerade Carnival. The pick is seeded by the batch id — every "New batch" rolls fresh,
 each run stays reproducible. The rolled theme's name is stored on the row
 (`theme_label`) and the dashboard shows a **🎲 Random theme: <name>** badge next to that
-generation, so the reviewer always knows which design is the wild one and what it
+generation, so the reviewer always knows which designs are randomized and what they
 rolled. Variations/tweaks of a wild design inherit its theme and label.
 
 ---

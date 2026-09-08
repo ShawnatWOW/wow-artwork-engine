@@ -311,14 +311,28 @@ const WILD_THEMES = [
   },
 ];
 
-/** Which (style, option) slots roll a wild theme. Pure; exported for tests. */
+/** Which (style, option) slots roll a wild theme. Pure; exported for tests.
+ *  Spectacular option 1 joined the wild pool 2026-09-08 (Shawn: the randomized
+ *  option 3 "is actually really good — apply that same concept to the first
+ *  one… so Scott can always get different variations"). The house
+ *  SPECTACULAR_FAMILIES all live in one genre — psychedelic saturated
+ *  creatures — so rotating them changed the cast but never the WORLD, and the
+ *  framed track read as the same piece every week. Option 1 keeps its painted
+ *  3D border; only the style/cast it wears is now drawn from the wild pool.
+ *  Option 2 stays on the house families, so a batch spans three looks. */
 export function isWildSlot(style, option) {
-  return (style === 'frame_break' && option === 3) || (style === 'eon_connected' && option === 2);
+  return (style === 'frame_break' && (option === 1 || option === 3))
+    || (style === 'eon_connected' && option === 2);
 }
 
-/** The wild theme one slot rolled — seeded by batch, so every batch differs. Pure. */
+/** The wild theme one slot rolled — seeded by batch, so every batch differs.
+ *  The two spectacular wild slots (1 and 3) are GUARANTEED different themes:
+ *  the batch picks a base index and the option strides from it, the same
+ *  trick familyFor uses. A shared seed with only the option in the hash could
+ *  land both on Cyberpunk in the same batch (~8% of batches). Pure. */
 export function wildThemeFor({ specKey, option, weekOf }) {
-  return WILD_THEMES[hash(`wild:${weekOf || 'week'}:${specKey}:${option}`) % WILD_THEMES.length];
+  const base = hash(`wild:${weekOf || 'week'}:${specKey}`);
+  return WILD_THEMES[(base + (option ?? 1)) % WILD_THEMES.length];
 }
 
 /** The wild theme for a job, or null when the slot isn't wild. Pure. */
@@ -613,8 +627,11 @@ export function buildStillPrompt({ style, specKey, option, weekOf }) {
     // smear when animated and the video has no rising action). The gentle
     // frame overlap in each arc's opening keeps the 3D read from second one;
     // the big punches belong to the movements and the ending.
-    // Option 3 is the WILD slot: its family/cast come from the rolled theme
-    // instead of the house psychedelic families (Shawn, 2026-08-18).
+    // Options 1 and 3 are WILD slots: their style/cast come from the rolled
+    // theme instead of the house psychedelic families (option 3 since
+    // 2026-08-18; option 1 joined 2026-09-08 so the framed track stops
+    // looking like the same piece every week). Option 2 keeps the house
+    // families, so one batch spans three genuinely different looks.
     const f = wild ?? familyFor({ specKey, option, weekOf });
     const cast = joinCast(castList(f));
     // SPLIT TRACKS (Shawn, 2026-08-18, shipping to WOW): option 1 keeps the

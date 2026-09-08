@@ -395,13 +395,51 @@ test('split tracks: borderless motion drops the frame rules, keeps the contract,
 // ---- Wild-theme slots (Shawn, 2026-08-18): spectacular option 3 and
 // EON-connected option 2 roll a randomized era/world theme each batch.
 
-test('wild slots: exactly spectacular option 3 and EON-connected option 2', () => {
+test('wild slots: spectacular options 1 + 3, and EON-connected option 2', () => {
+  // Option 1 joined the pool 2026-09-08 — the framed track wore one genre
+  // (house psychedelic) every week, so it read as the same piece each time.
+  assert.equal(isWildSlot('frame_break', 1), true);
   assert.equal(isWildSlot('frame_break', 3), true);
   assert.equal(isWildSlot('eon_connected', 2), true);
-  for (const [style, option] of [['frame_break', 1], ['frame_break', 2], ['eon_connected', 1], ['eon_connected', 3], ['eon_single', 1], ['eon_single', 2], ['eon_single', 3]]) {
+  for (const [style, option] of [['frame_break', 2], ['eon_connected', 1], ['eon_connected', 3], ['eon_single', 1], ['eon_single', 2], ['eon_single', 3]]) {
     assert.equal(isWildSlot(style, option), false, `${style} option ${option} must not be wild`);
     assert.equal(wildThemeInfo({ style, specKey: 'x', option, weekOf: 'w' }), null);
   }
+});
+
+test('the two spectacular wild slots never roll the SAME theme in one batch', () => {
+  // A shared seed with only the option hashed in put both on e.g. Cyberpunk
+  // in ~8% of batches — two cards, one world, no variety.
+  for (let run = 1; run <= 40; run += 1) {
+    const args = { specKey: 'spectacular_wow1_8', weekOf: `2026-09-07#run${run}` };
+    const one = wildThemeFor({ ...args, option: 1 });
+    const three = wildThemeFor({ ...args, option: 3 });
+    assert.notEqual(one.key, three.key, `run ${run}: options 1 and 3 both rolled ${one.key}`);
+  }
+});
+
+test('the framed track (option 1) wears the rolled theme but KEEPS its 3D border', () => {
+  const args = { ...JOB, option: 1, weekOf: '2026-09-07#run40' };
+  const wild = wildThemeFor(args);
+  const still = buildStillPrompt(args);
+  // The randomized world drives style + cast…
+  assert.ok(still.includes(wild.style), 'option 1 must carry the rolled theme style');
+  for (const member of castList(wild)) assert.ok(still.includes(member), `still must name ${member}`);
+  // …while every piece of the signature pop-out survives.
+  assert.match(still, /trompe-l'oeil/);
+  assert.match(still, /matte-black frame/);
+  assert.match(still, /flush with the picture's edges on all sides/);
+  assert.match(still, /IN FRONT of the black strips/);
+  assert.match(still, /never a photorealistic human likeness/);
+  assert.ok(checkPrompt(still).allowed);
+  // Its motion prompt stays the FRAMED contract, cast from the same theme.
+  const motion = buildMotionPrompt(args);
+  assert.match(motion, /freely pass IN FRONT of the frame/);
+  assert.ok(castList(wild).some((m) => motion.includes(m)), 'framed story names the rolled cast');
+  // The look actually changes batch to batch (the whole point).
+  const seeds = Array.from({ length: 10 }, (_, i) => `2026-09-07#run${i + 1}`);
+  const picked = new Set(seeds.map((weekOf) => wildThemeFor({ ...JOB, option: 1, weekOf }).key));
+  assert.ok(picked.size >= 3, `expected >=3 distinct themes across 10 batches, got ${picked.size}`);
 });
 
 test('wild themes: every entry is a labeled digital-art theme with a themed cast', () => {
