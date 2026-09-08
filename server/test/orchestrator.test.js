@@ -12,7 +12,7 @@ import { createMemoryRepo } from '../src/db/memoryRepo.js';
 import { createLocalStore } from '../src/services/storage/local.js';
 import { SURFACES } from '../src/services/generation/catalog.js';
 import { motionProvider, stillProvider } from '../src/services/generation/fixture.js';
-import { wildThemeFor } from '../src/services/generation/prompts.js';
+import { styleFor } from '../src/services/generation/prompts.js';
 import ffmpeg from '../src/services/ffmpeg.js';
 
 const execFileP = promisify(execFile);
@@ -704,7 +704,7 @@ test('story director: the motion prompt is written from the ACTUAL still when a 
   }
 });
 
-test('wild slots: spectacular options 1 + 3 carry rolled theme labels, and they differ', async (t) => {
+test('every design in a batch carries its own rolled style label, and they differ', async (t) => {
   if (!(await hasFfmpeg())) return t.skip('ffmpeg not installed');
   const { base, repo, store } = await harness();
   const spectacularOnly = SURFACES.filter((s) => s.key === 'spectacular');
@@ -715,22 +715,21 @@ test('wild slots: spectacular options 1 + 3 carry rolled theme labels, and they 
     });
     const stills = await repo.listArtworks(runId);
     assert.equal(stills.length, 3);
-    const labeled = stills.filter((a) => a.theme_label);
-    // Option 1 joined the wild pool 2026-09-08; option 2 keeps the house
-    // families, so a batch spans three genuinely different looks.
-    assert.equal(labeled.length, 2, 'options 1 and 3 are the wild slots');
+    // Every design is randomized now (2026-09-08) — no surface has a default
+    // style, so every card carries a label for its badge.
+    assert.equal(stills.filter((a) => a.theme_label).length, 3, 'all three designs are labeled');
     const seed = `2026-08-17#run${runId}`;
-    for (const option of [1, 3]) {
-      const expected = wildThemeFor({ specKey: 'spectacular_wow1_8', option, weekOf: seed });
+    for (const option of [1, 2, 3]) {
+      const expected = styleFor({ specKey: 'spectacular_wow1_8', option, weekOf: seed });
       const row = stills.find((a) => a.prompt.includes(expected.style));
       assert.ok(row, `no design carries option ${option}'s rolled style`);
       assert.equal(row.theme_label, expected.label);
     }
-    // Two wild cards in one batch must never show the same world.
-    assert.notEqual(labeled[0].theme_label, labeled[1].theme_label);
-    // The framed track keeps its painted border while wearing the theme.
+    // The three options Scott compares are three different worlds.
+    assert.equal(new Set(stills.map((a) => a.theme_label)).size, 3, 'a batch must not repeat a style');
+    // The framed track keeps its painted border while wearing its style.
     const framed = stills.find((a) => /matte-black frame/.test(a.prompt));
-    assert.ok(framed?.theme_label, 'the framed design is themed too');
+    assert.ok(framed?.theme_label, 'the framed design is styled too');
   } finally {
     await rm(base, { recursive: true, force: true });
   }

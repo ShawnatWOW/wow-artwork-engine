@@ -30,8 +30,10 @@ Every EON pillar has a narrow LED **spine** down its left side facing oncoming
 drivers. Both the spine and the face are cut from **one** design, so the artwork
 carries around the corner instead of the spine being a separate afterthought.
 
-3 options per sign each week. Psychedelic, high-saturation, characterful creatures
-(koi, octopus, peacock, jellyfish…), full-scene motion with real 3D depth.
+3 options per sign each week, and **every one rolls its own style** from a 28-strong pool
+(Cyberpunk, Roaring Twenties, Nordic Myth, Solarpunk, the house psychedelic looks…), with
+full-scene motion and real 3D depth. The three options of a sign are always three
+different worlds.
 
 ---
 
@@ -65,6 +67,19 @@ at a time, "N of 3 reviewed" progress per sign.
 ---
 
 ## Changelog (this delivery arc)
+
+- **2026-09-08 (2) — Every style on the page is now randomized.** Shawn: "make all of the
+  styles on the page randomly generate… so Scott can always have a random style for each
+  generation." All nine designs in a batch now roll their own style from ONE pool — the
+  per-surface defaults are gone (the EON-only THEMES list and the spectacular's
+  familyFor default are retired; the 8 house psychedelic families live on as pool
+  entries, so the WOW signature look still appears regularly without owning a slot). The
+  pool grew to **28 styles**: 8 new worlds (Art Deco Metropolis, Nordic Myth,
+  Bioluminescent Rainforest, Retro Space Race, Silk Road Bazaar, Arctic Aurora, Solarpunk
+  Garden City, Papercraft Storybook) were added because 9 draws a batch burns through a
+  small pool in a week or two. The 3 options of any one sign are guaranteed to be three
+  different styles, every card shows its 🎲 badge, and the still + motion prompts read the
+  same roll so they can never describe different creatures.
 
 - **2026-09-08 — The framed track gets randomized styles too.** Shawn: the randomized
   option 3 "is actually really good — apply that same concept to the first one… so Scott

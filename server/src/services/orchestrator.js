@@ -28,7 +28,7 @@ import { planJobs, POST, SURFACES, SPECS } from './generation/catalog.js';
 import {
   buildStillPrompt, buildClosingStillPrompt, buildMotionPrompt,
   composeSpectacularMotionPrompt, combineSpectacularActs, sanitizeMotionPrompt,
-  wildThemeInfo,
+  styleFor,
 } from './generation/prompts.js';
 import { directStory } from './generation/director.js';
 import { refineTweak } from './generation/tweak.js';
@@ -155,14 +155,14 @@ async function generateStill(job, ctx) {
     ? (ctx.closingPromptOverride ?? buildClosingStillPrompt({ style: job.style, specKey: job.specKey, option: job.option, weekOf: seed }))
     : null;
   const motionPromptAct2 = isStoryboard ? (ctx.motionPromptAct2Override ?? null) : null;
-  // WILD SLOT (Shawn, 2026-08-18): spectacular option 3 and EON-connected
-  // option 2 roll a randomized era/world theme each batch. The rolled theme's
-  // label is stored on the row so the dashboard can mark the wild design and
-  // say what it rolled. Vary/tweak inherit their source design's label
-  // (the override path keeps the source prompt, hence its theme).
+  // EVERY design rolls its own style now (Shawn, 2026-09-08) — the rolled
+  // style's label is stored on the row so the dashboard names the look on
+  // every card, not just the one-off "wild" slots this started as.
+  // Vary/tweak inherit their source design's label (the override path keeps
+  // the source prompt, hence its style).
   const themeLabel = ctx.themeLabelOverride
     ?? (ctx.promptOverride ? null
-      : wildThemeInfo({ style: job.style, specKey: job.specKey, option: job.option, weekOf: seed })?.label ?? null);
+      : styleFor({ specKey: job.specKey, option: job.option, weekOf: seed })?.label ?? null);
   const lineage = {
     familyId: ctx.familyId ?? null,
     parentArtworkId: ctx.parentArtworkId ?? null,
