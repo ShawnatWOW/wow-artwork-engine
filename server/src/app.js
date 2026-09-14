@@ -7,6 +7,7 @@ import healthRouter from './routes/health.js';
 import runsRouter from './routes/runs.js';
 import artworksRouter from './routes/artworks.js';
 import handoffRouter from './routes/handoff.js';
+import stylesRouter from './routes/styles.js';
 
 export function createApp() {
   const app = express();
@@ -41,6 +42,7 @@ export function createApp() {
   app.use('/api', runsRouter);
   app.use('/api', artworksRouter);
   app.use('/api', handoffRouter);
+  app.use('/api', stylesRouter);
 
   // 404
   app.use((req, res) => res.status(404).json({ error: 'not_found', path: req.path }));

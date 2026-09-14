@@ -34,7 +34,31 @@ const ARTWORK_COLUMNS = {
   familyId: 'family_id',
   parentArtworkId: 'parent_artwork_id',
   changeNote: 'change_note',
+  // Style Library (011_style_library.sql).
+  styleKey: 'style_key',
 };
+
+// Whitelisted style columns PATCH /styles/:id may set (camelCase → column).
+const STYLE_COLUMNS = {
+  label: 'label',
+  style: 'style',
+  cast: 'cast',
+  sourceType: 'source_type',
+  sourceUrl: 'source_url',
+  sourceName: 'source_name',
+  sourceKey: 'source_key',
+  frameKeys: 'frame_keys',
+  thumbnailKey: 'thumbnail_key',
+  previewKey: 'preview_key',
+  previewThumbKey: 'preview_thumb_key',
+  analysis: 'analysis',
+  enabled: 'enabled',
+  favorite: 'favorite',
+  weight: 'weight',
+  status: 'status',
+  error: 'error',
+};
+const STYLE_JSON = new Set(['cast', 'frameKeys', 'analysis']);
 
 export const pgRepo = {
   async createRun({ weekOf, triggeredBy, status = 'running' }) {
@@ -76,8 +100,8 @@ export const pgRepo = {
           family_id, parent_artwork_id, change_note,
           panel, fal_request_id, upscale_request_id, cost_usd,
           closing_prompt, closing_key, closing_thumb_key, closing_remote_url, motion_prompt_act2,
-          theme_label)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32)
+          theme_label, style_key)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33)
        RETURNING *`,
       [
         a.runId, a.surface, a.style, a.mediaType, a.specKey,
@@ -98,6 +122,8 @@ export const pgRepo = {
         a.closingRemoteUrl ?? null, a.motionPromptAct2 ?? null,
         // Wild-theme slot label (009) — which randomized theme this design rolled.
         a.themeLabel ?? null,
+        // Style Library (011) — the style key behind that label.
+        a.styleKey ?? null,
       ],
     );
     return rows[0];
@@ -231,6 +257,81 @@ export const pgRepo = {
         ORDER BY COALESCE(d.sent_at, d.created_at) DESC NULLS LAST, d.id DESC`,
     );
     return rows;
+  },
+
+  // --- Style Library (011_style_library.sql) -----------------------------
+  // Ordered by id so the seeded built-ins keep the code pool's order — the
+  // roll in prompts.styleFor is an index into this list, so order is part of
+  // what makes a batch rebuild identically.
+  async listStyles({ includeDisabled = true } = {}) {
+    const { rows } = await query(
+      `SELECT * FROM styles ${includeDisabled ? '' : 'WHERE enabled'} ORDER BY id ASC`,
+    );
+    return rows;
+  },
+
+  async getStyle(id) {
+    const { rows } = await query('SELECT * FROM styles WHERE id = $1', [id]);
+    return rows[0] || null;
+  },
+
+  async getStyleByKey(key) {
+    const { rows } = await query('SELECT * FROM styles WHERE key = $1', [key]);
+    return rows[0] || null;
+  },
+
+  async insertStyle(s) {
+    const { rows } = await query(
+      `INSERT INTO styles
+         (key, label, style, cast, source_type, source_url, source_name, source_key,
+          frame_keys, thumbnail_key, preview_key, preview_thumb_key, analysis,
+          enabled, favorite, weight, status, error, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+       ON CONFLICT (key) DO NOTHING
+       RETURNING *`,
+      [
+        s.key, s.label, s.style ?? '', JSON.stringify(s.cast ?? {}),
+        s.sourceType ?? 'builtin', s.sourceUrl ?? null, s.sourceName ?? null, s.sourceKey ?? null,
+        JSON.stringify(s.frameKeys ?? []), s.thumbnailKey ?? null, s.previewKey ?? null, s.previewThumbKey ?? null,
+        JSON.stringify(s.analysis ?? {}),
+        s.enabled ?? true, s.favorite ?? false, s.weight ?? 1,
+        s.status ?? 'ready', s.error ?? null, s.createdBy ?? null,
+      ],
+    );
+    return rows[0] || this.getStyleByKey(s.key);
+  },
+
+  async updateStyle(id, patch) {
+    const sets = [];
+    const values = [id];
+    for (const [key, col] of Object.entries(STYLE_COLUMNS)) {
+      if (patch[key] !== undefined) {
+        values.push(STYLE_JSON.has(key) ? JSON.stringify(patch[key]) : patch[key]);
+        sets.push(`${col} = $${values.length}`);
+      }
+    }
+    if (sets.length === 0) return this.getStyle(id);
+    sets.push('updated_at = now()');
+    const { rows } = await query(`UPDATE styles SET ${sets.join(', ')} WHERE id = $1 RETURNING *`, values);
+    return rows[0] || null;
+  },
+
+  async deleteStyle(id) {
+    await query('DELETE FROM styles WHERE id = $1', [id]);
+  },
+
+  // { [style_key]: { used, approved } } across every run — the card's
+  // "used 4× · 3 approved" line and, later, auto-weighting.
+  async styleUsage() {
+    const { rows } = await query(
+      `SELECT style_key,
+              COUNT(*)::int AS used,
+              COUNT(*) FILTER (WHERE status IN ('approved','sent'))::int AS approved
+         FROM artworks
+        WHERE style_key IS NOT NULL AND stage = 'still' AND parent_artwork_id IS NULL
+        GROUP BY style_key`,
+    );
+    return Object.fromEntries(rows.map((r) => [r.style_key, { used: r.used, approved: r.approved }]));
   },
 };
 

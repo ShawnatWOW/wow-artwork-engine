@@ -21,11 +21,13 @@ const router = Router();
 // in the background and status is polled via GET /runs/:id.
 router.post('/runs', async (req, res, next) => {
   try {
-    const { weekOf, triggeredBy } = req.body || {};
+    // `styles` = the batch composer's per-slot picks (Style Library):
+    // { [surface]: { [option]: styleKey | 'random' | 'favorites' } }.
+    const { weekOf, triggeredBy, styles } = req.body || {};
     const by = triggeredBy || req.get('x-user-email') || 'manual';
 
     const run = await new Promise((resolve, reject) => {
-      runWeek({ weekOf, triggeredBy: by, onStart: resolve }).catch((err) => {
+      runWeek({ weekOf, triggeredBy: by, styles, onStart: resolve }).catch((err) => {
         logger.error({ err: err.message }, 'Background run failed');
         reject(err);
       });
@@ -50,7 +52,8 @@ router.post('/runs/:id/regenerate', async (req, res, next) => {
 
     const run = await new Promise((resolve, reject) => {
       regenerateStills({
-        runId: id, surfaceKey, triggeredBy: req.get('x-user-email') || 'dashboard', onStart: resolve,
+        runId: id, surfaceKey, styleKey: req.body?.styleKey, styles: req.body?.styles,
+        triggeredBy: req.get('x-user-email') || 'dashboard', onStart: resolve,
       }).catch((err) => { logger.error({ err: err.message }, 'Background regenerate failed'); reject(err); });
     });
     res.status(202).json({ runId: run.id, surface: surfaceKey, status: 'running' });
@@ -79,7 +82,7 @@ router.post('/runs/:id/add', async (req, res, next) => {
 
     const run = await new Promise((resolve, reject) => {
       addStills({
-        runId: id, surfaceKey, count: req.body?.count,
+        runId: id, surfaceKey, count: req.body?.count, styleKey: req.body?.styleKey,
         triggeredBy: req.get('x-user-email') || 'dashboard', onStart: resolve,
       }).catch((err) => { logger.error({ err: err.message }, 'Background add failed'); reject(err); });
     });

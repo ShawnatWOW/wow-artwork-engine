@@ -19,6 +19,7 @@ export function createMemoryRepo({ persistPath = null } = {}) {
   let eonSequences = [];
   let selections = [];
   let deliveries = [];
+  let styles = [];
 
   // Hydrate from the snapshot, if one exists. A corrupt file starts fresh —
   // persistence is best-effort, never fatal.
@@ -30,13 +31,16 @@ export function createMemoryRepo({ persistPath = null } = {}) {
       if (Array.isArray(s.eonSequences)) eonSequences = s.eonSequences;
       if (Array.isArray(s.selections)) selections = s.selections;
       if (Array.isArray(s.deliveries)) deliveries = s.deliveries;
+      if (Array.isArray(s.styles)) styles = s.styles;
+      // A style stuck mid-analysis can never finish after a restart.
+      for (const st of styles) if (st.status === 'analyzing') { st.status = 'failed'; st.error = 'interrupted — the server restarted during analysis; try again'; }
       // A restart mid-generation leaves rows stuck at running/generating that
       // can never finish — fail them so the dashboard doesn't poll forever.
       const INTERRUPTED = 'interrupted — the server restarted during generation; start a new batch or retry';
       for (const r of runs) if (r.status === 'running') { r.status = 'failed'; r.error = INTERRUPTED; }
       for (const a of artworks) if (a.status === 'generating') { a.status = 'failed'; a.error = a.error || INTERRUPTED; }
     } catch {
-      runs = []; artworks = []; eonSequences = []; selections = []; deliveries = [];
+      runs = []; artworks = []; eonSequences = []; selections = []; deliveries = []; styles = [];
     }
   }
 
@@ -46,6 +50,7 @@ export function createMemoryRepo({ persistPath = null } = {}) {
   let seqSeq = maxId(eonSequences);
   let selSeq = maxId(selections);
   let delSeq = maxId(deliveries);
+  let styleSeq = maxId(styles);
 
   const clone = (o) => ({ ...o });
 
@@ -56,7 +61,7 @@ export function createMemoryRepo({ persistPath = null } = {}) {
     try {
       fs.mkdirSync(path.dirname(persistPath), { recursive: true });
       const tmp = `${persistPath}.tmp`;
-      fs.writeFileSync(tmp, JSON.stringify({ runs, artworks, eonSequences, selections, deliveries }));
+      fs.writeFileSync(tmp, JSON.stringify({ runs, artworks, eonSequences, selections, deliveries, styles }));
       fs.renameSync(tmp, persistPath);
     } catch {
       // best-effort — never let persistence break the request
@@ -156,6 +161,8 @@ export function createMemoryRepo({ persistPath = null } = {}) {
         // Wild-theme slot label (009_theme_label.sql) — which randomized theme
         // this design rolled; null for house-style rows.
         theme_label: a.themeLabel ?? null,
+        // Style Library (011) — the style key behind that label.
+        style_key: a.styleKey ?? null,
         created_at: new Date().toISOString(), // pg stamps this via DEFAULT now()
       };
       artworks.push(row);
@@ -175,6 +182,7 @@ export function createMemoryRepo({ persistPath = null } = {}) {
         familyId: 'family_id', parentArtworkId: 'parent_artwork_id', changeNote: 'change_note',
         closingPrompt: 'closing_prompt', closingKey: 'closing_key', closingThumbKey: 'closing_thumb_key',
         closingRemoteUrl: 'closing_remote_url', motionPromptAct2: 'motion_prompt_act2',
+        styleKey: 'style_key',
       };
       for (const [key, col] of Object.entries(map)) {
         if (patch[key] !== undefined) row[col] = patch[key];
@@ -259,6 +267,87 @@ export function createMemoryRepo({ persistPath = null } = {}) {
       for (const [k, col] of Object.entries(map)) if (patch[k] !== undefined) row[col] = patch[k];
       persist();
       return clone(row);
+    },
+
+    // --- Style Library (011_style_library.sql) ---------------------------
+    async listStyles({ includeDisabled = true } = {}) {
+      return styles.filter((st) => includeDisabled || st.enabled).map(clone);
+    },
+
+    async getStyle(id) {
+      const row = styles.find((st) => st.id === id);
+      return row ? clone(row) : null;
+    },
+
+    async getStyleByKey(key) {
+      const row = styles.find((st) => st.key === key);
+      return row ? clone(row) : null;
+    },
+
+    // Same ON CONFLICT (key) DO NOTHING semantics as pg: an existing key wins.
+    async insertStyle(st) {
+      const existing = styles.find((x) => x.key === st.key);
+      if (existing) return clone(existing);
+      const now = new Date().toISOString();
+      const row = {
+        id: (styleSeq += 1),
+        key: st.key,
+        label: st.label,
+        style: st.style ?? '',
+        cast: { ...(st.cast ?? {}) },
+        source_type: st.sourceType ?? 'builtin',
+        source_url: st.sourceUrl ?? null,
+        source_name: st.sourceName ?? null,
+        source_key: st.sourceKey ?? null,
+        frame_keys: [...(st.frameKeys ?? [])],
+        thumbnail_key: st.thumbnailKey ?? null,
+        preview_key: st.previewKey ?? null,
+        preview_thumb_key: st.previewThumbKey ?? null,
+        analysis: { ...(st.analysis ?? {}) },
+        enabled: st.enabled ?? true,
+        favorite: st.favorite ?? false,
+        weight: st.weight ?? 1,
+        status: st.status ?? 'ready',
+        error: st.error ?? null,
+        created_by: st.createdBy ?? null,
+        created_at: now,
+        updated_at: now,
+      };
+      styles.push(row);
+      persist();
+      return clone(row);
+    },
+
+    async updateStyle(id, patch) {
+      const row = styles.find((st) => st.id === id);
+      if (!row) return null;
+      const map = {
+        label: 'label', style: 'style', cast: 'cast', sourceType: 'source_type', sourceUrl: 'source_url',
+        sourceName: 'source_name', sourceKey: 'source_key', frameKeys: 'frame_keys', thumbnailKey: 'thumbnail_key',
+        previewKey: 'preview_key', previewThumbKey: 'preview_thumb_key', analysis: 'analysis',
+        enabled: 'enabled', favorite: 'favorite', weight: 'weight', status: 'status', error: 'error',
+      };
+      for (const [k, col] of Object.entries(map)) if (patch[k] !== undefined) row[col] = patch[k];
+      row.updated_at = new Date().toISOString();
+      persist();
+      return clone(row);
+    },
+
+    async deleteStyle(id) {
+      const i = styles.findIndex((st) => st.id === id);
+      if (i !== -1) styles.splice(i, 1);
+      persist();
+    },
+
+    async styleUsage() {
+      const out = {};
+      for (const a of artworks) {
+        if (!a.style_key || a.stage !== 'still' || a.parent_artwork_id) continue;
+        const u = (out[a.style_key] ||= { used: 0, approved: 0 });
+        u.used += 1;
+        if (a.status === 'approved' || a.status === 'sent') u.approved += 1;
+      }
+      return out;
     },
 
     async listDeliveries(runId) {

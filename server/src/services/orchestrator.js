@@ -28,8 +28,10 @@ import { planJobs, POST, SURFACES, SPECS } from './generation/catalog.js';
 import {
   buildStillPrompt, buildClosingStillPrompt, buildMotionPrompt,
   composeSpectacularMotionPrompt, combineSpectacularActs, sanitizeMotionPrompt,
-  styleFor,
+  castList,
 } from './generation/prompts.js';
+import { loadLibrary, parsePicks, resolveLook, excludeFor } from './styles/library.js';
+import { STYLE_POOL } from './generation/prompts.js';
 import { directStory } from './generation/director.js';
 import { refineTweak } from './generation/tweak.js';
 import { resolveDesign } from './keeper.js';
@@ -85,6 +87,58 @@ function resolveDeps(deps) {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Style Library helpers (2026-09-14). Every generation path resolves the look
+// a design wears BEFORE generateStill, so the still, the motion story, the
+// closing frame and the stored style_key all agree.
+// ---------------------------------------------------------------------------
+
+/** The code-pool roll, for callers that didn't resolve a look (tests, CLI). */
+function buildLookFallback(job, seed) {
+  return resolveLook({ library: { pool: STYLE_POOL, byKey: new Map() }, specKey: job.specKey, option: job.option, weekOf: seed });
+}
+
+/** Style keys the live (non-superseded) stills of one surface wear in a run. */
+function surfaceStyleKeys(artworks, surfaceStyle) {
+  return artworks
+    .filter((a) => a.stage === 'still' && a.style === surfaceStyle && a.status !== 'superseded' && !a.parent_artwork_id)
+    .map((a) => a.style_key)
+    .filter(Boolean);
+}
+
+/** The looks each surface wore in the most recent OTHER run — "not last week again". */
+async function previousStyleKeys(repo, { excludeRunId } = {}) {
+  const runs = await repo.listRuns({ limit: 5 });
+  const prev = runs.find((r) => r.id !== excludeRunId && r.status !== 'running');
+  if (!prev) return () => [];
+  const arts = await repo.listArtworks(prev.id);
+  return (surfaceStyle) => surfaceStyleKeys(arts, surfaceStyle);
+}
+
+/**
+ * Roll (or apply the reviewer's pick for) every job in order, threading the
+ * keys already taken so one sign never shows the same world twice.
+ * @returns {Map<job, look>}
+ */
+function assignLooks({ library, jobs, weekOf, picks = {}, taken = {}, previous = () => [], slotsPerSurface }) {
+  const looks = new Map();
+  const takenBy = {};
+  for (const j of jobs) takenBy[j.style] = [...(taken[j.style] || [])];
+  for (const job of jobs) {
+    const pick = picks[job.key]?.[job.option];
+    const exclude = excludeFor({
+      poolSize: library.pool.length,
+      taken: takenBy[job.style],
+      previous: previous(job.style),
+      slots: slotsPerSurface ?? jobs.filter((j) => j.style === job.style).length,
+    });
+    const look = resolveLook({ library, specKey: job.specKey, option: job.option, weekOf, pick, exclude });
+    if (look) takenBy[job.style].push(look.key);
+    looks.set(job, look);
+  }
+  return looks;
+}
+
 // ===========================================================================
 // PHASE 1 — stills (style review)
 // ===========================================================================
@@ -93,16 +147,23 @@ function resolveDeps(deps) {
  * Generate the week's still options (Phase 1). Cheap; nothing is animated yet.
  * @returns {Promise<{ runId, phase, status, weekOf, counts, artworks }>}
  */
-export async function runWeek({ weekOf, triggeredBy = 'manual', onStart, deps = {} } = {}) {
+export async function runWeek({ weekOf, triggeredBy = 'manual', styles, onStart, deps = {} } = {}) {
   const { repo, guardrails, qa, duration, fps } = resolveDeps(deps);
   const store = deps.store || (await getStore());
   const providers = deps.providers || getProviders();
   const week = weekOf || weekOfFor();
   const jobs = planJobs({ surfaces: deps.surfaces, optionsPerSurface: deps.optionsPerSurface });
+  // Style Library: what each slot wears — the reviewer's picks where given,
+  // rolled from the enabled pool otherwise, never repeating a sibling and
+  // (pool permitting) never repeating last batch's looks for that sign.
+  const library = await loadLibrary(repo);
+  const previous = await previousStyleKeys(repo);
 
   const run = await repo.createRun({ weekOf: week, triggeredBy, status: 'running' });
   await onStart?.(run);
-  logger.info({ runId: run.id, weekOf: week, options: jobs.length, mode: providers.mode || config.generationMode }, 'Phase 1 (stills) started');
+  const promptSeed = `${week}#run${run.id}`;
+  const looks = assignLooks({ library, jobs, weekOf: promptSeed, picks: parsePicks(styles), previous });
+  logger.info({ runId: run.id, weekOf: week, options: jobs.length, mode: providers.mode || config.generationMode, looks: [...looks.values()].map((l) => l?.key) }, 'Phase 1 (stills) started');
 
   const workDir = deps.workDir || (await mkdtemp(path.join(os.tmpdir(), `wae-still-${run.id}-`)));
   const counts = { ready: 0, failed: 0, blocked: 0 };
@@ -113,7 +174,7 @@ export async function runWeek({ weekOf, triggeredBy = 'manual', onStart, deps = 
     for (const job of jobs) {
       // Seed by BATCH, not by week (Shawn, 2026-08-14): every new batch gets
       // fresh subjects and environments instead of repeating the week's picks.
-      const r = await generateStill(job, { runId: run.id, weekOf: week, promptSeed: `${week}#run${run.id}`, directStory: deps.directStory, repo, store, providers, guardrails, qa, workDir });
+      const r = await generateStill(job, { runId: run.id, weekOf: week, promptSeed, look: looks.get(job), directStory: deps.directStory, repo, store, providers, guardrails, qa, workDir });
       counts.ready += r.ready; counts.failed += r.failed; counts.blocked += r.blocked;
       done += 1;
       await repo.setRunProgress?.(run.id, { phase: 'designs', done, total: jobs.length });
@@ -136,13 +197,17 @@ async function generateStill(job, ctx) {
   // promptSeed defaults to the week — regeneration salts it (see
   // regenerateStills) so fresh options don't repeat the retired designs.
   const seed = ctx.promptSeed || weekOf;
+  // The style card this design wears (Style Library). Callers resolve it up
+  // front; a missing look (older callers, tests) means the builders roll it
+  // themselves from the code pool exactly as before.
+  const look = ctx.look ?? null;
   // "Keep & explore" callers (varyStill/tweakStill) pass an explicit prompt to
   // re-run verbatim or after an LLM edit — use it as-is (skipping the template
   // rebuild) and still run the guardrail on it below. Lineage threads the family
   // links through to EVERY insert path (ready, qa-failed, blocked, error) so a
   // variation stays attached to its family even if it fails.
-  const prompt = ctx.promptOverride ?? buildStillPrompt({ style: job.style, specKey: job.specKey, option: job.option, weekOf: seed });
-  let motionPrompt = ctx.motionPromptOverride ?? buildMotionPrompt({ style: job.style, specKey: job.specKey, option: job.option, weekOf: seed });
+  const prompt = ctx.promptOverride ?? buildStillPrompt({ style: job.style, specKey: job.specKey, option: job.option, weekOf: seed, look });
+  let motionPrompt = ctx.motionPromptOverride ?? buildMotionPrompt({ style: job.style, specKey: job.specKey, option: job.option, weekOf: seed, look });
   // Storyboard surfaces (the spectacular) get a CLOSING still — the "ends
   // with" panel. Variations inherit their source's stored version via the
   // override; legacy rows without one rebuild from the template so re-rolls
@@ -152,7 +217,7 @@ async function generateStill(job, ctx) {
   // source's stored act 2 forward through vary/tweak.
   const isStoryboard = Boolean(job.storyboard);
   const closingPrompt = isStoryboard
-    ? (ctx.closingPromptOverride ?? buildClosingStillPrompt({ style: job.style, specKey: job.specKey, option: job.option, weekOf: seed }))
+    ? (ctx.closingPromptOverride ?? buildClosingStillPrompt({ style: job.style, specKey: job.specKey, option: job.option, weekOf: seed, look }))
     : null;
   const motionPromptAct2 = isStoryboard ? (ctx.motionPromptAct2Override ?? null) : null;
   // EVERY design rolls its own style now (Shawn, 2026-09-08) — the rolled
@@ -160,14 +225,15 @@ async function generateStill(job, ctx) {
   // every card, not just the one-off "wild" slots this started as.
   // Vary/tweak inherit their source design's label (the override path keeps
   // the source prompt, hence its style).
-  const themeLabel = ctx.themeLabelOverride
-    ?? (ctx.promptOverride ? null
-      : styleFor({ specKey: job.specKey, option: job.option, weekOf: seed })?.label ?? null);
+  const rolled = look ?? (ctx.promptOverride ? null : buildLookFallback(job, seed));
+  const themeLabel = ctx.themeLabelOverride ?? (ctx.promptOverride ? null : rolled?.label ?? null);
+  const styleKey = ctx.styleKeyOverride ?? (ctx.promptOverride ? null : rolled?.key ?? null);
   const lineage = {
     familyId: ctx.familyId ?? null,
     parentArtworkId: ctx.parentArtworkId ?? null,
     changeNote: ctx.changeNote ?? null,
     themeLabel,
+    styleKey,
   };
 
   // Guardrail BEFORE the (cheap) still spend — covers BOTH storyboard frames.
@@ -216,7 +282,11 @@ async function generateStill(job, ctx) {
       // border; options 2+ are borderless full-bleed — the director and the
       // motion contract both switch variants on this flag.
       const framed = job.option === 1;
-      const story = await (ctx.directStory ?? directStory)({ imageUrl: referenceUrl, framed });
+      const story = await (ctx.directStory ?? directStory)({
+        imageUrl: referenceUrl, framed,
+        // The director sees the style card too (the image wins on conflict).
+        style: rolled?.style, cast: rolled ? castList(rolled).filter(Boolean).join(', ') : undefined,
+      });
       if (story) motionPrompt = composeSpectacularMotionPrompt(story, { framed });
     }
 
@@ -355,7 +425,7 @@ async function generateStill(job, ctx) {
  * regenerate forced a re-spend across every sign).
  * @returns {Promise<{ runId, phase, status, surface, counts, artworks }>}
  */
-export async function regenerateStills({ runId, surfaceKey, triggeredBy = 'dashboard', onStart, deps = {} } = {}) {
+export async function regenerateStills({ runId, surfaceKey, styleKey, styles, triggeredBy = 'dashboard', onStart, deps = {} } = {}) {
   const { repo, guardrails, qa } = resolveDeps(deps);
   const store = deps.store || (await getStore());
   const providers = deps.providers || getProviders();
@@ -420,7 +490,19 @@ export async function regenerateStills({ runId, surfaceKey, triggeredBy = 'dashb
     usedOptions.add(job.option);
     jobs.push(job);
   }
-  logger.info({ runId, surface: surfaceKey, attempt, options: jobs.length, kept: mine.length - toRetire.length, triggeredBy, mode: providers.mode || config.generationMode }, 'Per-surface regenerate started');
+  // Looks: the reviewer's per-slot picks (or one key for every replaced
+  // slot), else fresh rolls avoiding what the KEPT siblings wear and what
+  // just got retired — "replace" must not hand back the same worlds.
+  const library = await loadLibrary(repo);
+  const kept = mine.filter((a) => !toRetire.includes(a));
+  const picks = styleKey ? Object.fromEntries(jobs.map((j) => [j.option, styleKey])) : (parsePicks({ [surfaceKey]: styles })[surfaceKey] || {});
+  const looks = assignLooks({
+    library, jobs, weekOf: promptSeed, picks: { [surfaceKey]: picks },
+    taken: { [surface.style]: surfaceStyleKeys(kept, surface.style) },
+    previous: () => toRetire.map((a) => a.style_key).filter(Boolean),
+    slotsPerSurface: jobs.length,
+  });
+  logger.info({ runId, surface: surfaceKey, attempt, options: jobs.length, kept: mine.length - toRetire.length, triggeredBy, mode: providers.mode || config.generationMode, looks: [...looks.values()].map((l) => l?.key) }, 'Per-surface regenerate started');
 
   const workDir = deps.workDir || (await mkdtemp(path.join(os.tmpdir(), `wae-regen-${runId}-`)));
   const counts = { ready: 0, failed: 0, blocked: 0 };
@@ -428,7 +510,7 @@ export async function regenerateStills({ runId, surfaceKey, triggeredBy = 'dashb
     let done = 0;
     await repo.setRunProgress?.(runId, { phase: 'designs', done, total: jobs.length });
     for (const job of jobs) {
-      const r = await generateStill(job, { runId, weekOf: week, promptSeed, directStory: deps.directStory, repo, store, providers, guardrails, qa, workDir });
+      const r = await generateStill(job, { runId, weekOf: week, promptSeed, look: looks.get(job), directStory: deps.directStory, repo, store, providers, guardrails, qa, workDir });
       counts.ready += r.ready; counts.failed += r.failed; counts.blocked += r.blocked;
       done += 1;
       await repo.setRunProgress?.(runId, { phase: 'designs', done, total: jobs.length });
@@ -462,7 +544,7 @@ export async function regenerateStills({ runId, surfaceKey, triggeredBy = 'dashb
  * rather than another roll of the same three.
  * @returns {Promise<{ runId, phase, status, surface, added, counts, artworks }>}
  */
-export async function addStills({ runId, surfaceKey, count = 1, triggeredBy = 'dashboard', onStart, deps = {} } = {}) {
+export async function addStills({ runId, surfaceKey, count = 1, styleKey, triggeredBy = 'dashboard', onStart, deps = {} } = {}) {
   const { repo, guardrails, qa } = resolveDeps(deps);
   const store = deps.store || (await getStore());
   const providers = deps.providers || getProviders();
@@ -491,7 +573,16 @@ export async function addStills({ runId, surfaceKey, count = 1, triggeredBy = 'd
   // planJobs is 1..N; we take only the tail slots we're adding.
   const allJobs = planJobs({ surfaces: [surface], optionsPerSurface: firstSlot + wanted - 1 });
   const jobs = allJobs.filter((j) => j.option >= firstSlot);
-  logger.info({ runId, surface: surfaceKey, firstSlot, adding: jobs.length, triggeredBy, mode: providers.mode || config.generationMode }, 'Add designs started');
+  // Looks: the reviewer's key for every added slot, else rolls that avoid
+  // everything this sign already shows.
+  const library = await loadLibrary(repo);
+  const looks = assignLooks({
+    library, jobs, weekOf: run.week_of,
+    picks: styleKey ? { [surfaceKey]: Object.fromEntries(jobs.map((j) => [j.option, styleKey])) } : {},
+    taken: { [surface.style]: surfaceStyleKeys(mine, surface.style) },
+    slotsPerSurface: jobs.length,
+  });
+  logger.info({ runId, surface: surfaceKey, firstSlot, adding: jobs.length, triggeredBy, mode: providers.mode || config.generationMode, looks: [...looks.values()].map((l) => l?.key) }, 'Add designs started');
 
   const workDir = deps.workDir || (await mkdtemp(path.join(os.tmpdir(), `wae-add-${runId}-`)));
   const counts = { ready: 0, failed: 0, blocked: 0 };
@@ -499,7 +590,7 @@ export async function addStills({ runId, surfaceKey, count = 1, triggeredBy = 'd
     let done = 0;
     await repo.setRunProgress?.(runId, { phase: 'designs', done, total: jobs.length });
     for (const job of jobs) {
-      const r = await generateStill(job, { runId, weekOf: run.week_of, repo, store, providers, guardrails, qa, workDir });
+      const r = await generateStill(job, { runId, weekOf: run.week_of, look: looks.get(job), directStory: deps.directStory, repo, store, providers, guardrails, qa, workDir });
       counts.ready += r.ready; counts.failed += r.failed; counts.blocked += r.blocked;
       done += 1;
       await repo.setRunProgress?.(runId, { phase: 'designs', done, total: jobs.length });
@@ -525,7 +616,7 @@ export async function addStills({ runId, surfaceKey, count = 1, triggeredBy = 'd
  * reviewer only disliked one.)
  * @returns {Promise<{ runId, phase, status, artworkId, counts }>}
  */
-export async function regenerateStill({ artworkId, triggeredBy = 'dashboard', onStart, deps = {} } = {}) {
+export async function regenerateStill({ artworkId, styleKey, triggeredBy = 'dashboard', onStart, deps = {} } = {}) {
   const { repo, guardrails, qa } = resolveDeps(deps);
   const store = deps.store || (await getStore());
   const providers = deps.providers || getProviders();
@@ -555,12 +646,23 @@ export async function regenerateStill({ artworkId, triggeredBy = 'dashboard', on
   const promptSeed = `${run.week_of}#a${still.id}`;
   const jobs = planJobs({ surfaces: [surface], optionsPerSurface: deps.optionsPerSurface });
   const job = jobs.find((j) => j.option === option) || jobs[0];
-  logger.info({ runId: run.id, artworkId, surface: surface.key, option, triggeredBy, mode: providers.mode || config.generationMode }, 'Per-design regenerate started');
+  // Look: the reviewer's pick, else a roll avoiding the siblings AND the
+  // design being replaced (a "new design" in the same world is not new).
+  const library = await loadLibrary(repo);
+  const siblings = (await repo.listArtworks(run.id)).filter((a) => a.id !== still.id);
+  const looks = assignLooks({
+    library, jobs: [job], weekOf: promptSeed,
+    picks: styleKey ? { [surface.key]: { [job.option]: styleKey } } : {},
+    taken: { [surface.style]: surfaceStyleKeys(siblings, surface.style) },
+    previous: () => [still.style_key].filter(Boolean),
+    slotsPerSurface: 1,
+  });
+  logger.info({ runId: run.id, artworkId, surface: surface.key, option, triggeredBy, mode: providers.mode || config.generationMode, look: looks.get(job)?.key }, 'Per-design regenerate started');
 
   const workDir = deps.workDir || (await mkdtemp(path.join(os.tmpdir(), `wae-regen1-${run.id}-`)));
   try {
     await repo.setRunProgress?.(run.id, { phase: 'designs', done: 0, total: 1 });
-    const counts = await generateStill(job, { runId: run.id, weekOf: run.week_of, promptSeed, directStory: deps.directStory, repo, store, providers, guardrails, qa, workDir });
+    const counts = await generateStill(job, { runId: run.id, weekOf: run.week_of, promptSeed, look: looks.get(job), directStory: deps.directStory, repo, store, providers, guardrails, qa, workDir });
     await repo.setRunProgress?.(run.id, { phase: 'designs', done: 1, total: 1 });
     const status = counts.ready === 0 ? 'failed' : 'complete';
     await repo.setRunStatus(run.id, status);
@@ -637,6 +739,7 @@ async function spawnVariation({ source, resolvePrompt, triggeredBy, onStart, dep
       // A variation of a wild-theme design stays that theme (the prompt is
       // the source's), so its label rides along.
       themeLabelOverride: source.theme_label ?? null,
+      styleKeyOverride: source.style_key ?? null,
       familyId, parentArtworkId: source.id, changeNote,
     });
     await repo.setRunProgress?.(run.id, { phase: 'designs', done: 1, total: 1 });

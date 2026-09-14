@@ -115,6 +115,20 @@ export async function computeSpend({ repo, month } = {}) {
     if (est.topaz > 0) topazSeconds += seconds;
   }
 
+  // Style Library previews (2026-09-14): one Seedream still per new style
+  // (or per "re-preview"), recorded on the style row's analysis ledger.
+  let previewCount = 0;
+  let previewsUsd = 0;
+  if (typeof repo.listStyles === 'function') {
+    for (const st of await repo.listStyles()) {
+      for (const p of st.analysis?.preview_costs_usd || []) {
+        if (monthKey(p.at) !== m || !(p.usd > 0)) continue;
+        previewCount += 1;
+        previewsUsd += p.usd;
+      }
+    }
+  }
+
   const videosUsd = seedanceUsd + topazUsd; // full per-video cost (gen + upscale)
   const round = (n) => Math.round(n * 100) / 100;
   return {
@@ -130,7 +144,8 @@ export async function computeSpend({ repo, month } = {}) {
       seedance: { seconds: round(videoSeconds), usd: round(seedanceUsd) },
       topaz: { seconds: round(topazSeconds), usd: round(topazUsd) },
     },
-    totalUsd: round(stillsUsd + videosUsd),
+    stylePreviews: { count: previewCount, usd: round(previewsUsd) },
+    totalUsd: round(stillsUsd + videosUsd + previewsUsd),
     // The canonical rate book these figures come from (for display/audit).
     rates: falPricing.REFERENCE_PER_SECOND,
   };

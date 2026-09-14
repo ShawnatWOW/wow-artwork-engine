@@ -6,9 +6,19 @@ import { createApp } from './app.js';
 import { closePool } from './db/pool.js';
 import { startScheduler } from './services/scheduler.js';
 import { runWeek } from './services/orchestrator.js';
+import { getRepo } from './db/index.js';
+import { ensureBuiltins } from './services/styles/library.js';
 
 async function main() {
   await loadSecrets(); // Secrets Manager → process.env (no-op if unconfigured)
+  // Style Library: the 28 built-in styles live in the table from first boot
+  // (insert-if-missing — never overwrites a reviewer's edits).
+  try {
+    const added = await ensureBuiltins(getRepo());
+    if (added) logger.info({ added }, 'Style Library: built-in styles seeded');
+  } catch (err) {
+    logger.warn({ err: err.message }, 'Style Library seed skipped');
+  }
   const app = createApp();
 
   const server = app.listen(config.port, () => {

@@ -416,9 +416,23 @@ export const STYLE_POOL = [...WILD_THEMES, ...SPECTACULAR_FAMILIES];
  *     collide inside a surface a few percent of the time.)
  * Pure; exported for the UI/tests.
  */
-export function styleFor({ specKey, option, weekOf }) {
+export function styleFor({ specKey, option, weekOf, pool = STYLE_POOL, exclude } = {}) {
+  if (!pool?.length) return null;
   const base = hash(`style:${weekOf || 'week'}:${specKey}`);
-  return STYLE_POOL[(base + (option ?? 1)) % STYLE_POOL.length];
+  // Style Library (2026-09-14): the pool is whatever is enabled in the
+  // library, and a favourite is appended a second time so it comes up twice
+  // as often. The copies sit AFTER the plain ring (not interleaved) so the
+  // option stride still lands on three different worlds in the common case;
+  // `exclude` (sibling picks, last batch's looks) closes the rest — the roll
+  // walks forward to the first key not excluded.
+  const ring = [...pool, ...pool.filter((s) => s.favorite)];
+  const start = (base + (option ?? 1)) % ring.length;
+  if (!exclude || exclude.size === 0) return ring[start];
+  for (let step = 0; step < ring.length; step += 1) {
+    const s = ring[(start + step) % ring.length];
+    if (!exclude.has(s.key)) return s;
+  }
+  return ring[start];
 }
 
 // Two-act scene arcs — each one a STORY told through movement, not a motion
@@ -493,8 +507,8 @@ const joinCast = (cast) => `${cast.slice(0, -1).join(', ')} and ${cast.at(-1)}`;
 
 /** The narrative arc for one spectacular option. Pure; exported for tests.
  *  The wild slot (option 3) casts its rolled theme's characters. */
-export function arcFor({ specKey, option, weekOf }) {
-  const f = styleFor({ specKey, option, weekOf });
+export function arcFor({ specKey, option, weekOf, look }) {
+  const f = look ?? styleFor({ specKey, option, weekOf });
   const arc = SPECTACULAR_ARCS[hash(`arc:${weekOf || 'week'}:${specKey}:${option}`) % SPECTACULAR_ARCS.length];
   return arc(f.cast);
 }
@@ -658,11 +672,14 @@ const ONLY_CAST = (cast) =>
  * The still (first-frame) prompt for one option — art + composition only.
  * @param {{ style, specKey, option, weekOf }} job
  */
-export function buildStillPrompt({ style, specKey, option, weekOf }) {
+export function buildStillPrompt({ style, specKey, option, weekOf, look }) {
   // EVERY design rolls its own style now (Shawn, 2026-09-08). One picker, one
   // pool, all three surfaces — the EON surfaces use the rolled cast's hero as
-  // their single subject, the spectacular uses the whole cast.
-  const s = styleFor({ specKey, option, weekOf });
+  // their single subject, the spectacular uses the whole cast. `look` is the
+  // resolved style card when the orchestrator already rolled (or the
+  // reviewer picked) one — the Style Library path; the bare roll is the
+  // template/test path.
+  const s = look ?? styleFor({ specKey, option, weekOf });
   if (style === 'eon_connected') {
     const tr = travelFor(option);
     const subject = s.cast.hero;
@@ -700,7 +717,7 @@ export function buildStillPrompt({ style, specKey, option, weekOf }) {
     // full-bleed pieces built to ship now — pure immersive scenery, maximum
     // motion and story.
     if (option === 1) {
-      const arc = arcFor({ specKey, option, weekOf });
+      const arc = arcFor({ specKey, option, weekOf, look: f });
       return `An ultra-wide trompe-l'oeil deep-relief composition in perfectly frontal, dead-centered, ` +
         `symmetrical one-point perspective. Style: ${f.style}. ` +
         `${FRAME_GEOMETRY} ${FRAME_STYLE} ` +
@@ -743,11 +760,11 @@ export function buildStillPrompt({ style, specKey, option, weekOf }) {
  * end_image_url, so approval of this image is approval of the ending.
  * @param {{ style, specKey, option, weekOf }} job
  */
-export function buildClosingStillPrompt({ style, specKey, option, weekOf }) {
+export function buildClosingStillPrompt({ style, specKey, option, weekOf, look }) {
   if (style !== 'frame_break') return null; // storyboard is a spectacular-only feature
-  const f = styleFor({ specKey, option, weekOf });
+  const f = look ?? styleFor({ specKey, option, weekOf });
   const cast = joinCast(castList(f));
-  const arc = arcFor({ specKey, option, weekOf });
+  const arc = arcFor({ specKey, option, weekOf, look: f });
   return `An ultra-wide trompe-l'oeil deep-relief composition in perfectly frontal, dead-centered, ` +
     `symmetrical one-point perspective. Style: ${f.style}. ` +
     `${FRAME_GEOMETRY} ${FRAME_STYLE} ` +
@@ -825,10 +842,10 @@ const CAMERA_LOCK =
  * The motion prompt for one option — how the art moves within the frame.
  * @param {{ style, specKey, option, weekOf }} job
  */
-export function buildMotionPrompt({ style, specKey, option, weekOf }) {
+export function buildMotionPrompt({ style, specKey, option, weekOf, look }) {
   // Same roll as the still, so the motion always names the subject that was
   // actually painted (one picker, one seed — they cannot drift apart).
-  const s = styleFor({ specKey, option, weekOf });
+  const s = look ?? styleFor({ specKey, option, weekOf });
   const CONSTANCY =
     'Colors, saturation and lighting remain exactly constant for the entire duration; no fading, no color drift.';
   if (style === 'eon_connected') {
@@ -848,7 +865,7 @@ export function buildMotionPrompt({ style, specKey, option, weekOf }) {
     // SPLIT TRACKS (Shawn, 2026-08-18): only option 1 carries the painted
     // border; options 2+ are borderless full-bleed → framed motion rules
     // would describe a frame that isn't there.
-    return buildSpectacularArcPrompt({ specKey, option, weekOf, framed: option === 1 });
+    return buildSpectacularArcPrompt({ specKey, option, weekOf, framed: option === 1, look: s });
   }
   const solo = soloMotionFor({ specKey, option, weekOf })(s.cast.hero);
   return `${CAMERA_LOCK} Vivid ambient motion: ${solo}. ` +
@@ -953,7 +970,7 @@ export function composeSpectacularMotionPrompt(story, { framed = true } = {}) {
     `Rapid, exciting, high-energy movement — never static, never jittery. ${CONSTANCY_SPEC}`;
 }
 
-export function buildSpectacularArcPrompt({ specKey, option, weekOf, framed = true } = {}) {
+export function buildSpectacularArcPrompt({ specKey, option, weekOf, framed = true, look } = {}) {
   // TEMPLATE story — the fallback when the vision director (director.js)
   // can't run (no OpenAI key, fixture mode, or a failed call). A chase with
   // real stakes (Shawn, 2026-08-14: story = pursuit, scenery used as cover,
@@ -964,7 +981,7 @@ export function buildSpectacularArcPrompt({ specKey, option, weekOf, framed = tr
   const opt = option ?? 1;
   // Option 3 is the wild slot — the fallback story stars the wild cast so it
   // matches the design's still even when the vision director can't run.
-  const f = styleFor({ specKey: key, option: opt, weekOf });
+  const f = look ?? styleFor({ specKey: key, option: opt, weekOf });
   const { keeper, hero, companion } = f.cast;
   const front = framed ? 'up to the frame itself and back' : 'up to the very front and back';
   const story = `A chase with real stakes plays out across this one take: ${hero} flees across the full ` +
