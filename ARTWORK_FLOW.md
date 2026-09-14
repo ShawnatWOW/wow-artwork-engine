@@ -49,8 +49,56 @@ and its motion prompt read the SAME roll, they can never describe different crea
 **Guarantees.** The pick is seeded by the batch id, so every "New batch" rolls fresh while
 a given run always rebuilds identically. The three options of one sign are **always three
 different styles** — they are what Scott compares side by side. Each design's style name
-is stored on the row (`theme_label`) and shown as a **🎲 Random theme: <name>** badge on
-its card. Variations and tweaks inherit their source design's style and label.
+is stored on the row (`theme_label`, plus `style_key` since 2026-09-14) and shown as a
+**🎨 <name>** badge on its card. Variations and tweaks inherit their source design's style.
+
+---
+
+## The Style Library (Shawn, 2026-09-14)
+
+**The pool is a table now, and Scott fills it himself.** Scott kept sending Instagram
+links of artwork he liked and asking for those styles; each one was a code change. The
+**Styles** tab on the Artwork Engine page replaces that loop:
+
+1. **Add a style** — upload a screenshot / saved image / screen recording (PNG, JPG, MP4,
+   MOV, up to 250 MB; the phone's photo picker works), or paste a link — and name it.
+2. **The engine watches it.** ffmpeg samples up to 12 frames evenly across a clip, keeps a
+   thumbnail, and measures motion (scene-change scores → slow / lively / kinetic).
+3. **The style analyst writes the card** (`services/styles/analyze.js`, GPT-4o vision):
+   one prompt-ready sentence in the pool's own voice (always says "digital art"), a
+   three-creature cast native to that world (keeper / hero / companion), palette, medium,
+   era, lighting, linework, texture, composition, motion signature. Hard rules: never a
+   real artist, brand or franchise; never people or faces; placement/meta words are
+   scrubbed. The still guardrail runs on the card before it can ever reach a spend.
+4. **One preview still ($0.03)** of the look on the wide sign — the borderless spectacular
+   composition with the card's own cast — so Scott judges the *result*, not a description.
+5. **It joins the random pool immediately** (switch it off on its card to keep it for
+   picking by name). ★ Favourites roll twice as often and are what "Random favourite"
+   draws from.
+
+**Picking a style.** "New batch" opens the composer: one choice per slot (3 signs × 3
+options) — 🎲 Random (the default), ★ Random favourite, or any style by name — with "All
+random", "All favourites" and "Same style everywhere" shortcuts; the last choice is
+remembered per browser. Each sign's header has the same choice for **Add another design**
+/ **Replace unsaved designs** / a card's **Replace this design**. Every design's 🎨 badge
+opens **Add to favourites** and **Another design in this style**.
+
+**The roll.** `styleFor` now indexes into whatever is enabled + complete in the table
+(favourites appended once more), and the orchestrator resolves every design's look up
+front (`services/styles/library.js` → `assignLooks`): a named pick wins (even a switched-
+off style); random rolls skip the sign's other options in this batch and, pool permitting,
+what that sign wore in the *previous* batch. Still, motion, closing frame and story all
+read that one resolved look.
+
+**Links.** Instagram serves no media to an API — oEmbed (tokenless again since June 2026)
+returns embed HTML only. Pasted post/reel URLs go through **Apify's Instagram scraper**
+(public posts, no login, ~$0.003/post) when `APIFY_TOKEN` is set; without it the link path
+refuses with the honest fallback ("screenshot or screen-record it and upload"). Direct
+image/video URLs download as-is. **No analyst key** → the row is saved as *Needs details*
+with its frames; Scott (or Shawn) writes the sentence and cast by hand on the card.
+
+**Cost.** ≈ $0.05 per new style (analysis ≈ $0.02, preview $0.03). Previews are counted
+in the spend strip.
 
 ---
 
