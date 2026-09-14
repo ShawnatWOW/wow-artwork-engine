@@ -49,6 +49,10 @@ different worlds.
 4. **Make videos** from approved designs (4K, ~$8–16 each) — with a live progress counter.
 5. **Approve videos**, then **✉ Send to Jeff** (Google Drive + Gmail).
 6. **📤 Sent history** — every delivery ever made to Jeff, with Drive links.
+7. **🎨 Styles** — the Style Library: add a style from a screenshot, saved image, screen
+   recording or link (the engine watches it, writes the style card, paints a preview),
+   favourite it, switch it in/out of the random pool, and **pick a style per slot** before
+   a batch, a sign redo, or a single replacement.
 
 Guided **1 Pick designs → 2 Make videos → 3 Send to Jeff** flow, one clear next action
 at a time, "N of 3 reviewed" progress per sign.
@@ -68,6 +72,25 @@ at a time, "N of 3 reviewed" progress per sign.
 
 ## Changelog (this delivery arc)
 
+- **2026-09-14 — The Style Library: Scott adds his own styles, and picks a style per
+  slot.** Shawn: Scott "has been constantly requesting that I add new art styles… he sends
+  them all to me through Instagram links." The 28-style pool moved from code into a
+  `styles` table (seeded at boot, never overwriting an edit), and the Artwork Engine page
+  grew a **Styles** tab. Add a style = upload a screenshot / saved image / screen recording
+  (or paste a link) + a name → ffmpeg samples frames and measures motion → the GPT-4o
+  style analyst writes a card in the pool's exact voice (one sentence + a three-creature
+  cast; never an artist name, never people; guardrailed) → one $0.03 preview of the look
+  on the wide sign. New styles join the random pool at once; ★ favourites roll twice as
+  often. Picking: "New batch" opens a composer (3 signs × 3 slots: Random / Random
+  favourite / any style; remembered), each sign's Add/Replace has the same choice, and
+  every card's 🎨 badge offers "favourite" and "another design in this style". The roll
+  never repeats a sibling and (pool permitting) not last batch's looks. Every design now
+  records `style_key`, so cards show "used N× · M approved". Instagram links need the
+  Apify connector (`APIFY_TOKEN`; ~$0.003/post) — without it the link path says
+  "screenshot it and upload", which works from a phone today. Without an OpenAI key the
+  reference is saved as *Needs details* and the card can be written by hand. 29 new
+  engine tests (163 green); dashboard: proxy routes (raw 250 MB upload passthrough),
+  service client, `components/artwork-engine/StyleLibrary.tsx`.
 - **2026-09-08 (2) — Every style on the page is now randomized.** Shawn: "make all of the
   styles on the page randomly generate… so Scott can always have a random style for each
   generation." All nine designs in a batch now roll their own style from ONE pool — the

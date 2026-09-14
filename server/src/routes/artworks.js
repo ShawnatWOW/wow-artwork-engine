@@ -97,7 +97,7 @@ router.post('/artworks/:id/regenerate', async (req, res, next) => {
     if (artwork.status === 'superseded') return res.status(409).json({ error: 'already_replaced', message: 'This design was already replaced.' });
 
     const run = await new Promise((resolve, reject) => {
-      regenerateStill({ artworkId: artwork.id, triggeredBy: req.get('x-user-email') || 'dashboard', onStart: resolve })
+      regenerateStill({ artworkId: artwork.id, styleKey: req.body?.styleKey, triggeredBy: req.get('x-user-email') || 'dashboard', onStart: resolve })
         .catch((err) => { logger.error({ err: err.message }, 'Background per-design regenerate failed'); reject(err); });
     });
     res.status(202).json({ runId: run.id, artworkId: artwork.id, status: 'running' });
@@ -301,7 +301,7 @@ router.get('/artworks/:id/closing', async (req, res, next) => {
 });
 
 // Stream an object by key from whichever store is active.
-async function streamKey(key, res) {
+export async function streamKey(key, res) {
   if (!key) return res.status(404).json({ error: 'no_media' });
   const store = await getStore();
   const type = contentTypeFor(key);

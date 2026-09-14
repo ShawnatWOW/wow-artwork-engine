@@ -125,7 +125,23 @@ const config = {
     // each generated still and scripts its motion story from what is actually
     // in the picture.
     directorModel: process.env.ARTWORK_DIRECTOR_MODEL || 'gpt-4o-mini',
+    // Vision model for the STYLE ANALYST (services/styles/analyze.js) — looks
+    // at the frames of an uploaded reference (an Instagram post, a screenshot,
+    // a screen recording) and writes the style card. One call per new style,
+    // ~12 images, so the bigger model is affordable and worth it.
+    styleModel: process.env.ARTWORK_STYLE_MODEL || 'gpt-4o',
     baseUrl: process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1',
+  },
+
+  // Style Library (2026-09-14). Instagram links are fetched through Apify's
+  // Instagram scraper (public posts, no login) when a token is configured;
+  // without one the link path refuses with a "screenshot it instead" message
+  // and uploads still work. maxUploadBytes bounds a screen recording.
+  styles: {
+    apifyToken: process.env.APIFY_TOKEN || '',
+    apifyActor: process.env.APIFY_INSTAGRAM_ACTOR || 'apify~instagram-scraper',
+    maxUploadBytes: num(process.env.STYLE_MAX_UPLOAD_MB, 250) * 1024 * 1024,
+    maxFrames: num(process.env.STYLE_MAX_FRAMES, 12),
   },
 
   // Brand guardrails (locked: loose — block nudity only). Config-driven so
