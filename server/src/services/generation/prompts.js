@@ -690,6 +690,24 @@ const freedomFor = (s) => (limitedSubjects(s)
 // that many, the picture says so in one sentence, and the opening, poise and
 // template story are written for that many.
 const limitedSubjects = (s) => hasLock(s) && (s.subjectCount === 1 || s.subjectCount === 2);
+
+// MATERIAL looks (Shawn, 2026-09-15): "it just needs to be an all paint scene.
+// It's focusing too hard on making the subjects and not enough on making the
+// texture of the paint thick and beautiful." Every clause of the spectacular
+// prompt is about SUBJECTS — who stands where, doing what — and the treatment
+// is their coating. For a material look the order flips: the substance fills
+// the frame and IS the picture, its surface is what the eye is on, and any
+// creature is formed entirely out of it. Written right after the lock so it
+// outranks the composition boilerplate.
+export const isMaterial = (s) => hasLock(s) && s.sceneMode === 'material' && Boolean(s.material);
+const materialLead = (s) => (isMaterial(s)
+  ? `The entire picture is ${s.material}, edge to edge: every form in it is ${s.material} itself — ` +
+    `sculpted, heaped, colliding, splashing and dripping — and the SURFACE of the ${s.material} is the ` +
+    `subject of the picture: thick viscous ridges, wet glossy sheen, deep folds, heavy strands and fine ` +
+    `splash tendrils frozen mid-air, in ultra-macro detail. Any creature in the picture is formed entirely ` +
+    `out of ${s.material}, not wearing it — its body IS the substance, with no fur, skin, scales, feathers ` +
+    `or fabric anywhere. Far more of the frame is given to the substance and its texture than to any figure. `
+  : '');
 /** The creatures a spectacular design actually shows for this look. Pure; exported for tests. */
 export function subjectsFor(s) {
   if (!s?.cast) return [];
@@ -697,7 +715,11 @@ export function subjectsFor(s) {
   return castList(s);
 }
 // "The scene is home to an ensemble…" or, for a limited look, exactly N.
-const ensembleFor = (s, cast) => (limitedSubjects(s)
+const ensembleFor = (s, cast) => (isMaterial(s)
+  ? (limitedSubjects(s)
+    ? `Rising out of the ${s.material} ${s.subjectCount === 1 ? 'is one form' : 'are two forms'}, themselves made of it: ${cast} — ${s.subjectCount === 1 ? 'the only figure' : 'the only figures'} in the picture, huge in frame and half-dissolved back into the substance. `
+    : `Rising out of the ${s.material}, themselves made of it, are ${cast} — each half-dissolved back into the substance. `)
+  : limitedSubjects(s)
   ? (s.subjectCount === 1
     ? `The picture has exactly one living subject: ${cast} — colossal in frame, filling most of the height; it is the only creature anywhere in the picture, and the rest of the frame is the backdrop and the paint. `
     : `The picture has exactly two living subjects: ${cast} — both huge in frame, filling most of the height; they are the only creatures anywhere in the picture, and the rest of the frame is the backdrop and the paint. `)
@@ -713,9 +735,11 @@ const limitedOpening = (s, option) => {
   return `This is how the story opens: ${s.cast.keeper} dominates the ${near} half mid-motion while ` +
     `${s.cast.hero} streaks in from the far ${far} edge — the two about to collide, the whole picture already surging. `;
 };
-const poiseFor = (s) => (limitedSubjects(s)
-  ? 'The picture is visibly mid-motion: the treatment itself flows, splashes and churns, each subject caught mid-stride, colossal in frame, with unmistakable momentum. '
-  : `${CAST_POISE} `);
+const poiseFor = (s) => (isMaterial(s)
+  ? `The picture is visibly mid-motion: the ${s.material} itself heaves, flows, splashes and churns everywhere — thick surges, whipping strands, airborne droplets — with unmistakable momentum. `
+  : limitedSubjects(s)
+    ? 'The picture is visibly mid-motion: the treatment itself flows, splashes and churns, each subject caught mid-stride, colossal in frame, with unmistakable momentum. '
+    : `${CAST_POISE} `);
 
 // Energy clause for standalone stills — the subject should feel alive even as
 // a still frame. (Kept off the connected master, whose environment must stay
@@ -805,7 +829,7 @@ export function buildStillPrompt({ style, specKey, option, weekOf, look }) {
   if (style === 'eon_connected') {
     const tr = travelFor(option);
     const subject = s.cast.hero;
-    return `An ultra-wide continuous panoramic scene with dynamic motion throughout. Style: ${s.style}. ${styleLock(s, option)}` +
+    return `An ultra-wide continuous panoramic scene with dynamic motion throughout. Style: ${s.style}. ${styleLock(s, option)}${materialLead(s)}` +
       `The single hero subject is ${subject}, caught mid-motion and trailing ribbons of glowing light, ` +
       `positioned at the ${tr.start} edge, occupying about one third ` +
       `of the frame width and at least 60% of the frame height, with a continuous seamless environment extending ` +
@@ -841,7 +865,7 @@ export function buildStillPrompt({ style, specKey, option, weekOf, look }) {
     if (option === 1) {
       const arc = arcFor({ specKey, option, weekOf, look: f });
       return `An ultra-wide trompe-l'oeil deep-relief composition in perfectly frontal, dead-centered, ` +
-        `symmetrical one-point perspective. Style: ${f.style}. ${styleLock(f, option)}` +
+        `symmetrical one-point perspective. Style: ${f.style}. ${styleLock(f, option)}${materialLead(f)}` +
         `${FRAME_GEOMETRY} ${FRAME_STYLE} ` +
         ensembleFor(f, cast) +
         freedomFor(f) +
@@ -853,7 +877,7 @@ export function buildStillPrompt({ style, specKey, option, weekOf, look }) {
     }
     const { keeper, hero, companion } = f.cast;
     const [near, far] = option % 2 === 0 ? ['left', 'right'] : ['right', 'left'];
-    return `An ultra-wide cinematic full-bleed composition with sweeping 3D depth. Style: ${f.style}. ${styleLock(f, option)}` +
+    return `An ultra-wide cinematic full-bleed composition with sweeping 3D depth. Style: ${f.style}. ${styleLock(f, option)}${materialLead(f)}` +
       `The scene fills the ENTIRE picture edge to edge and corner to corner — one continuous, deep, ` +
       `living world with no border, no frame, no vignette, no dark edges: pure immersive scenery ` +
       `everywhere. ` +
@@ -868,7 +892,7 @@ export function buildStillPrompt({ style, specKey, option, weekOf, look }) {
   }
   // eon_single: tall portrait composition, composed to wrap (the left band is
   // cut away onto the pod's spine — see WRAP_BAND_SINGLE).
-  return `A tall vertical scene. Style: ${s.style}. ${styleLock(s, option)}` +
+  return `A tall vertical scene. Style: ${s.style}. ${styleLock(s, option)}${materialLead(s)}` +
     `The single hero subject is ${s.cast.hero}, filling most of the frame height with a strong central focal point ` +
     `and bold silhouette, centred in the right four-fifths of the frame. ` +
     `${WRAP_BAND_SINGLE} ${ENERGY} ${contrastFor(s)} ${SAFE}`;
@@ -888,7 +912,7 @@ export function buildClosingStillPrompt({ style, specKey, option, weekOf, look }
   const cast = joinCast(subjectsFor(f));
   const arc = arcFor({ specKey, option, weekOf, look: f });
   return `An ultra-wide trompe-l'oeil deep-relief composition in perfectly frontal, dead-centered, ` +
-    `symmetrical one-point perspective. Style: ${f.style}. ${styleLock(f, option)}` +
+    `symmetrical one-point perspective. Style: ${f.style}. ${styleLock(f, option)}${materialLead(f)}` +
     `${FRAME_GEOMETRY} ${FRAME_STYLE} ` +
     `${ensembleFor(f, cast)}${ONLY_CAST(cast)} ` +
     // "grand finale"/"closing pose of a performance" wording literalized into a
@@ -1172,7 +1196,7 @@ export function combineSpectacularActs(act1, act2) {
 
 export { CHOREOGRAPHIES, SOLO_MOTIONS, SPECTACULAR_FAMILIES, SPECTACULAR_ARCS, WILD_THEMES };
 export default {
-  colorCountOf, paletteFor, colorName, subjectsFor,
+  colorCountOf, paletteFor, colorName, subjectsFor, isMaterial,
   buildStillPrompt, buildClosingStillPrompt, buildMotionPrompt, buildSpectacularArcPrompt,
   composeSpectacularMotionPrompt, buildSpectacularAct, combineSpectacularActs, sanitizeMotionPrompt,
   travelFor, choreographyFor, soloMotionFor, arcFor, SPECTACULAR_FAMILIES,

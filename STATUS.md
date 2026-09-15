@@ -86,7 +86,11 @@ at a time, "N of 3 reviewed" progress per sign.
   "ensemble casts" rule, baked into the spectacular prompt. The analyst now counts the
   reference's subjects; a one- or two-subject look trims the cast, the opening, the closing
   frame and the story to match (verified live: two paint-dipped subjects, nothing else).
-  Apify + OpenAI keys are in the production env. 171/171 tests.
+  Then the texture: "it just needs to be an all paint scene." The analyst now decides
+  whether a look is a *material* (the substance IS the picture) or a *style on subjects*;
+  material looks lead the prompt with the substance and its surface, the creatures are
+  formed of it, and mode / material / subject count are editable on the card.
+  Apify + OpenAI keys are in the production env. 173/173 tests.
 
 - **2026-09-14 — The Style Library: Scott adds his own styles, and picks a style per
   slot.** Shawn: Scott "has been constantly requesting that I add new art styles… he sends

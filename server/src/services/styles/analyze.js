@@ -28,6 +28,8 @@ Return STRICT JSON with exactly these fields:
  "signature": ["<3 to 6 short non-negotiable rules that define this look, each 4-14 words. Always cover: the surface treatment, the colour count, the backdrop, the scale/framing, and HOW MANY subjects share a frame (e.g. 'one or two subjects only, never a crowd'). E.g. 'every figure and object is coated in thick glossy wet paint as if dipped', 'exactly two flat colours per scene, one per body, colliding where they touch', 'plain pale lavender studio backdrop, empty and evenly lit', 'macro close-up: subjects fill the frame, no landscape'>"],
  "backdrop": "<what the background is in this look, in 3-12 words — e.g. 'plain pale lavender studio wall', 'deep black void', 'dense neon jungle'>",
  "subject_count": <how many living subjects share ONE frame in the reference: 1, 2, 3, or "many" — a portrait of one figure is 1, two bodies colliding is 2, a bustling scene is "many">,
+ "scene_mode": "<'material' when the picture IS a substance — paint, liquid, smoke, fabric, glass, sand — and the subjects are made of it or drowned in it, so the texture of that substance is what the eye is on; 'subject' when the treatment is a rendering style applied to recognisable characters and places (cel animation, risograph, pixel art…)>",
+ "material": "<for 'material' looks: the substance itself in 3-8 words, e.g. 'thick glossy wet acrylic paint', 'molten chrome', 'coloured smoke'; otherwise ''>",
  "color_rule": "<START WITH HOW MANY distinct colours share one frame, then how they are used, 4-16 words — e.g. 'two saturated flat colours per scene, one per body, no gradients', 'three inks overprinted', 'many: full rainbow spectrum everywhere'>",
  "medium": "<e.g. cel animation, gouache, 3D render, high-speed studio photography of liquid paint, risograph, pixel art>",
  "era": "<the period or movement it evokes, or 'contemporary'>",
@@ -49,6 +51,7 @@ Return STRICT JSON with exactly these fields:
 HARD RULES:
 - Never name a real artist, studio, brand, franchise, film, game or character. Describe the look in your own words instead.
 - If the reference shows PEOPLE, do not describe them as people — describe the TREATMENT applied to them (coated, sculpted, painted, cel-shaded…) and give that same treatment to the cast. The treatment is the style; the people are just the subject.
+- For a 'material' look, every cast member is a creature SCULPTED FROM the material — write it that way ('a whale sculpted from thick yellow paint', 'a hare cast in molten chrome'), never an animal with the material on it ('an eagle streaked with paint' still comes out with feathers).
 - The cast are CONCRETE, tangible, clearly non-humanoid creatures — animals, beasts, mythic creatures, plants, living objects — that CARRY the treatment on their own bodies, e.g. 'a colossal bison dipped head to hoof in glossy cobalt paint', 'a hare cast in thick dripping magenta paint mid-leap'. Never abstract effects as cast members (no 'a vortex of paint', 'a flow of colour', 'a burst of light' — those are scenery, not characters). Never people, never faces, never humanoid figures (no sprites, elves, golems with faces, robots shaped like people), never anything photorealistic.
 - Never use these words anywhere: billboard, sign, panel, pod, spectacular, artwork, poster, framed, canvas, display, screen, logo, text.
 - No text or lettering in any description.
@@ -107,13 +110,19 @@ export function normalizeCard(raw) {
   // ensemble requirement, right for the house looks, wrong for a portrait.
   const sc = String(raw.subject_count ?? '').trim().toLowerCase();
   const subject_count = /^[123]$/.test(sc) ? Number(sc) : (sc ? 'many' : null);
+  // MATERIAL looks (Shawn, 2026-09-15: "it just needs to be an all paint
+  // scene… not enough on the texture of the paint"): the substance is the
+  // picture and the subjects are made of it — the prompt leads with the
+  // material and its surface, not with who is standing where.
+  const scene_mode = String(raw.scene_mode ?? '').trim().toLowerCase() === 'material' ? 'material' : 'subject';
+  const material = scene_mode === 'material' ? s(raw.material, 80) : '';
   const confidence = Number(raw.confidence);
   return {
     label: s(raw.label, 60) || null,
     style,
     cast,
     analysis: {
-      signature, backdrop: s(raw.backdrop, 120), color_rule: s(raw.color_rule, 140), subject_count,
+      signature, backdrop: s(raw.backdrop, 120), color_rule: s(raw.color_rule, 140), subject_count, scene_mode, material,
       medium: s(raw.medium, 80), era: s(raw.era, 80), palette,
       lighting: s(raw.lighting, 120), linework: s(raw.linework, 120), texture: s(raw.texture, 120),
       composition: s(raw.composition, 160), motion_signature: s(raw.motion_signature, 160),
