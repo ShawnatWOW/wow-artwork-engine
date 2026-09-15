@@ -72,6 +72,18 @@ at a time, "N of 3 reviewed" progress per sign.
 
 ## Changelog (this delivery arc)
 
+- **2026-09-15 — The style lock + Re-analyze.** Scott's first live style from a reel
+  ("Explosive Color Clash": paint-dipped bodies, two colours per shot, lavender studio
+  backdrop) generated as a rainbow vortex on a black beach. Root cause: the analyst
+  described the subject not the treatment, and only its one sentence reached a prompt
+  whose boilerplate demanded a dark background, a world edge to edge and "creatures,
+  people". The analyst now returns signature rules + backdrop + colour rule; every still
+  prompt writes them in as an override right after the style sentence, the conflicting
+  clauses yield for locked looks, and the colour rule's count picks the palette colours
+  per design. Verified live before/after on the same reel. Cards show their rules;
+  older cards get a **Re-analyze** button (rewrites from the saved frames, no re-upload).
+  Apify + OpenAI keys are in the production env. 168/168 tests.
+
 - **2026-09-14 — The Style Library: Scott adds his own styles, and picks a style per
   slot.** Shawn: Scott "has been constantly requesting that I add new art styles… he sends
   them all to me through Instagram links." The 28-style pool moved from code into a

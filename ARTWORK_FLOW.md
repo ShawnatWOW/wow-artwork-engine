@@ -100,6 +100,36 @@ with its frames; Scott (or Shawn) writes the sentence and cast by hand on the ca
 **Cost.** ≈ $0.05 per new style (analysis ≈ $0.02, preview $0.03). Previews are counted
 in the spend strip.
 
+**The style lock (2026-09-15 — "Explosive Color Clash").** The first live style from an
+Instagram reel (bodies dipped in thick glossy paint, two flat colours per shot, a plain
+lavender studio backdrop, macro close-up) came out as a rainbow paint vortex over a
+black-sky beach with tiny people. Two causes, both fixed:
+
+1. *The card was generic.* The analyst wrote "an eruption of vividly colored paint
+   splashes" — the subject, not the treatment. It now works like a matte painter copying
+   a technique and returns a **`signature`** (3–6 non-negotiable rules: surface treatment,
+   colour count, backdrop, scale), a **`backdrop`** and a **`color_rule`**, and when the
+   reference shows people it describes the treatment applied to them and gives it to the
+   (clearly non-humanoid) cast.
+2. *Only the one sentence reached the prompt*, and the scene boilerplate overruled it:
+   "deep, dark background", "one continuous deep living world edge to edge", "full
+   creative freedom — creatures, people". Every still prompt now writes the lock right
+   after `Style:` — *"These rules define the look and override any other direction here:
+   …; the backdrop is …; colour: … — in this scene exactly #A and #B"* — and for a locked
+   look the dark-background clause and the "creatures, people" freedom yield to it. The
+   colour rule's count picks that many palette colours per design (rotated by option so
+   siblings differ). `SAFE` now reads "painted, illustrated, sculpted or rendered" so a
+   glossy 3D treatment isn't fought by "painterly". Built-ins carry no lock → unchanged.
+
+   Verified live (same reel, same slot, $0.03 each): before = rainbow creature on a black
+   field; after = paint-coated creatures under studio lights on a lavender wall in the
+   card's colours.
+
+**Re-analyze.** A style keeps its frames, so `POST /styles/:id/reanalyze` (the card's
+*Re-analyze* button) rewrites the card with the current analyst and paints a fresh
+preview — no re-upload. The reviewer's name is kept; a failed re-analysis leaves a
+usable card usable.
+
 ---
 
 ## The flow, end to end

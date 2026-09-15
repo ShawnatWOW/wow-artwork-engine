@@ -157,7 +157,13 @@ test('toLook / isComplete: a row needs a sentence and a full cast', () => {
   assert.equal(isComplete({ style: 'x', cast: { keeper: 'a', hero: 'b' } }), false);
   assert.equal(isComplete({ style: '', cast: { keeper: 'a', hero: 'b', companion: 'c' } }), false);
   const l = toLook({ id: 3, key: 'k', label: 'L', style: 's', cast: { hero: 'h' }, favorite: 1, weight: '2', source_type: 'upload' });
-  assert.deepEqual(l, { id: 3, key: 'k', label: 'L', style: 's', cast: { keeper: '', hero: 'h', companion: '' }, favorite: true, weight: 2, sourceType: 'upload' });
+  assert.deepEqual(l, { id: 3, key: 'k', label: 'L', style: 's', cast: { keeper: '', hero: 'h', companion: '' }, favorite: true, weight: 2, sourceType: 'upload', signature: [], backdrop: '', colorRule: '', palette: [] });
+  // The style lock rides along from the analysis (2026-09-15).
+  const locked = toLook({ key: 'k', label: 'L', style: 's', cast: CARD.cast, analysis: { signature: ['coated in paint', ''], backdrop: 'a pale wall', color_rule: 'two colours', palette: ['#ff0000'] } });
+  assert.deepEqual(locked.signature, ['coated in paint']);
+  assert.equal(locked.backdrop, 'a pale wall');
+  assert.equal(locked.colorRule, 'two colours');
+  assert.deepEqual(locked.palette, ['#ff0000']);
 });
 
 // --- analyst -------------------------------------------------------------------
@@ -516,4 +522,120 @@ test('buildStillPrompt/buildMotionPrompt accept a resolved look and ignore the r
       assert.match(m, /toucan|jaguar|tree frog/);
     }
   }
+});
+
+// --- the style lock (2026-09-15) ------------------------------------------------
+
+test('style lock: a card with a signature writes its rules, backdrop and colour count into every still; built-ins are untouched', () => {
+  const locked = toLook({
+    key: 'clash', label: 'Explosive Color Clash', style: 'high-speed studio photography of liquid paint — digital art',
+    cast: { keeper: 'a colossal paint-dipped bison', hero: 'a paint-coated hare mid-leap', companion: 'a tiny paint-dipped beetle' },
+    analysis: {
+      signature: ['every object is coated in thick drippy paint', 'macro close-up: subjects dominate the frame'],
+      backdrop: 'plain pastel lavender studio wall',
+      color_rule: 'two saturated colours collide per scene',
+      palette: ['#0052A4', '#F2B134', '#F23005', '#84C441', '#F25294'],
+    },
+  });
+  for (const style of ['frame_break', 'eon_connected', 'eon_single']) {
+    for (const option of [1, 2, 3]) {
+      const p = buildStillPrompt({ style, specKey: 'x', option, weekOf: 'w', look: locked });
+      assert.match(p, /These rules define the look and override any other direction here: every object is coated in thick drippy paint; macro close-up/);
+      assert.match(p, /the backdrop is plain pastel lavender studio wall/);
+      // The colour rule says TWO, so exactly two palette colours are named — and the dark-background demand yields.
+      assert.match(p, /this scene uses only [a-z -]+ and [a-z -]+, nothing else/);
+      assert.doesNotMatch(p, /deep, dark background/);
+      assert.match(p, /readable from far away/);
+      // "creatures, people" creative freedom gives way to freedom of subject only.
+      assert.doesNotMatch(p, /creatures, people, living objects/);
+      assert.doesNotMatch(p, DOMAIN_TERMS);
+      assert.doesNotMatch(p, META_TERMS);
+    }
+  }
+  // Siblings get different colour pairs (rotated by option).
+  const pair = (o) => /uses only ([a-z -]+) and ([a-z -]+), nothing else/.exec(buildStillPrompt({ style: 'eon_single', specKey: 'x', option: o, weekOf: 'w', look: locked })).slice(1);
+  assert.notDeepEqual(pair(1), pair(2));
+  // A built-in has no lock: the classic clauses stay exactly as they were.
+  const plain = toLook({ key: 'k', label: 'K', style: 'papercut storybook digital art', cast: CARD.cast });
+  const p = buildStillPrompt({ style: 'frame_break', specKey: 'x', option: 2, weekOf: 'w', look: plain });
+  assert.doesNotMatch(p, /These rules define the look/);
+  assert.match(p, /deep, dark background/);
+  assert.match(p, /full creative freedom/);
+});
+
+test('colorCountOf / paletteFor: the rule\'s count wins, otherwise up to five', async () => {
+  const { colorCountOf, paletteFor } = await import('../src/services/generation/prompts.js');
+  assert.equal(colorCountOf('two saturated colours per scene'), 2);
+  assert.equal(colorCountOf('3 flat inks'), 3);
+  assert.equal(colorCountOf('full rainbow spectrum everywhere'), null);
+  const pal = ['#1', '#2', '#3', '#4', '#5', '#6'];
+  assert.deepEqual(paletteFor({ palette: pal, colorRule: 'two colours' }, 1), ['#1', '#2']);
+  assert.deepEqual(paletteFor({ palette: pal, colorRule: 'two colours' }, 2), ['#2', '#3']);
+  assert.deepEqual(paletteFor({ palette: pal, colorRule: 'rainbow' }, 1), ['#1', '#2', '#3', '#4', '#5']);
+  assert.deepEqual(paletteFor({ palette: [], colorRule: 'two' }, 1), []);
+});
+
+test('normalizeCard keeps the signature, backdrop and colour rule (scrubbed)', () => {
+  const card = normalizeCard({ ...CARD, signature: ['coated in paint like a poster', '', 'two colours'], backdrop: 'a plain sign wall', color_rule: 'two flat colours on a canvas' });
+  assert.deepEqual(card.analysis.signature, ['coated in paint like a print', 'two colours']);
+  assert.equal(card.analysis.backdrop, 'a plain scene wall');
+  assert.equal(card.analysis.color_rule, 'two flat colours on a surface');
+  assert.deepEqual(normalizeCard(CARD).analysis.signature, []);
+});
+
+test('reanalyzeStyle: rewrites the card from the stored frames, keeps the name, paints a new preview; refuses built-ins', async (t) => {
+  if (!(await hasFfmpeg())) return t.skip('ffmpeg not installed');
+  const { reanalyzeStyle } = await import('../src/services/styles/ingest.js');
+  const { base, repo, store } = await harness();
+  try {
+    const mp4 = await makeMp4(base, 'reel.mp4', 3);
+    const first = normalizeCard(CARD);
+    const { done } = await ingestStyle({ name: 'Scott Reel', source: { kind: 'file', path: mp4, filename: 'reel.mp4' }, deps: { repo, store, providers, analyze: async () => first } });
+    const v1 = await done;
+    assert.equal(v1.status, 'ready');
+    const previewBefore = v1.preview_key;
+
+    let seenFrames = 0;
+    const second = normalizeCard({ ...CARD, label: 'Analyst Name', style: 'paint-dipped studio digital art — two flat colours', signature: ['coated in thick paint'], backdrop: 'a pale wall', color_rule: 'two colours' });
+    const v2 = await reanalyzeStyle({ styleId: v1.id, deps: { repo, store, providers, analyze: async ({ frames, hints }) => { seenFrames = frames.length; assert.equal(hints.name, 'Scott Reel'); assert.equal(hints.isVideo, true); return second; } } });
+    assert.equal(seenFrames, 3, 'the stored frames were handed to the analyst');
+    assert.equal(v2.status, 'ready');
+    assert.equal(v2.label, 'Scott Reel', 'the reviewer\'s name survives');
+    assert.match(v2.style, /paint-dipped/);
+    assert.deepEqual(v2.analysis.signature, ['coated in thick paint']);
+    assert.ok(v2.analysis.reanalyzed_at);
+    assert.notEqual(v2.preview_key, previewBefore, 'a fresh preview was painted');
+    assert.match(v2.analysis.preview_prompt, /These rules define the look/);
+    assert.equal(v2.frame_keys.length, 3, 'frames kept');
+
+    // A failed re-analysis leaves a usable card usable.
+    const v3 = await reanalyzeStyle({ styleId: v1.id, deps: { repo, store, providers, analyze: async () => null } });
+    assert.equal(v3.status, 'ready');
+    assert.match(v3.error, /by hand/);
+    assert.match(v3.style, /paint-dipped/);
+
+    await ensureBuiltins(repo);
+    const cyber = await repo.getStyleByKey('cyberpunk');
+    await assert.rejects(reanalyzeStyle({ styleId: cyber.id, deps: { repo, store, providers } }), (e) => e.code === 'builtin');
+  } finally { await rm(base, { recursive: true, force: true }); }
+});
+
+test('missingFields names exactly what an incomplete analyst answer lacks', async () => {
+  const { missingFields } = await import('../src/services/styles/analyze.js');
+  assert.deepEqual(missingFields(null), ['everything']);
+  assert.deepEqual(missingFields({ style: 'x', cast: { keeper: 'a', hero: 'b', companion: 'c' } }), []);
+  assert.deepEqual(missingFields({ style: '', cast: { keeper: 'a', hero: '', companion: 'c' } }), ['style', 'cast.hero']);
+  assert.deepEqual(missingFields({}), ['style', 'cast.keeper', 'cast.hero', 'cast.companion']);
+});
+
+test('colorName turns palette hex into the plain names the painter obeys', async () => {
+  const { colorName } = await import('../src/services/generation/prompts.js');
+  assert.equal(colorName('#F2B134'), 'golden yellow');
+  assert.equal(colorName('#F23005'), 'vermilion orange-red');
+  assert.equal(colorName('#0052A4'), 'cobalt blue');
+  assert.equal(colorName('#84C441'), 'lime green');
+  assert.equal(colorName('#F25294'), 'crimson pink');
+  assert.equal(colorName('#ffffff'), 'white');
+  assert.equal(colorName('#101010'), 'black');
+  assert.equal(colorName('nope'), 'nope');
 });

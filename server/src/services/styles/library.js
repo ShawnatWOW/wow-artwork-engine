@@ -17,6 +17,7 @@ export const FAVORITES = 'favorites';
 /** A repo row → the shape prompts.js consumes. Pure. */
 export function toLook(row) {
   const cast = row.cast && typeof row.cast === 'object' ? row.cast : {};
+  const an = row.analysis && typeof row.analysis === 'object' ? row.analysis : {};
   return {
     id: row.id ?? null,
     key: row.key,
@@ -26,6 +27,15 @@ export function toLook(row) {
     favorite: Boolean(row.favorite),
     weight: Number(row.weight ?? 1) || 1,
     sourceType: row.source_type ?? 'builtin',
+    // The STYLE LOCK (2026-09-15): the analyst's non-negotiable rules,
+    // backdrop and colour rule — prompts.js writes them into every still so a
+    // reference's treatment survives the scene boilerplate. Empty for the
+    // built-ins (their sentence is the whole card), so their prompts are
+    // unchanged.
+    signature: Array.isArray(an.signature) ? an.signature.filter(Boolean).slice(0, 6) : [],
+    backdrop: an.backdrop || '',
+    colorRule: an.color_rule || '',
+    palette: Array.isArray(an.palette) ? an.palette.slice(0, 6) : [],
   };
 }
 

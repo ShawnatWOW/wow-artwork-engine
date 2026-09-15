@@ -17,32 +17,38 @@ import { readFile } from 'node:fs/promises';
 import config from '../../config/index.js';
 import logger from '../../config/logger.js';
 
-const SYSTEM = `You are the style analyst for a studio that paints giant animated outdoor artworks in many visual styles. You are shown frames from a reference piece the creative director liked. Your job is to capture its VISUAL STYLE — not its subject — as a reusable style card, so new scenes with entirely different subjects can be painted to look like it.
+const SYSTEM = `You are the style analyst for a studio that paints giant animated outdoor artworks in many visual styles. You are shown frames from a reference piece the creative director liked. Your job is to capture what makes it LOOK the way it does — the TREATMENT, not the subject — as a reusable style card, so new scenes with entirely different subjects come out unmistakably in this look.
+
+Think like a matte painter copying a technique: what is every surface made of? how many colours are on screen at once and how are they used? what is the backdrop? how close is the camera? what is the lighting? what texture does the medium have? The card must let someone who has never seen the reference reproduce those decisions.
 
 Return STRICT JSON with exactly these fields:
 {
  "label": "<2-4 word name for this style, Title Case>",
- "style": "<ONE sentence, 20-40 words, the genre first, ending in the phrase 'digital art' somewhere in it. Concrete visual descriptors only: medium, linework, palette, lighting, texture, era. Example of the voice: 'cyberpunk digital art — a rain-slicked neon megacity of holographic light, chrome towers and electric color'>",
- "medium": "<e.g. cel animation, gouache, 3D render, risograph, pixel art>",
+ "style": "<ONE sentence, 25-45 words, that LEADS with the surface treatment and the medium, then colour rule, backdrop, lighting and texture, and contains the phrase 'digital art'. Concrete and specific — never generic words like 'vibrant', 'dynamic', 'bold' on their own. Example of the voice: 'cyberpunk digital art — a rain-slicked neon megacity of holographic light, chrome towers and electric color'>",
+ "signature": ["<3 to 6 short non-negotiable rules that define this look, each 4-14 words. Always cover: the surface treatment, the colour count, the backdrop, the scale/framing, and HOW MANY subjects share a frame (e.g. 'one or two subjects only, never a crowd'). E.g. 'every figure and object is coated in thick glossy wet paint as if dipped', 'exactly two flat colours per scene, one per body, colliding where they touch', 'plain pale lavender studio backdrop, empty and evenly lit', 'macro close-up: subjects fill the frame, no landscape'>"],
+ "backdrop": "<what the background is in this look, in 3-12 words — e.g. 'plain pale lavender studio wall', 'deep black void', 'dense neon jungle'>",
+ "color_rule": "<START WITH HOW MANY distinct colours share one frame, then how they are used, 4-16 words — e.g. 'two saturated flat colours per scene, one per body, no gradients', 'three inks overprinted', 'many: full rainbow spectrum everywhere'>",
+ "medium": "<e.g. cel animation, gouache, 3D render, high-speed studio photography of liquid paint, risograph, pixel art>",
  "era": "<the period or movement it evokes, or 'contemporary'>",
  "palette": ["<hex>", "<hex>", "<hex>", "<hex>", "<hex>"],
  "lighting": "<one short phrase>",
  "linework": "<one short phrase>",
  "texture": "<one short phrase>",
- "composition": "<one short phrase about depth, framing, density>",
+ "composition": "<one short phrase about scale, framing, density — how much of the frame the subject fills, how empty the rest is>",
  "motion_signature": "<one short phrase: how things move in this world, drawn from the frames and the motion hint>",
  "cast": {
-   "keeper": "<a colossal, slow, awe-inspiring non-human creature or living object native to this world, described in 6-12 words>",
-   "hero": "<a mid-sized, fast, agile non-human creature or living object, 6-12 words>",
-   "companion": "<a small, quick, playful non-human creature or living object, 6-12 words>"
+   "keeper": "<a colossal, slow, awe-inspiring non-human creature or living object native to this world, rendered WITH this style's treatment, 6-14 words>",
+   "hero": "<a mid-sized, fast, agile non-human creature or living object, with the treatment, 6-14 words>",
+   "companion": "<a small, quick, playful non-human creature or living object, with the treatment, 6-14 words>"
  },
- "avoid": ["<up to 4 things that would break the look, e.g. 'photorealism', 'muted colors'>"],
+ "avoid": ["<up to 4 things that would break the look, e.g. 'photorealism', 'muted colors', 'busy landscape backgrounds'>"],
  "confidence": <0-1>
 }
 
 HARD RULES:
 - Never name a real artist, studio, brand, franchise, film, game or character. Describe the look in your own words instead.
-- The cast are stylized non-human beings (animals, mythic creatures, robots, plants, living objects). Never people, never faces, never anything photorealistic.
+- If the reference shows PEOPLE, do not describe them as people — describe the TREATMENT applied to them (coated, sculpted, painted, cel-shaded…) and give that same treatment to the cast. The treatment is the style; the people are just the subject.
+- The cast are CONCRETE, tangible, clearly non-humanoid creatures — animals, beasts, mythic creatures, plants, living objects — that CARRY the treatment on their own bodies, e.g. 'a colossal bison dipped head to hoof in glossy cobalt paint', 'a hare cast in thick dripping magenta paint mid-leap'. Never abstract effects as cast members (no 'a vortex of paint', 'a flow of colour', 'a burst of light' — those are scenery, not characters). Never people, never faces, never humanoid figures (no sprites, elves, golems with faces, robots shaped like people), never anything photorealistic.
 - Never use these words anywhere: billboard, sign, panel, pod, spectacular, artwork, poster, framed, canvas, display, screen, logo, text.
 - No text or lettering in any description.
 - If the frames are a montage of several styles, describe the dominant one.`;
@@ -88,12 +94,19 @@ export function normalizeCard(raw) {
     ? raw.palette.map((c) => String(c).trim()).filter((c) => /^#?[0-9a-f]{6}$/i.test(c)).map((c) => (c.startsWith('#') ? c : `#${c}`)).slice(0, 8)
     : [];
   const avoid = Array.isArray(raw.avoid) ? raw.avoid.map((a) => s(a, 60)).filter(Boolean).slice(0, 6) : [];
+  // The signature (2026-09-15): the rules the generator must honour even when
+  // the composition boilerplate pulls the other way. Live finding: a paint-
+  // dipped two-tone studio look came out as a rainbow landscape because only
+  // the one-sentence `style` reached the prompt and the scene rules
+  // ("deep dark background", "full creative freedom", "living world") won.
+  const signature = Array.isArray(raw.signature) ? raw.signature.map((a) => s(a, 140)).filter(Boolean).slice(0, 6) : [];
   const confidence = Number(raw.confidence);
   return {
     label: s(raw.label, 60) || null,
     style,
     cast,
     analysis: {
+      signature, backdrop: s(raw.backdrop, 120), color_rule: s(raw.color_rule, 140),
       medium: s(raw.medium, 80), era: s(raw.era, 80), palette,
       lighting: s(raw.lighting, 120), linework: s(raw.linework, 120), texture: s(raw.texture, 120),
       composition: s(raw.composition, 160), motion_signature: s(raw.motion_signature, 160),
@@ -124,23 +137,37 @@ export async function analyzeStyle({ frames, hints = {} } = {}) {
       'Write the style card. JSON only.',
     ].filter(Boolean);
 
-    const resp = await fetch(`${baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model: styleModel,
-        max_tokens: 900,
-        response_format: { type: 'json_object' },
-        messages: [
-          { role: 'system', content: SYSTEM },
-          { role: 'user', content: [{ type: 'text', text: lines.join(' ') }, ...images] },
-        ],
-      }),
-    });
-    if (!resp.ok) throw new Error(`openai ${resp.status}`);
-    const data = await resp.json();
-    const card = normalizeCard(JSON.parse(data.choices?.[0]?.message?.content || '{}'));
-    if (!card) logger.warn('Style analyst returned an incomplete card');
+    const ask = async (extraUser) => {
+      const resp = await fetch(`${baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify({
+          model: styleModel,
+          max_tokens: 900,
+          response_format: { type: 'json_object' },
+          messages: [
+            { role: 'system', content: SYSTEM },
+            { role: 'user', content: [{ type: 'text', text: lines.join(' ') + (extraUser ? ` ${extraUser}` : '') }, ...images] },
+          ],
+        }),
+      });
+      if (!resp.ok) throw new Error(`openai ${resp.status}`);
+      const data = await resp.json();
+      return JSON.parse(data.choices?.[0]?.message?.content || '{}');
+    };
+    let raw = await ask();
+    let card = normalizeCard(raw);
+    if (!card) {
+      // One retry with the gap named: the model occasionally drops a cast
+      // member or the style sentence, and a second ask fixes it far more
+      // often than it repeats (live, 2026-09-15). A style must not land as
+      // "Needs details" over a one-off omission.
+      const missing = missingFields(raw);
+      logger.warn({ missing }, 'Style analyst returned an incomplete card — asking once more');
+      raw = await ask(`Your previous answer was missing or empty: ${missing.join(', ')}. Return the complete card with every field filled.`);
+      card = normalizeCard(raw);
+      if (!card) logger.warn({ missing: missingFields(raw) }, 'Style analyst returned an incomplete card twice');
+    }
     return card;
   } catch (err) {
     logger.warn({ err: err.message }, 'Style analyst failed');
@@ -148,4 +175,13 @@ export async function analyzeStyle({ frames, hints = {} } = {}) {
   }
 }
 
-export default { analyzeStyle, normalizeCard, scrub };
+/** Which essentials a raw answer lacks. Pure; exported for tests. */
+export function missingFields(raw) {
+  const out = [];
+  if (!raw || typeof raw !== 'object') return ['everything'];
+  if (!String(raw.style || '').trim()) out.push('style');
+  for (const k of ['keeper', 'hero', 'companion']) if (!String(raw.cast?.[k] || '').trim()) out.push(`cast.${k}`);
+  return out;
+}
+
+export default { analyzeStyle, normalizeCard, missingFields, scrub };

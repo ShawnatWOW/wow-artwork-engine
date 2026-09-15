@@ -7,6 +7,7 @@
 //   PATCH  /api/styles/:id                { label, style, cast, enabled, favorite, weight }
 //   DELETE /api/styles/:id                user-added only; built-ins are disabled, not deleted
 //   POST   /api/styles/:id/preview        re-render the "on the sign" preview → 202
+//   POST   /api/styles/:id/reanalyze      rewrite the card from the stored frames → 202
 //   GET    /api/styles/:id/media/:kind    thumbnail | preview | preview_full | source | frame-<n>
 //
 // Uploads arrive as a raw body (the dashboard proxy forwards the bytes with
@@ -20,7 +21,7 @@ import path from 'node:path';
 import config from '../config/index.js';
 import logger from '../config/logger.js';
 import { getRepo } from '../db/index.js';
-import { ingestStyle, previewStyle } from '../services/styles/ingest.js';
+import { ingestStyle, previewStyle, reanalyzeStyle } from '../services/styles/ingest.js';
 import { ensureBuiltins, isComplete } from '../services/styles/library.js';
 import { streamKey } from './artworks.js';
 
@@ -170,6 +171,20 @@ router.post('/styles/:id/preview', async (req, res, next) => {
     // Fire and poll — the still takes ~20s live.
     previewStyle({ styleId: row.id }).catch((err) => logger.warn({ styleId: row.id, err: err.message }, 'Preview re-render failed'));
     res.status(202).json({ style: present(row) });
+  } catch (err) { next(err); }
+});
+
+// Re-run the analyst on the stored frames (a better analyst, or a renamed
+// style) — no re-upload. 202 + poll like a first-time add.
+router.post('/styles/:id/reanalyze', async (req, res, next) => {
+  try {
+    const row = await loadStyle(req, res);
+    if (!row) return;
+    if (row.source_type === 'builtin') return res.status(409).json({ error: 'builtin', message: 'Built-in styles have no reference to re-analyze.' });
+    if (!row.frame_keys?.length) return res.status(409).json({ error: 'no_frames', message: 'This style has no stored frames — add it again from the reference.' });
+    if (row.status === 'analyzing') return res.status(409).json({ error: 'busy', message: 'This style is already being analyzed.' });
+    reanalyzeStyle({ styleId: row.id }).catch((err) => logger.warn({ styleId: row.id, err: err.message }, 'Re-analysis failed'));
+    res.status(202).json({ style: present({ ...row, status: 'analyzing' }) });
   } catch (err) { next(err); }
 });
 
