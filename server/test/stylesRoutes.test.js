@@ -187,3 +187,23 @@ test('POST /runs accepts style picks and the rows record them', async (t) => {
   const usage = await json(await fetch(`${url}/styles`));
   assert.equal(usage.body.styles.find((s) => s.key === 'papercraft').usage.used, 1);
 });
+
+test('POST /styles/:id/reanalyze: 409 for a built-in, 202 for an added style (then it re-runs the analyst)', async (t) => {
+  if (!(await hasFfmpeg())) return t.skip('ffmpeg not installed');
+  const { body: list } = await json(await fetch(`${url}/styles`));
+  const builtin = list.styles.find((s) => s.source_type === 'builtin');
+  assert.equal((await fetch(`${url}/styles/${builtin.id}/reanalyze`, { method: 'POST' })).status, 409);
+
+  const png = path.join(base, 'ref2.png');
+  await execFileP('ffmpeg', ['-y', '-f', 'lavfi', '-i', 'testsrc=s=320x240', '-frames:v', '1', png]);
+  const created = await json(await fetch(`${url}/styles/upload?name=Again&filename=ref2.png`, { method: 'POST', body: await readFile(png), headers: { 'Content-Type': 'image/png' } }));
+  const row = await waitReady(created.body.style.id);
+  assert.equal(row.status, 'failed'); // no analyst in this lab
+  const re = await json(await fetch(`${url}/styles/${row.id}/reanalyze`, { method: 'POST' }));
+  assert.equal(re.status, 202);
+  assert.equal(re.body.style.status, 'analyzing');
+  const after = await waitReady(row.id);
+  assert.equal(after.status, 'failed', 'still no analyst → failed again, frames kept');
+  assert.equal(after.frame_keys.length, 1);
+  assert.equal(after.has_thumbnail, true);
+});

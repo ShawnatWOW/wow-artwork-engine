@@ -592,9 +592,90 @@ const CONTRAST =
 // negations literalize — the "bands" lesson).
 const SAFE =
   'Ultra high detail. No text, no logos, no watermarks, no weapons. ' +
-  'The whole picture is stylized painterly digital art, never photographic: any person or ' +
+  'The whole picture is stylized digital art — painted, illustrated, sculpted or rendered, never photographic: any person or ' +
   'humanoid character is a clearly stylized animated-film character with illustrated ' +
   'features — never a photorealistic human likeness.';
+// STYLE LOCK (Shawn, 2026-09-15). A Style Library card carries more than its
+// one sentence: the analyst's signature rules, backdrop and colour rule. Live
+// finding: "Explosive Color Clash" (bodies dipped in thick glossy paint, two
+// flat colours per shot, a plain pale studio backdrop, macro close-up) came out
+// as a rainbow paint vortex over a black-sky beach with tiny people — because
+// only the sentence reached the prompt while the scene boilerplate demanded a
+// "deep, dark background", a "deep living world edge to edge" and "full
+// creative freedom — creatures, people". For a locked look the lock is written
+// right after the style sentence and the conflicting clauses yield to it.
+const hasLock = (s) => Boolean(s?.signature?.length || s?.backdrop || s?.colorRule);
+// How many colours the colour rule allows per scene ("two flat colours…"),
+// or null when it doesn't say. Listing the whole palette next to a "two
+// colours" rule made the model use all five at once (live, 2026-09-15).
+const COLOR_COUNT = { one: 1, two: 2, three: 3, four: 4, 1: 1, 2: 2, 3: 3, 4: 4 };
+export function colorCountOf(rule = '') {
+  const m = /\b(one|two|three|four|[1-4])\b/i.exec(String(rule));
+  return m ? COLOR_COUNT[m[1].toLowerCase()] : null;
+}
+/** The palette a design gets: the rule's count of colours, rotated by option so siblings differ. Pure. */
+export function paletteFor(s, option = 1) {
+  const pal = s?.palette || [];
+  if (!pal.length) return [];
+  const n = colorCountOf(s.colorRule);
+  if (!n || n >= pal.length) return pal.slice(0, 5);
+  const start = ((option ?? 1) - 1) % pal.length;
+  return Array.from({ length: n }, (_, i) => pal[(start + i) % pal.length]);
+}
+// A hex colour as the model reads it best: a plain name (hex codes were half-
+// ignored live, 2026-09-15 — "exactly #F2B134 and #F23005" still painted five
+// colours; "golden yellow and scarlet red, nothing else" is what it obeys).
+const HUE_NAMES = [
+  [0, 'scarlet red'], [15, 'vermilion orange-red'], [30, 'bright orange'], [45, 'golden yellow'], [60, 'lemon yellow'],
+  [80, 'lime green'], [100, 'bright green'], [140, 'emerald green'], [165, 'teal'], [180, 'cyan'], [195, 'sky blue'],
+  [215, 'cobalt blue'], [240, 'royal blue'], [260, 'indigo'], [280, 'violet'], [300, 'magenta'], [320, 'hot pink'],
+  [340, 'crimson pink'], [360, 'scarlet red'],
+];
+export function colorName(hex) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || '').trim());
+  if (!m) return String(hex || '').trim();
+  const [r, g, b] = [0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16) / 255);
+  const max = Math.max(r, g, b); const min = Math.min(r, g, b); const d = max - min;
+  const l = (max + min) / 2;
+  if (d < 0.08) return l > 0.9 ? 'white' : l < 0.12 ? 'black' : l > 0.6 ? 'light grey' : 'dark grey';
+  let h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  h = (h * 60 + 360) % 360;
+  const sat = d / (1 - Math.abs(2 * l - 1));
+  let name = HUE_NAMES.reduce((best, [deg, n]) => (Math.abs(deg - h) < Math.abs(best[0] - h) ? [deg, n] : best), HUE_NAMES[0])[1];
+  if (l < 0.3) name = `deep ${name}`;
+  else if (l > 0.75) name = `pale ${name}`;
+  else if (sat < 0.45) name = `muted ${name}`;
+  return name;
+}
+const styleLock = (s, option = 1) => {
+  if (!hasLock(s)) return '';
+  const rules = [...(s.signature || [])];
+  if (s.backdrop) rules.push(`the backdrop is ${s.backdrop}`);
+  if (s.colorRule) {
+    const pal = paletteFor(s, option);
+    const n = colorCountOf(s.colorRule);
+    const named = pal.map(colorName);
+    rules.push(`colour: ${s.colorRule}${named.length
+      ? (n && n < (s.palette || []).length
+        ? ` — this scene uses only ${named.join(' and ')}, nothing else`
+        : ` — ${named.join(', ')}`)
+      : ''}`);
+  }
+  return `These rules define the look and override any other direction here: ${rules.join('; ')}. ` +
+    `Every character, surface and background element is rendered with exactly this treatment — nothing in the scene escapes it. `;
+};
+// The readability clause, minus the dark-background demand when the look
+// dictates its own backdrop.
+const contrastFor = (s) => (hasLock(s) && s.backdrop
+  ? 'Strong tonal separation between the subjects and the backdrop, readable from far away in direct sunlight.'
+  : CONTRAST);
+// "Full creative freedom" invites a second style into the picture; a locked
+// look keeps the freedom of subject but not of treatment.
+const freedomFor = (s) => (hasLock(s)
+  ? `Beyond that cast there is creative freedom of subject — more creatures of the same kinds, animals, beasts and living objects that serve the scene are welcome; every character in the picture is a creature like these — but never freedom of treatment: everything wears this look. `
+  : `Beyond that cast there is full creative freedom — any characters and scenery that serve the ` +
+    `scene are welcome: creatures, people, living objects, anything with personality. `);
+
 // Energy clause for standalone stills — the subject should feel alive even as
 // a still frame. (Kept off the connected master, whose environment must stay
 // clean and uniform for the travel illusion.)
@@ -683,7 +764,7 @@ export function buildStillPrompt({ style, specKey, option, weekOf, look }) {
   if (style === 'eon_connected') {
     const tr = travelFor(option);
     const subject = s.cast.hero;
-    return `An ultra-wide continuous panoramic scene with dynamic motion throughout. Style: ${s.style}. ` +
+    return `An ultra-wide continuous panoramic scene with dynamic motion throughout. Style: ${s.style}. ${styleLock(s, option)}` +
       `The single hero subject is ${subject}, caught mid-motion and trailing ribbons of glowing light, ` +
       `positioned at the ${tr.start} edge, occupying about one third ` +
       `of the frame width and at least 60% of the frame height, with a continuous seamless environment extending ` +
@@ -691,7 +772,7 @@ export function buildStillPrompt({ style, specKey, option, weekOf, look }) {
       `swirling patterns, flowing textures, and dynamic layers that suggest movement and depth as the subject travels. ` +
       `Lighting shifts and evolves as the subject journeys; no secondary focal objects; ` +
       `keep the subject clear of the areas at one-third and two-thirds of the frame width. ` +
-      `${WRAP_BANDS_CONNECTED} ${CONTRAST} ${SAFE}`;
+      `${WRAP_BANDS_CONNECTED} ${contrastFor(s)} ${SAFE}`;
   }
   if (style === 'frame_break') {
     // The WOW signature 3D pop-out — story edition (Shawn, 2026-08-11).
@@ -719,37 +800,35 @@ export function buildStillPrompt({ style, specKey, option, weekOf, look }) {
     if (option === 1) {
       const arc = arcFor({ specKey, option, weekOf, look: f });
       return `An ultra-wide trompe-l'oeil deep-relief composition in perfectly frontal, dead-centered, ` +
-        `symmetrical one-point perspective. Style: ${f.style}. ` +
+        `symmetrical one-point perspective. Style: ${f.style}. ${styleLock(f, option)}` +
         `${FRAME_GEOMETRY} ${FRAME_STYLE} ` +
         `The scene is home to an ensemble of characters: ${cast}. ` +
-        `Beyond that cast there is full creative freedom — any characters and scenery that serve the ` +
-        `scene are welcome: creatures, people, living objects, anything with personality. ` +
+        freedomFor(f) +
         `This is how the story opens: ${arc.opening}. ` +
         `Whatever moves onto the frame's inner edge is rendered IN FRONT of the black strips, partially ` +
         `covering them and casting soft shadows onto them — unmistakably closer to the viewer than the ` +
         `frame plane. ${FRAME_CONTAINMENT} ` +
-        `${CAST_POISE} ${CONTRAST} ${SAFE}`;
+        `${CAST_POISE} ${contrastFor(f)} ${SAFE}`;
     }
     const { keeper, hero, companion } = f.cast;
     const [near, far] = option % 2 === 0 ? ['left', 'right'] : ['right', 'left'];
-    return `An ultra-wide cinematic full-bleed composition with sweeping 3D depth. Style: ${f.style}. ` +
+    return `An ultra-wide cinematic full-bleed composition with sweeping 3D depth. Style: ${f.style}. ${styleLock(f, option)}` +
       `The scene fills the ENTIRE picture edge to edge and corner to corner — one continuous, deep, ` +
       `living world with no border, no frame, no vignette, no dark edges: pure immersive scenery ` +
       `everywhere. ` +
       `The scene is home to an ensemble of characters: ${cast}. ` +
-      `Beyond that cast there is full creative freedom — any characters and scenery that serve the ` +
-      `scene are welcome: creatures, people, living objects, anything with personality. ` +
+      freedomFor(f) +
       `This is how the story opens: ${keeper} dominates the ${near} third mid-motion while ${hero} ` +
       `streaks in from the far ${far} edge trailing light and ${companion} sweeps through the deep ` +
       `middle distance — the whole scene already surging. ` +
-      `${CAST_POISE} ${CONTRAST} ${SAFE}`;
+      `${CAST_POISE} ${contrastFor(f)} ${SAFE}`;
   }
   // eon_single: tall portrait composition, composed to wrap (the left band is
   // cut away onto the pod's spine — see WRAP_BAND_SINGLE).
-  return `A tall vertical scene. Style: ${s.style}. ` +
+  return `A tall vertical scene. Style: ${s.style}. ${styleLock(s, option)}` +
     `The single hero subject is ${s.cast.hero}, filling most of the frame height with a strong central focal point ` +
     `and bold silhouette, centred in the right four-fifths of the frame. ` +
-    `${WRAP_BAND_SINGLE} ${ENERGY} ${CONTRAST} ${SAFE}`;
+    `${WRAP_BAND_SINGLE} ${ENERGY} ${contrastFor(s)} ${SAFE}`;
 }
 
 /**
@@ -766,7 +845,7 @@ export function buildClosingStillPrompt({ style, specKey, option, weekOf, look }
   const cast = joinCast(castList(f));
   const arc = arcFor({ specKey, option, weekOf, look: f });
   return `An ultra-wide trompe-l'oeil deep-relief composition in perfectly frontal, dead-centered, ` +
-    `symmetrical one-point perspective. Style: ${f.style}. ` +
+    `symmetrical one-point perspective. Style: ${f.style}. ${styleLock(f, option)}` +
     `${FRAME_GEOMETRY} ${FRAME_STYLE} ` +
     `The scene is home to an ensemble of characters: ${cast}. ${ONLY_CAST(cast)} ` +
     // "grand finale"/"closing pose of a performance" wording literalized into a
@@ -1030,6 +1109,7 @@ export function combineSpectacularActs(act1, act2) {
 
 export { CHOREOGRAPHIES, SOLO_MOTIONS, SPECTACULAR_FAMILIES, SPECTACULAR_ARCS, WILD_THEMES };
 export default {
+  colorCountOf, paletteFor, colorName,
   buildStillPrompt, buildClosingStillPrompt, buildMotionPrompt, buildSpectacularArcPrompt,
   composeSpectacularMotionPrompt, buildSpectacularAct, combineSpectacularActs, sanitizeMotionPrompt,
   travelFor, choreographyFor, soloMotionFor, arcFor, SPECTACULAR_FAMILIES,

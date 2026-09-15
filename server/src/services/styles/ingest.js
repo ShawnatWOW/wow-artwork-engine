@@ -13,7 +13,7 @@
 // KEEPS its frames and thumbnail: the reviewer can write the style sentence
 // and cast by hand (PATCH) and it becomes usable.
 
-import { mkdtemp, rm, copyFile, mkdir } from 'node:fs/promises';
+import { mkdtemp, rm, copyFile, mkdir, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import config from '../../config/index.js';
@@ -187,6 +187,72 @@ export async function processStyle({ styleId, source, name, deps = {} }) {
 }
 
 /**
+ * RE-ANALYZE a style from its stored frames (2026-09-15): a better analyst
+ * (or a hand-edited name) should not need the reference uploaded again. The
+ * frames, thumbnail and source stay; the card is rewritten, the reviewer's
+ * label kept, and a fresh preview painted. Resolves to the final row; a
+ * failure is a 'failed' row exactly like a first-time ingest.
+ */
+export async function reanalyzeStyle({ styleId, deps = {} }) {
+  const { repo, analyze } = resolveDeps(deps);
+  const store = deps.store || (await getStore());
+  const row = await repo.getStyle(styleId);
+  if (!row) throw new Error(`Style ${styleId} not found`);
+  if (row.source_type === 'builtin') throw Object.assign(new Error('Built-in styles have no reference to re-analyze.'), { code: 'builtin' });
+  if (!row.frame_keys?.length) throw Object.assign(new Error('This style has no stored frames — add it again from the reference.'), { code: 'no_frames' });
+  if (row.status === 'analyzing') throw Object.assign(new Error('This style is already being analyzed.'), { code: 'busy' });
+
+  await repo.updateStyle(styleId, { status: 'analyzing', error: null, analysis: { ...(row.analysis || {}), stage: 'writing' } });
+  const workDir = deps.workDir || (await mkdtemp(path.join(os.tmpdir(), `wae-style-re-${styleId}-`)));
+  try {
+    const dir = path.join(workDir, 'frames');
+    await mkdir(dir, { recursive: true });
+    const frames = [];
+    for (const [i, key] of row.frame_keys.entries()) {
+      const f = path.join(dir, `f${String(i + 1).padStart(2, '0')}.jpg`);
+      await writeFile(f, await store.getBuffer(key));
+      frames.push(f);
+    }
+    const an = row.analysis || {};
+    const card = await analyze({ frames, hints: { name: row.label, caption: an.caption, motion: an.motion, isVideo: an.source?.isVideo, durationS: an.source?.durationS } });
+    const current = await repo.getStyle(styleId);
+    if (!card) {
+      const reason = config.openai.apiKey
+        ? 'The style analyst could not describe this reference — write the style sentence and cast by hand, or try a clearer image.'
+        : 'Style analysis needs the OpenAI key (OPENAI_API_KEY) — write the style sentence and cast by hand for now.';
+      // A failed re-analysis keeps the old card usable if it was complete.
+      await repo.updateStyle(styleId, { status: isComplete(current) ? 'ready' : 'failed', error: reason, analysis: { ...(current.analysis || {}), stage: 'failed' } });
+      return repo.getStyle(styleId);
+    }
+    const gate = checkPrompt(`${card.style} ${Object.values(card.cast).join(' ')}`);
+    if (!gate.allowed) {
+      await repo.updateStyle(styleId, { status: isComplete(current) ? 'ready' : 'failed', error: `guardrail: ${gate.reasons.join('; ')}`, analysis: { ...(current.analysis || {}), stage: 'failed' } });
+      return repo.getStyle(styleId);
+    }
+    await repo.updateStyle(styleId, {
+      style: card.style,
+      cast: card.cast,
+      analysis: { ...(current.analysis || {}), ...card.analysis, stage: 'previewing', reanalyzed_at: new Date().toISOString() },
+      status: 'ready',
+      error: null,
+    });
+    await previewStyle({ styleId, deps: { ...deps, repo, store, workDir } }).catch((err) => {
+      logger.warn({ styleId, err: err.message }, 'Style preview failed after re-analysis');
+    });
+    await setStage(repo, styleId, 'done');
+    logger.info({ styleId, key: row.key }, 'Style re-analyzed');
+    return repo.getStyle(styleId);
+  } catch (err) {
+    logger.error({ styleId, err: err.message }, 'Style re-analysis failed');
+    const current = await repo.getStyle(styleId);
+    if (current) await repo.updateStyle(styleId, { status: isComplete(current) ? 'ready' : 'failed', error: err.message, analysis: { ...(current.analysis || {}), stage: 'failed' } });
+    return repo.getStyle(styleId);
+  } finally {
+    if (!deps.workDir) await rm(workDir, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
+/**
  * Render (or re-render) the "what this looks like on the sign" preview: one
  * still, the borderless spectacular composition, in this style with its own
  * cast. Live mode spends one Seedream image; the cost lands in the row's
@@ -240,4 +306,4 @@ export async function previewStyle({ styleId, deps = {} }) {
   }
 }
 
-export default { ingestStyle, processStyle, previewStyle, slugify };
+export default { ingestStyle, processStyle, previewStyle, reanalyzeStyle, slugify };
