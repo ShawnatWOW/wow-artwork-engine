@@ -405,6 +405,21 @@ export async function padToAspect({ input, output, width, height, aspect }) {
   return { output, ...c };
 }
 
+/**
+ * Centre-crop a STILL to a wanted aspect (GPT Image 2.5 caps custom sizes
+ * at 3:1; the spectacular is 3.62:1). Returns the input untouched when the
+ * aspect already matches within tolerance. Uses computeBarCrop's geometry —
+ * no bar proof needed: this is deliberate cropping of a full-bleed scene.
+ * @returns {Promise<{ output, cropped: boolean, width, height }>}
+ */
+export async function cropStillToAspect({ input, output, wantAspect, tolerance = 0.02 }) {
+  const dims = await probe(input);
+  const box = computeBarCrop({ rawWidth: dims.width, rawHeight: dims.height, wantAspect, tolerance });
+  if (!box) return { output: input, cropped: false, width: dims.width, height: dims.height };
+  await run(['-y', '-i', input, '-vf', `crop=${box.width}:${box.height}:${box.x}:${box.y}`, '-frames:v', '1', output]);
+  return { output, cropped: true, width: box.width, height: box.height };
+}
+
 /** ffprobe → { width, height, duration } for an output file. */
 export async function probe(input) {
   const args = [
@@ -486,5 +501,4 @@ export default {
   extractFrameAt,
   imageSimilarity,
   computePadCanvas,
-  padToAspect,
-};
+  padToAspect, cropStillToAspect };

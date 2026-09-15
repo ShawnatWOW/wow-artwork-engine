@@ -103,6 +103,21 @@ export function seedreamCostUsd({ count = 1 } = {}) {
   return round4(count * SEEDREAM_PER_IMAGE);
 }
 
+// GPT Image 2.5 on fal bills by output tokens, which scale with pixels and
+// the quality level. Fitted to fal's published 'high' examples (2026-09-15):
+// 1024x768 $0.0362, 1920x1080 $0.0395, 3840x2160 $0.1002 — a base plus a
+// per-megapixel slope. Other quality levels are scaled from 'high' (fal does
+// not publish them per level); FAL_PRICE_GPTIMAGE_PER_MP / _BASE override.
+export const GPTIMAGE_BASE_USD = num(process.env.FAL_PRICE_GPTIMAGE_BASE, 0.0193);
+export const GPTIMAGE_PER_MP_USD = num(process.env.FAL_PRICE_GPTIMAGE_PER_MP, 0.00976);
+export const GPTIMAGE_QUALITY_MULT = { low: 0.15, medium: 0.5, high: 1, auto: 1, xhigh: 2, max: 4 };
+/** GPT Image still USD (estimate). */
+export function gptImageCostUsd({ width = 1024, height = 1024, quality = 'high' } = {}) {
+  const mp = (width * height) / 1e6;
+  const high = Math.max(0.036, GPTIMAGE_BASE_USD + GPTIMAGE_PER_MP_USD * mp);
+  return round4(high * (GPTIMAGE_QUALITY_MULT[String(quality).toLowerCase()] ?? 1));
+}
+
 // Pixel budget fal targets per tier: standard renders ~1080p-class (2.07MP),
 // fast ~720p-class (0.92MP). Seedance downscales our 4K gen target to this tier,
 // so the BILLED pixels are this budget in the clip's aspect — NOT the 4K final
@@ -193,11 +208,12 @@ export const REFERENCE_PER_SECOND = {
   seedance_25_720p: seedanceCostUsd({ width: 1280, height: 720, durationS: 1, tier: '2.5' }),
   topaz_uhd: TOPAZ_PER_SECOND.uhd,
   seedream_still: SEEDREAM_PER_IMAGE,
+  gptimage_still_4k_high: gptImageCostUsd({ width: 3840, height: 2160, quality: 'high' }),
 };
 
 export default {
   seedanceTier, usedTopaz, seedanceTokens, seedanceCostUsd, topazCostUsd,
-  seedreamCostUsd, renderDimsForTier, renderDimsForResolution, dimsForResolution, videoCostUsd,
+  seedreamCostUsd, gptImageCostUsd, renderDimsForTier, renderDimsForResolution, dimsForResolution, videoCostUsd,
   requestIdFromStatusUrl, REFERENCE_PER_SECOND,
   SEEDANCE_RATE_PER_1K, TOPAZ_PER_SECOND, SEEDREAM_PER_IMAGE,
 };

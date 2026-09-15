@@ -72,6 +72,14 @@ at a time, "N of 3 reviewed" progress per sign.
 
 ## Changelog (this delivery arc)
 
+- **2026-09-15 (2) — The painter is now GPT Image 2.5.** Shawn: "the image generation is
+  a problem… let's use gpt image 2.5 so it's crazy quality and more prompt adherent."
+  Stills come from GPT Image 2.5 Flare on fal at `xhigh` (≈ $0.14 per spectacular still,
+  ~30–90s) instead of Seedream ($0.03, ~15s). GPT Image caps sizes at 3:1, so borderless
+  spectaculars are painted at 3:1 and centre-cropped to the sign's 3.62:1; the framed
+  track stays on Seedream so its painted border sits at the true edges. `STILL_PROVIDER=
+  seedream` switches back; `FAL_GPTIMAGE_QUALITY` is the cost lever.
+
 - **2026-09-15 — The style lock + Re-analyze.** Scott's first live style from a reel
   ("Explosive Color Clash": paint-dipped bodies, two colours per shot, lavender studio
   backdrop) generated as a rainbow vortex on a black beach. Root cause: the analyst

@@ -253,16 +253,42 @@ async function generateStill(job, ctx) {
     const dir = path.join(workDir, `${job.key}_opt${job.option}`);
     await mkdir(dir, { recursive: true });
     const stillPath = path.join(dir, 'still.png');
-    const gen = await providers.still.generate({
+    // The painter: GPT Image 2.5 for everything it fits (aspect ≤ 3:1); the
+    // FRAMED spectacular track keeps Seedream so the painted border sits at
+    // the sign's true 3.62:1 edges (generation/index.js). Tests and fixture
+    // mode supply one provider for both.
+    const painter = (job.style === 'frame_break' && job.option === 1 && providers.stillFramed) ? providers.stillFramed : providers.still;
+    const gen = await painter.generate({
       width: job.gen.width, height: job.gen.height, ratio: job.gen.ratio, output: stillPath, prompt,
     });
     // NO frame plate anywhere (Shawn, 2026-08-14): the perimeter comes from
-    // Seedream painting it (still prompt) and Seedance maintaining it — the
+    // the painter painting it (still prompt) and Seedance maintaining it — the
     // reviewed still, the stored file and the Seedance reference are the raw
-    // model output, untouched.
-    const finalStillPath = stillPath;
-    const referenceUrl = gen.url ?? null;
+    // model output, untouched... except for ASPECT: a painter whose size cap
+    // is narrower than the sign (GPT Image's 3:1 vs the spectacular's 3.62:1)
+    // returns a taller canvas, which is centre-cropped to the sign's aspect
+    // here so the reviewed still, the stored file and the video's first frame
+    // all share the sign's exact shape. The cropped file is re-hosted on fal
+    // so Seedance starts from precisely what the reviewer approved.
+    let finalStillPath = stillPath;
+    let referenceUrl = gen.url ?? null;
     const live = !String(gen.model || '').startsWith('fixture');
+    if (gen.width && gen.height) {
+      const wantAspect = job.gen.width / job.gen.height;
+      const croppedPath = path.join(dir, 'still_cropped.png');
+      const crop = await ffmpeg.cropStillToAspect({ input: stillPath, output: croppedPath, wantAspect });
+      if (crop.cropped) {
+        finalStillPath = croppedPath;
+        logger.info({ runId, surface: job.key, option: job.option, from: `${gen.width}x${gen.height}`, to: `${crop.width}x${crop.height}` }, 'Still cropped to the sign\'s aspect');
+        if (live && referenceUrl) {
+          try {
+            referenceUrl = (await uploadToFalStorage({ sourcePath: croppedPath, contentType: 'image/png' })).url;
+          } catch (err) {
+            logger.warn({ runId, surface: job.key, err: err.message }, 'Could not re-host the cropped still; the video will start from the uncropped canvas');
+          }
+        }
+      }
+    }
 
     // Every generation gets its own file. Keying on (run, surface, option slot)
     // alone meant a variation, a re-roll or a per-design regenerate silently
@@ -325,7 +351,7 @@ async function generateStill(job, ctx) {
     const stillLive = live;
     // Gate on the RAW art: readability is about the scene, and the plate's
     // black band would drag the average luma down artificially.
-    const gate = await qa.lumaGate(stillPath);
+    const gate = await qa.lumaGate(finalStillPath);
     if (!gate.ok) {
       await repo.insertArtwork({
         runId, surface: job.surface, style: job.style, mediaType: 'still', stage: 'still',
@@ -334,7 +360,7 @@ async function generateStill(job, ctx) {
         s3KeyFinal: put.key, thumbnailKey: thumbKey,
         status: 'failed', error: `qa: ${gate.reason}`,
         falRequestId: stillLive ? gen.jobId ?? null : null,
-        costUsd: stillLive ? falPricing.seedreamCostUsd({ count: 1 }) : 0,
+        costUsd: stillLive ? (gen.costUsd ?? falPricing.seedreamCostUsd({ count: 1 })) : 0,
         ...lineage,
       });
       logger.warn({ runId, surface: job.key, option: job.option, yavg: gate.yavg }, 'Still failed luma QA gate');
@@ -386,7 +412,7 @@ async function generateStill(job, ctx) {
     // each — opening + closing when the storyboard rendered). Fixtures free.
     const stillLedger = {
       falRequestId: stillLive ? gen.jobId ?? null : null,
-      costUsd: stillLive ? falPricing.seedreamCostUsd({ count: stillCount }) : 0,
+      costUsd: stillLive ? ((gen.costUsd ?? falPricing.seedreamCostUsd({ count: 1 })) + (stillCount > 1 ? falPricing.seedreamCostUsd({ count: stillCount - 1 }) : 0)) : 0,
     };
 
     await repo.insertArtwork({
