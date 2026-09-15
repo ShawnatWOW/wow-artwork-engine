@@ -298,6 +298,27 @@ living environment, letterbox-margin dead space, anti-drift. It swaps in:
 | 11 | The motion has a story — beginning, journey, payoff — with zero timestamps | One untimed story sentence naming the design's own cast |
 | 10 | Delivery: exact pixels (spectacular 3840×1062; EON one master 960×384 — spine 64 + face 256 per pillar, per Jeff 2026-08-21) | Conform exact-fit; EON ships the single wrapped master and skips Topaz |
 
+## The painter: GPT Image 2.5 (Shawn, 2026-09-15)
+
+Shawn: "the image generation is a problem. It generates almost instantly, which is weird
+for an allegedly high quality image. Let's use gpt image 2.5 so it's crazy quality and
+more prompt adherent." Stills now come from **GPT Image 2.5 Flare** on fal
+(`openai/gpt-image-2.5/flare/text-to-image`, quality `xhigh`) instead of Seedream v4.
+Same interface: the output URL is the first frame Seedance animates.
+
+- **Sizes.** GPT Image caps custom sizes at 3:1 (multiples of 16, long edge ≤ 3840, 0.66–8.3
+  MP). The spectacular is 3.62:1, so the borderless tracks are painted at 3:1 and the centre
+  is **cropped to the sign's aspect** before review, storage and the video (the cropped
+  file is re-hosted on fal so Seedance starts from exactly what was approved). The
+  **framed track (option 1) keeps Seedream**, whose native 3.62:1 keeps the painted border
+  at the true edges — a border cropped from a 3:1 canvas loses its top and bottom strips.
+  EON sizes fit GPT Image as-is (the single pillar is scaled to the pixel budget).
+- **Cost.** Estimated from fal's published points (4K high ≈ $0.10): a 3:1 spectacular
+  still ≈ $0.07 at high / **≈ $0.14 at xhigh**; EON similar. Was $0.03 flat. Each row
+  carries the painter's own figure in `cost_usd`.
+- **Switch back** with `STILL_PROVIDER=seedream`; pick Sunburst (slower, finer) with
+  `FAL_GPTIMAGE_MODEL=openai/gpt-image-2.5/sunburst/text-to-image`.
+
 ## Current knobs & numbers
 
 | Setting | Value now | Change via |
@@ -308,7 +329,7 @@ living environment, letterbox-margin dead space, anti-drift. It swaps in:
 | Upscale | **ON** — Topaz 4× to 4K-class | `FAL_UPSCALE=0` turns it off for iteration |
 | Cost per spectacular render | **~$16.20** at 30s + Topaz (~$4.60 at 10s, no upscale) | — |
 | Time per video | ~10–20 min at 30s + Topaz | — |
-| Still / design | $0.03, ~20–40s | — |
+| Still / design | GPT Image 2.5 Flare xhigh ≈ $0.14, ~30–90s (framed track: Seedream $0.03) | `STILL_PROVIDER`, `FAL_GPTIMAGE_QUALITY` |
 
 ## Iteration log (why things are the way they are)
 

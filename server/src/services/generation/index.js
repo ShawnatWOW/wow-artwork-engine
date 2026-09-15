@@ -12,6 +12,7 @@ import logger from '../../config/logger.js';
 import * as fixture from './fixture.js';
 import * as fal from './fal.js';
 import * as seedream from './seedream.js';
+import * as gptimage from './gptimage.js';
 
 export function getProviders(mode = config.generationMode) {
   if (mode === 'live') {
@@ -22,9 +23,16 @@ export function getProviders(mode = config.generationMode) {
       );
     }
     logger.warn('Generation mode: LIVE — calls will spend credits.');
+    // Stills: GPT Image 2.5 by default (Shawn, 2026-09-15). The FRAMED
+    // spectacular track paints with Seedream while GPT Image caps aspect at
+    // 3:1 — a 3.62:1 painted border cropped from a 3:1 canvas loses its top
+    // and bottom strips. Borderless and EON surfaces fit GPT Image.
+    const useGpt = config.stillProvider === 'gptimage';
+    if (useGpt) logger.info({ model: config.fal.gptImageModel, quality: config.fal.gptImageQuality }, 'Still painter: GPT Image 2.5 (framed track on Seedream)');
     return {
       mode,
-      still: seedream.stillProvider,
+      still: useGpt ? gptimage.stillProvider : seedream.stillProvider,
+      stillFramed: seedream.stillProvider,
       motion: fal.motionProvider,
     };
   }

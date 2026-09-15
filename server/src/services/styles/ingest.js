@@ -25,6 +25,7 @@ import { checkPrompt } from '../guardrails.js';
 import { buildStillPrompt } from '../generation/prompts.js';
 import falPricing from '../generation/falPricing.js';
 import { extractReference, makeThumb } from './frames.js';
+import { cropStillToAspect } from '../ffmpeg.js';
 import { analyzeStyle } from './analyze.js';
 import { fetchReference } from './links.js';
 import { toLook, isComplete } from './library.js';
@@ -277,6 +278,12 @@ export async function previewStyle({ styleId, deps = {} }) {
     await mkdir(dir, { recursive: true });
     const out = path.join(dir, 'preview.png');
     const gen = await providers.still.generate({ prompt, width: PREVIEW.width, height: PREVIEW.height, output: out });
+    // GPT Image caps aspect at 3:1; the preview is the sign's 3.62:1 — crop
+    // the centre so the preview shows exactly the sign's shape.
+    try {
+      const crop = await cropStillToAspect({ input: gen.path, output: path.join(dir, 'preview_cropped.png'), wantAspect: PREVIEW.width / PREVIEW.height });
+      if (crop.cropped) gen.path = crop.output;
+    } catch (err) { logger.warn({ styleId, err: err.message }, 'Preview aspect crop failed; keeping the painter\'s canvas'); }
     // Every preview gets its own key (a re-render must not overwrite while
     // the old one may still be on screen).
     const stamp = Date.now().toString(36);
@@ -297,8 +304,8 @@ export async function previewStyle({ styleId, deps = {} }) {
         ...(current.analysis || {}),
         preview_prompt: prompt,
         preview_at: new Date().toISOString(),
-        preview_cost_usd: live ? falPricing.seedreamCostUsd({ count: 1 }) : 0,
-        preview_costs_usd: [...(current.analysis?.preview_costs_usd || []), { at: new Date().toISOString(), usd: live ? falPricing.seedreamCostUsd({ count: 1 }) : 0 }],
+        preview_cost_usd: live ? (gen.costUsd ?? falPricing.seedreamCostUsd({ count: 1 })) : 0,
+        preview_costs_usd: [...(current.analysis?.preview_costs_usd || []), { at: new Date().toISOString(), usd: live ? (gen.costUsd ?? falPricing.seedreamCostUsd({ count: 1 })) : 0 }],
       },
     });
   } finally {

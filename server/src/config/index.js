@@ -86,6 +86,12 @@ const config = {
     // a 2.0 slug re-caps clips at 15s and re-enables the two-segment chain.
     seedanceModel: process.env.FAL_SEEDANCE_MODEL || 'bytedance/seedance-2.5/image-to-video',
     seedreamModel: process.env.FAL_SEEDREAM_MODEL || 'fal-ai/bytedance/seedream/v4/text-to-image',
+    // GPT Image 2.5 (Shawn, 2026-09-15: "crazy quality and more prompt
+    // adherent"). Flare = fast high-quality generation; Sunburst = the slower
+    // precision variant (openai/gpt-image-2.5/sunburst/text-to-image).
+    // quality: auto | low | medium | high | xhigh | max — the cost lever.
+    gptImageModel: process.env.FAL_GPTIMAGE_MODEL || 'openai/gpt-image-2.5/flare/text-to-image',
+    gptImageQuality: process.env.FAL_GPTIMAGE_QUALITY || 'xhigh',
     queueBase: process.env.FAL_QUEUE_BASE || 'https://queue.fal.run',
     // fal REST base for storage uploads (the stitched 30s clip + the segment
     // handoff frame must be fal-fetchable URLs before Topaz / Seedance B).
@@ -113,6 +119,12 @@ const config = {
   gemini: {
     apiKey: process.env.GEMINI_API_KEY,
   },
+
+  // Which painter makes the stills in live mode: 'gptimage' (GPT Image 2.5,
+  // default since 2026-09-15) or 'seedream'. The FRAMED spectacular track
+  // always paints with Seedream while GPT Image caps aspect at 3:1 (the
+  // painted border must sit at the sign's true 3.62:1 edges).
+  stillProvider: (process.env.STILL_PROVIDER || 'gptimage').toLowerCase(),
 
   // OpenAI powers the plain-language "tweak" — an LLM edits ONLY the reviewer's
   // requested change into a design's existing prompt. Accepts either env name

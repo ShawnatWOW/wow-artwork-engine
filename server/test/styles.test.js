@@ -727,3 +727,84 @@ test('material looks: the substance leads the prompt, subjects are formed of it,
   assert.equal(normalizeCard({ ...CARD, scene_mode: 'subject', material: 'coloured smoke' }).analysis.material, '');
   assert.equal(normalizeCard(CARD).analysis.scene_mode, 'subject');
 });
+
+// --- GPT Image 2.5 painter (2026-09-15) --------------------------------------
+
+test('fitDimsGpt: aspect capped at 3:1, long edge 3840, pixel budget, multiples of 16', async () => {
+  const { fitDimsGpt } = await import('../src/services/generation/gptimage.js');
+  const spec = fitDimsGpt(4096, 1132); // the spectacular: 3.62:1 → 3:1
+  assert.equal(spec.aspectCapped, true);
+  assert.ok(spec.width / spec.height <= 3.0001, `aspect ${spec.width / spec.height}`);
+  assert.ok(spec.width <= 3840 && spec.width % 16 === 0 && spec.height % 16 === 0);
+  const con = fitDimsGpt(4096, 1638); // EON connected 2.5:1 → fits, scaled to the edge cap
+  assert.equal(con.aspectCapped, false);
+  assert.ok(Math.abs(con.width / con.height - 2.5) < 0.05);
+  assert.ok(con.width <= 3840 && con.width * con.height <= 8294400);
+  const single = fitDimsGpt(3200, 3840); // EON single: over the pixel budget → scaled down, aspect kept
+  assert.equal(single.aspectCapped, false);
+  assert.ok(single.width * single.height <= 8294400 && single.width * single.height >= 655360);
+  assert.ok(Math.abs(single.width / single.height - 3200 / 3840) < 0.02);
+  const tiny = fitDimsGpt(200, 100);
+  assert.ok(tiny.width * tiny.height >= 655360, 'tiny requests are lifted to the pixel floor');
+  assert.ok(tiny.width % 16 === 0 && tiny.height % 16 === 0);
+});
+
+test('gptImageCostUsd tracks fal\'s published high-quality points and scales by quality', async () => {
+  const { gptImageCostUsd } = await import('../src/services/generation/falPricing.js');
+  assert.ok(Math.abs(gptImageCostUsd({ width: 3840, height: 2160, quality: 'high' }) - 0.1002) < 0.005);
+  assert.ok(Math.abs(gptImageCostUsd({ width: 1920, height: 1080, quality: 'high' }) - 0.0395) < 0.003);
+  assert.ok(gptImageCostUsd({ width: 1024, height: 768, quality: 'high' }) >= 0.036);
+  assert.ok(Math.abs(gptImageCostUsd({ width: 3840, height: 2160, quality: 'xhigh' }) - gptImageCostUsd({ width: 3840, height: 2160, quality: 'high' }) * 2) < 0.001);
+  assert.ok(gptImageCostUsd({ width: 3840, height: 1280, quality: 'xhigh' }) < 0.2, 'a spectacular still at xhigh stays well under a quarter');
+});
+
+test('live providers: GPT Image paints the stills, Seedream keeps the framed track; STILL_PROVIDER=seedream restores Seedream everywhere', async () => {
+  const { getProviders } = await import('../src/services/generation/index.js');
+  const prevKey = config.fal.key; const prevProv = config.stillProvider;
+  config.fal.key = 'test-key';
+  try {
+    config.stillProvider = 'gptimage';
+    const p = getProviders('live');
+    assert.equal(p.still.model, 'gpt-image-2.5@fal');
+    assert.equal(p.stillFramed.model, 'seedream-v4@fal');
+    config.stillProvider = 'seedream';
+    const q = getProviders('live');
+    assert.equal(q.still.model, 'seedream-v4@fal');
+    assert.equal(q.stillFramed.model, 'seedream-v4@fal');
+  } finally { config.fal.key = prevKey; config.stillProvider = prevProv; }
+});
+
+test('a painter that returns a 3:1 canvas is centre-cropped to the sign\'s 3.62:1; the framed track uses stillFramed', async (t) => {
+  if (!(await hasFfmpeg())) return t.skip('ffmpeg not installed');
+  const ffmpeg = (await import('../src/services/ffmpeg.js')).default;
+  const { fitDimsGpt } = await import('../src/services/generation/gptimage.js');
+  const { base, repo, store } = await harness();
+  try {
+    const used = [];
+    // A stand-in for GPT Image: honours the 3:1 cap like the real one.
+    const capped = {
+      model: 'gpt-image-2.5@fal',
+      async generate({ width, height, output, prompt }) {
+        const d = fitDimsGpt(width, height);
+        used.push('gpt');
+        const r = await stillProvider.generate({ width: d.width, height: d.height, output, prompt });
+        return { ...r, model: 'fixture-gpt', width: d.width, height: d.height, costUsd: 0.12 };
+      },
+    };
+    const framedPainter = { model: 'seedream-v4@fal', async generate(o) { used.push('seedream'); return stillProvider.generate(o); } };
+    const spectacularOnly = SURFACES.filter((s) => s.key === 'spectacular');
+    const { runId } = await runWeek({
+      weekOf: '2026-09-15', triggeredBy: 'test',
+      deps: { repo, store, providers: { mode: 'fixture', still: capped, stillFramed: framedPainter, motion: motionProvider }, surfaces: spectacularOnly, optionsPerSurface: 3, duration: 1 },
+    });
+    const stills = (await repo.listArtworks(runId)).filter((a) => a.stage === 'still');
+    assert.equal(stills.length, 3);
+    assert.deepEqual(used.sort(), ['gpt', 'gpt', 'seedream'], 'option 1 painted by the framed painter, 2 and 3 by GPT Image');
+    for (const a of stills) {
+      assert.equal(a.status, 'ready', a.error || '');
+      const dims = await ffmpeg.probe(store.localPath(a.s3_key_final));
+      const aspect = dims.width / dims.height;
+      assert.ok(Math.abs(aspect - 4096 / 1132) < 0.02, `stored still is the sign's aspect (got ${aspect.toFixed(3)} from ${dims.width}x${dims.height})`);
+    }
+  } finally { await rm(base, { recursive: true, force: true }); }
+});
