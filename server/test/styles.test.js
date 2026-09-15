@@ -157,7 +157,7 @@ test('toLook / isComplete: a row needs a sentence and a full cast', () => {
   assert.equal(isComplete({ style: 'x', cast: { keeper: 'a', hero: 'b' } }), false);
   assert.equal(isComplete({ style: '', cast: { keeper: 'a', hero: 'b', companion: 'c' } }), false);
   const l = toLook({ id: 3, key: 'k', label: 'L', style: 's', cast: { hero: 'h' }, favorite: 1, weight: '2', source_type: 'upload' });
-  assert.deepEqual(l, { id: 3, key: 'k', label: 'L', style: 's', cast: { keeper: '', hero: 'h', companion: '' }, favorite: true, weight: 2, sourceType: 'upload', signature: [], backdrop: '', colorRule: '', palette: [] });
+  assert.deepEqual(l, { id: 3, key: 'k', label: 'L', style: 's', cast: { keeper: '', hero: 'h', companion: '' }, favorite: true, weight: 2, sourceType: 'upload', signature: [], backdrop: '', colorRule: '', palette: [], subjectCount: null });
   // The style lock rides along from the analysis (2026-09-15).
   const locked = toLook({ key: 'k', label: 'L', style: 's', cast: CARD.cast, analysis: { signature: ['coated in paint', ''], backdrop: 'a pale wall', color_rule: 'two colours', palette: ['#ff0000'] } });
   assert.deepEqual(locked.signature, ['coated in paint']);
@@ -638,4 +638,58 @@ test('colorName turns palette hex into the plain names the painter obeys', async
   assert.equal(colorName('#ffffff'), 'white');
   assert.equal(colorName('#101010'), 'black');
   assert.equal(colorName('nope'), 'nope');
+});
+
+test('subject count: a one- or two-subject look trims the spectacular ensemble; the crowd clauses are gone', async () => {
+  const { subjectsFor, buildSpectacularArcPrompt, buildClosingStillPrompt } = await import('../src/services/generation/prompts.js');
+  const base = {
+    key: 'clash', label: 'Explosive Color Clash', style: 'liquid paint digital art',
+    cast: { keeper: 'a colossal paint-dipped bison', hero: 'a paint-coated hare mid-leap', companion: 'a tiny paint-dipped beetle' },
+  };
+  const one = toLook({ ...base, analysis: { signature: ['coated in paint'], backdrop: 'a pale wall', subject_count: 1 } });
+  const two = toLook({ ...base, analysis: { signature: ['coated in paint'], backdrop: 'a pale wall', subject_count: 2 } });
+  const many = toLook({ ...base, analysis: { signature: ['coated in paint'], backdrop: 'a pale wall', subject_count: 'many' } });
+  const plain = toLook(base);
+  assert.equal(one.subjectCount, 1); assert.equal(two.subjectCount, 2); assert.equal(many.subjectCount, null); assert.equal(plain.subjectCount, null);
+  assert.deepEqual(subjectsFor(one), ['a paint-coated hare mid-leap']);
+  assert.deepEqual(subjectsFor(two), ['a colossal paint-dipped bison', 'a paint-coated hare mid-leap']);
+  assert.equal(subjectsFor(many).length, 3);
+  assert.equal(subjectsFor(plain).length, 3);
+
+  for (const option of [1, 2, 3]) {
+    const p1 = buildStillPrompt({ style: 'frame_break', specKey: 'x', option, weekOf: 'w', look: one });
+    assert.match(p1, /exactly one living subject: a paint-coated hare mid-leap — colossal in frame/);
+    assert.match(p1, /exactly one living subject in the frame, never a crowd/);
+    assert.doesNotMatch(p1, /bison|beetle/, 'the other two creatures never appear');
+    assert.doesNotMatch(p1, /ensemble|creative freedom|every character distinct/);
+    assert.doesNotMatch(p1, DOMAIN_TERMS); assert.doesNotMatch(p1, META_TERMS);
+    if (option === 1) assert.match(p1, /matte-black frame/, 'the framed track keeps its border');
+
+    const p2 = buildStillPrompt({ style: 'frame_break', specKey: 'x', option, weekOf: 'w', look: two });
+    assert.match(p2, /exactly two living subjects: a colossal paint-dipped bison and a paint-coated hare mid-leap/);
+    assert.doesNotMatch(p2, /beetle|ensemble|creative freedom/);
+    assert.match(p2, /about to collide/);
+
+    // The full ensemble is untouched for a many-subject or unlocked look.
+    for (const l of [many, plain]) {
+      const p3 = buildStillPrompt({ style: 'frame_break', specKey: 'x', option, weekOf: 'w', look: l });
+      assert.match(p3, /ensemble of characters: a colossal paint-dipped bison, a paint-coated hare mid-leap and a tiny paint-dipped beetle/);
+    }
+  }
+  // Template story and closing still follow the count too.
+  const s1 = buildSpectacularArcPrompt({ specKey: 'x', option: 2, weekOf: 'w', framed: false, look: one });
+  assert.match(s1, /One journey with real stakes/); assert.doesNotMatch(s1, /bison|beetle/);
+  const s2 = buildSpectacularArcPrompt({ specKey: 'x', option: 2, weekOf: 'w', framed: false, look: two });
+  assert.match(s2, /A collision with real stakes/); assert.doesNotMatch(s2, /beetle/);
+  const s3 = buildSpectacularArcPrompt({ specKey: 'x', option: 2, weekOf: 'w', framed: false, look: plain });
+  assert.match(s3, /A chase with real stakes/); assert.match(s3, /beetle/);
+  const c1 = buildClosingStillPrompt({ style: 'frame_break', specKey: 'x', option: 1, weekOf: 'w', look: one });
+  assert.doesNotMatch(c1, /bison|beetle/);
+  // The motion prompt for the spectacular reads the same count.
+  const m1 = buildMotionPrompt({ style: 'frame_break', specKey: 'x', option: 2, weekOf: 'w', look: one });
+  assert.doesNotMatch(m1, /bison|beetle/);
+  // normalizeCard accepts 1/2/3/"many".
+  assert.equal(normalizeCard({ ...CARD, subject_count: 2 }).analysis.subject_count, 2);
+  assert.equal(normalizeCard({ ...CARD, subject_count: 'many' }).analysis.subject_count, 'many');
+  assert.equal(normalizeCard(CARD).analysis.subject_count, null);
 });

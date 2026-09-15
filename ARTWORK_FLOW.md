@@ -125,6 +125,19 @@ black-sky beach with tiny people. Two causes, both fixed:
    field; after = paint-coated creatures under studio lights on a lavender wall in the
    card's colours.
 
+**Subject count (2026-09-15, same day).** Even with the lock, the design still showed a
+crowd — cheetah, hummingbird, snake, lions, cats. That crowd is Scott's own **2026-08-05
+"ensemble casts"** requirement, baked into the spectacular prompt in five places: the
+three-creature cast line, the "creative freedom — more creatures welcome" invitation, the
+three-position opening, "every character distinct at its own depth", and the template
+chase story that needs all three. Right for the house looks; wrong for a portrait. The
+analyst now returns **`subject_count`** (1, 2, 3 or "many"); for a look with one or two
+subjects the ensemble yields: the cast is trimmed to that many, the picture says *"exactly
+two living subjects: … — they are the only creatures anywhere in the picture"*, the
+invitation is dropped, and the opening, poise, closing frame and template story are
+written for that many. Verified live: two paint-coated subjects on a pale wall, nothing
+else. Looks with 3/"many" and every built-in keep the full ensemble.
+
 **Re-analyze.** A style keeps its frames, so `POST /styles/:id/reanalyze` (the card's
 *Re-analyze* button) rewrites the card with the current analyst and paints a fresh
 preview — no re-upload. The reviewer's name is kept; a failed re-analysis leaves a

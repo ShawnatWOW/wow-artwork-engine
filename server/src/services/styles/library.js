@@ -36,6 +36,9 @@ export function toLook(row) {
     backdrop: an.backdrop || '',
     colorRule: an.color_rule || '',
     palette: Array.isArray(an.palette) ? an.palette.slice(0, 6) : [],
+    // 1 or 2 → the spectacular trims its ensemble to that many subjects;
+    // null/'many' → the full three-creature cast as always.
+    subjectCount: [1, 2].includes(Number(an.subject_count)) ? Number(an.subject_count) : null,
   };
 }
 
