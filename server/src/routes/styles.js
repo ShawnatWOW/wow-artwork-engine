@@ -143,6 +143,23 @@ router.patch('/styles/:id', async (req, res, next) => {
       if (!Number.isFinite(w) || w < 0 || w > 10) return res.status(400).json({ error: 'bad_weight' });
       patch.weight = w;
     }
+    // The analyst's judgement calls are editable: how the scene is built
+    // (material vs subject), the substance, and how many subjects share a
+    // frame. Merged into the stored analysis, never replacing the rest.
+    if (b.analysis && typeof b.analysis === 'object') {
+      const an = { ...(row.analysis || {}) };
+      const a = b.analysis;
+      if (a.scene_mode !== undefined) an.scene_mode = a.scene_mode === 'material' ? 'material' : 'subject';
+      if (a.material !== undefined) an.material = String(a.material || '').trim().slice(0, 80);
+      if (a.subject_count !== undefined) {
+        const sc = String(a.subject_count ?? '').trim().toLowerCase();
+        an.subject_count = /^[123]$/.test(sc) ? Number(sc) : (sc ? 'many' : null);
+      }
+      if (a.backdrop !== undefined) an.backdrop = String(a.backdrop || '').trim().slice(0, 120);
+      if (a.color_rule !== undefined) an.color_rule = String(a.color_rule || '').trim().slice(0, 140);
+      if (Array.isArray(a.signature)) an.signature = a.signature.map((x) => String(x || '').trim().slice(0, 140)).filter(Boolean).slice(0, 6);
+      patch.analysis = an;
+    }
     // Hand-writing the card completes a failed analysis.
     const merged = { ...row, ...patch };
     if (row.status === 'failed' && isComplete(merged)) { patch.status = 'ready'; patch.error = null; }

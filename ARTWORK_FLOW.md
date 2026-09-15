@@ -138,6 +138,22 @@ invitation is dropped, and the opening, poise, closing frame and template story 
 written for that many. Verified live: two paint-coated subjects on a pale wall, nothing
 else. Looks with 3/"many" and every built-in keep the full ensemble.
 
+**Material looks (2026-09-15, same day).** Shawn: "It doesn't even need to be two subjects.
+It just needs to be an all paint scene. It's focusing too hard on making the subjects and
+not enough on making the texture of the paint thick and beautiful." Every clause of the
+spectacular prompt is about *subjects* — who stands where, doing what — and the treatment
+is their coating. The analyst now returns **`scene_mode`** (`material` when the substance
+IS the picture — paint, liquid, smoke, fabric, glass — vs `subject` when the treatment is a
+rendering style applied to characters and places) and the **`material`** itself. For a
+material look the prompt leads, right after the lock, with *"The entire picture is thick
+glossy wet paint, edge to edge: every form in it is the paint itself … the SURFACE of the
+paint is the subject: thick viscous ridges, wet glossy sheen … any creature is formed
+entirely out of it, not wearing it"*, the cast is introduced as forms *rising out of* the
+material, and the poise clause is the material heaving and splashing. The cast is written
+as creatures *sculpted from* the material. Mode, material and subject count are editable
+on the card (Edit) so the analyst's call can be overridden by hand. Verified live: a whale
+of thick yellow paint in a wave of blue and red paint on a lavender wall.
+
 **Re-analyze.** A style keeps its frames, so `POST /styles/:id/reanalyze` (the card's
 *Re-analyze* button) rewrites the card with the current analyst and paints a fresh
 preview — no re-upload. The reviewer's name is kept; a failed re-analysis leaves a

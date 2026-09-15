@@ -207,3 +207,23 @@ test('POST /styles/:id/reanalyze: 409 for a built-in, 202 for an added style (th
   assert.equal(after.frame_keys.length, 1);
   assert.equal(after.has_thumbnail, true);
 });
+
+test('PATCH /styles/:id accepts the analyst\'s knobs (scene_mode, material, subject_count) and keeps the rest of the analysis', async () => {
+  const { body: list } = await json(await fetch(`${url}/styles`));
+  const target = list.styles.find((s) => s.key === 'synthwave');
+  const r = await json(await fetch(`${url}/styles/${target.id}`, {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ analysis: { scene_mode: 'material', material: 'molten chrome', subject_count: '2', signature: ['mirror everything', ''] } }),
+  }));
+  assert.equal(r.status, 200);
+  assert.equal(r.body.style.analysis.scene_mode, 'material');
+  assert.equal(r.body.style.analysis.material, 'molten chrome');
+  assert.equal(r.body.style.analysis.subject_count, 2);
+  assert.deepEqual(r.body.style.analysis.signature, ['mirror everything']);
+  const r2 = await json(await fetch(`${url}/styles/${target.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ analysis: { subject_count: 'many', scene_mode: 'subject' } }) }));
+  assert.equal(r2.body.style.analysis.subject_count, 'many');
+  assert.equal(r2.body.style.analysis.scene_mode, 'subject');
+  assert.equal(r2.body.style.analysis.material, 'molten chrome', 'untouched fields survive');
+  // Reset so the roll tests below are unaffected.
+  await fetch(`${url}/styles/${target.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ analysis: { signature: [], scene_mode: 'subject', material: '', subject_count: null } }) });
+});

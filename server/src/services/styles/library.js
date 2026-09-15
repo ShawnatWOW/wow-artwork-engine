@@ -39,6 +39,10 @@ export function toLook(row) {
     // 1 or 2 → the spectacular trims its ensemble to that many subjects;
     // null/'many' → the full three-creature cast as always.
     subjectCount: [1, 2].includes(Number(an.subject_count)) ? Number(an.subject_count) : null,
+    // 'material' → the substance is the picture (prompts lead with it and its
+    // surface; subjects are formed of it). Anything else → subject-led.
+    sceneMode: an.scene_mode === 'material' ? 'material' : 'subject',
+    material: an.scene_mode === 'material' ? String(an.material || '').trim() : '',
   };
 }
 

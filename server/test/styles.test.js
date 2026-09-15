@@ -157,7 +157,7 @@ test('toLook / isComplete: a row needs a sentence and a full cast', () => {
   assert.equal(isComplete({ style: 'x', cast: { keeper: 'a', hero: 'b' } }), false);
   assert.equal(isComplete({ style: '', cast: { keeper: 'a', hero: 'b', companion: 'c' } }), false);
   const l = toLook({ id: 3, key: 'k', label: 'L', style: 's', cast: { hero: 'h' }, favorite: 1, weight: '2', source_type: 'upload' });
-  assert.deepEqual(l, { id: 3, key: 'k', label: 'L', style: 's', cast: { keeper: '', hero: 'h', companion: '' }, favorite: true, weight: 2, sourceType: 'upload', signature: [], backdrop: '', colorRule: '', palette: [], subjectCount: null });
+  assert.deepEqual(l, { id: 3, key: 'k', label: 'L', style: 's', cast: { keeper: '', hero: 'h', companion: '' }, favorite: true, weight: 2, sourceType: 'upload', signature: [], backdrop: '', colorRule: '', palette: [], subjectCount: null, sceneMode: 'subject', material: '' });
   // The style lock rides along from the analysis (2026-09-15).
   const locked = toLook({ key: 'k', label: 'L', style: 's', cast: CARD.cast, analysis: { signature: ['coated in paint', ''], backdrop: 'a pale wall', color_rule: 'two colours', palette: ['#ff0000'] } });
   assert.deepEqual(locked.signature, ['coated in paint']);
@@ -692,4 +692,38 @@ test('subject count: a one- or two-subject look trims the spectacular ensemble; 
   assert.equal(normalizeCard({ ...CARD, subject_count: 2 }).analysis.subject_count, 2);
   assert.equal(normalizeCard({ ...CARD, subject_count: 'many' }).analysis.subject_count, 'many');
   assert.equal(normalizeCard(CARD).analysis.subject_count, null);
+});
+
+test('material looks: the substance leads the prompt, subjects are formed of it, built-ins untouched', async () => {
+  const { isMaterial } = await import('../src/services/generation/prompts.js');
+  const base = { key: 'clash', label: 'Explosive Color Clash', style: 'liquid paint digital art', cast: { keeper: 'a colossal octopus of blue paint', hero: 'a cheetah of orange paint', companion: 'a hummingbird of cyan paint' } };
+  const mat = toLook({ ...base, analysis: { signature: ['thick glossy paint coats every surface'], backdrop: 'a pale wall', scene_mode: 'material', material: 'thick glossy wet acrylic paint', subject_count: 2 } });
+  const sub = toLook({ ...base, analysis: { signature: ['cel-shaded'], backdrop: 'a pale wall', scene_mode: 'subject', material: '', subject_count: 2 } });
+  assert.equal(mat.sceneMode, 'material'); assert.equal(mat.material, 'thick glossy wet acrylic paint');
+  assert.equal(sub.sceneMode, 'subject'); assert.equal(sub.material, '');
+  assert.equal(isMaterial(mat), true); assert.equal(isMaterial(sub), false); assert.equal(isMaterial(toLook(base)), false);
+  for (const style of ['frame_break', 'eon_connected', 'eon_single']) {
+    for (const option of [1, 2, 3]) {
+      const p = buildStillPrompt({ style, specKey: 'x', option, weekOf: 'w', look: mat });
+      assert.match(p, /The entire picture is thick glossy wet acrylic paint, edge to edge/);
+      assert.match(p, /SURFACE of the thick glossy wet acrylic paint is the subject/);
+      assert.match(p, /formed entirely out of thick glossy wet acrylic paint, not wearing it/);
+      assert.doesNotMatch(p, DOMAIN_TERMS); assert.doesNotMatch(p, META_TERMS);
+      if (style === 'frame_break') {
+        assert.match(p, /Rising out of the thick glossy wet acrylic paint are two forms, themselves made of it: a colossal octopus of blue paint and a cheetah of orange paint/);
+        assert.doesNotMatch(p, /hummingbird|ensemble/);
+        assert.match(p, /the thick glossy wet acrylic paint itself heaves, flows, splashes/);
+        if (option === 1) assert.match(p, /matte-black frame/);
+      }
+      const q = buildStillPrompt({ style, specKey: 'x', option, weekOf: 'w', look: sub });
+      assert.doesNotMatch(q, /entire picture is|formed entirely out of/);
+    }
+  }
+  const plain = buildStillPrompt({ style: 'frame_break', specKey: 'x', option: 2, weekOf: 'w', look: toLook(base) });
+  assert.doesNotMatch(plain, /entire picture is|Rising out of/);
+  assert.match(plain, /ensemble of characters/);
+  // normalizeCard: mode + material; material is dropped for subject looks.
+  assert.equal(normalizeCard({ ...CARD, scene_mode: 'material', material: 'coloured smoke' }).analysis.material, 'coloured smoke');
+  assert.equal(normalizeCard({ ...CARD, scene_mode: 'subject', material: 'coloured smoke' }).analysis.material, '');
+  assert.equal(normalizeCard(CARD).analysis.scene_mode, 'subject');
 });
