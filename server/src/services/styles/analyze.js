@@ -27,6 +27,7 @@ Return STRICT JSON with exactly these fields:
  "style": "<ONE sentence, 25-45 words, that LEADS with the surface treatment and the medium, then colour rule, backdrop, lighting and texture, and contains the phrase 'digital art'. Concrete and specific — never generic words like 'vibrant', 'dynamic', 'bold' on their own. Example of the voice: 'cyberpunk digital art — a rain-slicked neon megacity of holographic light, chrome towers and electric color'>",
  "signature": ["<3 to 6 short non-negotiable rules that define this look, each 4-14 words. Always cover: the surface treatment, the colour count, the backdrop, the scale/framing, and HOW MANY subjects share a frame (e.g. 'one or two subjects only, never a crowd'). E.g. 'every figure and object is coated in thick glossy wet paint as if dipped', 'exactly two flat colours per scene, one per body, colliding where they touch', 'plain pale lavender studio backdrop, empty and evenly lit', 'macro close-up: subjects fill the frame, no landscape'>"],
  "backdrop": "<what the background is in this look, in 3-12 words — e.g. 'plain pale lavender studio wall', 'deep black void', 'dense neon jungle'>",
+ "subject_count": <how many living subjects share ONE frame in the reference: 1, 2, 3, or "many" — a portrait of one figure is 1, two bodies colliding is 2, a bustling scene is "many">,
  "color_rule": "<START WITH HOW MANY distinct colours share one frame, then how they are used, 4-16 words — e.g. 'two saturated flat colours per scene, one per body, no gradients', 'three inks overprinted', 'many: full rainbow spectrum everywhere'>",
  "medium": "<e.g. cel animation, gouache, 3D render, high-speed studio photography of liquid paint, risograph, pixel art>",
  "era": "<the period or movement it evokes, or 'contemporary'>",
@@ -100,13 +101,19 @@ export function normalizeCard(raw) {
   // the one-sentence `style` reached the prompt and the scene rules
   // ("deep dark background", "full creative freedom", "living world") won.
   const signature = Array.isArray(raw.signature) ? raw.signature.map((a) => s(a, 140)).filter(Boolean).slice(0, 6) : [];
+  // How many living subjects share a frame. 1 or 2 means the spectacular's
+  // three-creature ensemble must yield (Shawn, 2026-09-15: "it's still
+  // forcing a bunch of characters") — the crowd was Scott's 2026-08-05
+  // ensemble requirement, right for the house looks, wrong for a portrait.
+  const sc = String(raw.subject_count ?? '').trim().toLowerCase();
+  const subject_count = /^[123]$/.test(sc) ? Number(sc) : (sc ? 'many' : null);
   const confidence = Number(raw.confidence);
   return {
     label: s(raw.label, 60) || null,
     style,
     cast,
     analysis: {
-      signature, backdrop: s(raw.backdrop, 120), color_rule: s(raw.color_rule, 140),
+      signature, backdrop: s(raw.backdrop, 120), color_rule: s(raw.color_rule, 140), subject_count,
       medium: s(raw.medium, 80), era: s(raw.era, 80), palette,
       lighting: s(raw.lighting, 120), linework: s(raw.linework, 120), texture: s(raw.texture, 120),
       composition: s(raw.composition, 160), motion_signature: s(raw.motion_signature, 160),

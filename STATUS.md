@@ -82,7 +82,11 @@ at a time, "N of 3 reviewed" progress per sign.
   clauses yield for locked looks, and the colour rule's count picks the palette colours
   per design. Verified live before/after on the same reel. Cards show their rules;
   older cards get a **Re-analyze** button (rewrites from the saved frames, no re-upload).
-  Apify + OpenAI keys are in the production env. 168/168 tests.
+  Then the crowd: the design still showed six creatures — Scott's own 2026-08-05
+  "ensemble casts" rule, baked into the spectacular prompt. The analyst now counts the
+  reference's subjects; a one- or two-subject look trims the cast, the opening, the closing
+  frame and the story to match (verified live: two paint-dipped subjects, nothing else).
+  Apify + OpenAI keys are in the production env. 171/171 tests.
 
 - **2026-09-14 — The Style Library: Scott adds his own styles, and picks a style per
   slot.** Shawn: Scott "has been constantly requesting that I add new art styles… he sends

@@ -503,7 +503,7 @@ const SPECTACULAR_ARCS = [
 ];
 
 /** Join a cast list into prose: "a, b and c". Pure. */
-const joinCast = (cast) => `${cast.slice(0, -1).join(', ')} and ${cast.at(-1)}`;
+const joinCast = (cast) => (cast.length <= 1 ? String(cast[0] ?? '') : `${cast.slice(0, -1).join(', ')} and ${cast.at(-1)}`);
 
 /** The narrative arc for one spectacular option. Pure; exported for tests.
  *  The wild slot (option 3) casts its rolled theme's characters. */
@@ -650,6 +650,7 @@ export function colorName(hex) {
 const styleLock = (s, option = 1) => {
   if (!hasLock(s)) return '';
   const rules = [...(s.signature || [])];
+  if (s.subjectCount === 1 || s.subjectCount === 2) rules.push(`exactly ${s.subjectCount === 1 ? 'one living subject' : 'two living subjects'} in the frame, never a crowd of creatures`);
   if (s.backdrop) rules.push(`the backdrop is ${s.backdrop}`);
   if (s.colorRule) {
     const pal = paletteFor(s, option);
@@ -670,11 +671,51 @@ const contrastFor = (s) => (hasLock(s) && s.backdrop
   ? 'Strong tonal separation between the subjects and the backdrop, readable from far away in direct sunlight.'
   : CONTRAST);
 // "Full creative freedom" invites a second style into the picture; a locked
-// look keeps the freedom of subject but not of treatment.
-const freedomFor = (s) => (hasLock(s)
-  ? `Beyond that cast there is creative freedom of subject — more creatures of the same kinds, animals, beasts and living objects that serve the scene are welcome; every character in the picture is a creature like these — but never freedom of treatment: everything wears this look. `
-  : `Beyond that cast there is full creative freedom — any characters and scenery that serve the ` +
-    `scene are welcome: creatures, people, living objects, anything with personality. `);
+// look keeps the freedom of subject but not of treatment — and a look with
+// one or two subjects gets no invitation at all (Shawn, 2026-09-15: "it's
+// still forcing a bunch of characters" — the invitation was the zoo).
+const freedomFor = (s) => (limitedSubjects(s)
+  ? ''
+  : hasLock(s)
+    ? `Beyond that cast there is creative freedom of subject — other creatures and living objects that serve the scene are welcome, every one wearing this same treatment — but never freedom of treatment: everything wears this look. `
+    : `Beyond that cast there is full creative freedom — any characters and scenery that serve the ` +
+      `scene are welcome: creatures, people, living objects, anything with personality. `);
+
+// SUBJECT COUNT (2026-09-15). The spectacular was built around Scott's
+// ensemble requirement (2026-08-05): a three-creature cast, a three-position
+// opening, "every character distinct at its own depth", a chase story that
+// needs all three. Right for the house looks; wrong for a reference that is a
+// portrait of one paint-dipped body or two colliding. When the analyst
+// counted one or two subjects, the ensemble yields: the cast is trimmed to
+// that many, the picture says so in one sentence, and the opening, poise and
+// template story are written for that many.
+const limitedSubjects = (s) => hasLock(s) && (s.subjectCount === 1 || s.subjectCount === 2);
+/** The creatures a spectacular design actually shows for this look. Pure; exported for tests. */
+export function subjectsFor(s) {
+  if (!s?.cast) return [];
+  if (limitedSubjects(s)) return s.subjectCount === 1 ? [s.cast.hero] : [s.cast.keeper, s.cast.hero];
+  return castList(s);
+}
+// "The scene is home to an ensemble…" or, for a limited look, exactly N.
+const ensembleFor = (s, cast) => (limitedSubjects(s)
+  ? (s.subjectCount === 1
+    ? `The picture has exactly one living subject: ${cast} — colossal in frame, filling most of the height; it is the only creature anywhere in the picture, and the rest of the frame is the backdrop and the paint. `
+    : `The picture has exactly two living subjects: ${cast} — both huge in frame, filling most of the height; they are the only creatures anywhere in the picture, and the rest of the frame is the backdrop and the paint. `)
+  : `The scene is home to an ensemble of characters: ${cast}. `);
+// The opening beat for a limited look (the ensemble's three-position opening
+// and the arcs assume three characters).
+const limitedOpening = (s, option) => {
+  const [near, far] = option % 2 === 0 ? ['left', 'right'] : ['right', 'left'];
+  if (s.subjectCount === 1) {
+    return `This is how the story opens: ${s.cast.hero} dominates the centre of the frame mid-motion, ` +
+      `the treatment erupting around it — the whole picture already surging. `;
+  }
+  return `This is how the story opens: ${s.cast.keeper} dominates the ${near} half mid-motion while ` +
+    `${s.cast.hero} streaks in from the far ${far} edge — the two about to collide, the whole picture already surging. `;
+};
+const poiseFor = (s) => (limitedSubjects(s)
+  ? 'The picture is visibly mid-motion: the treatment itself flows, splashes and churns, each subject caught mid-stride, colossal in frame, with unmistakable momentum. '
+  : `${CAST_POISE} `);
 
 // Energy clause for standalone stills — the subject should feel alive even as
 // a still frame. (Kept off the connected master, whose environment must stay
@@ -792,7 +833,7 @@ export function buildStillPrompt({ style, specKey, option, weekOf, look }) {
     // The rolled style supplies the world and the cast; the frame rules below
     // are what stay constant on this track.
     const f = s;
-    const cast = joinCast(castList(f));
+    const cast = joinCast(subjectsFor(f));
     // SPLIT TRACKS (Shawn, 2026-08-18, shipping to WOW): option 1 keeps the
     // signature painted border (the mastery track); options 2+ are BORDERLESS
     // full-bleed pieces built to ship now — pure immersive scenery, maximum
@@ -802,13 +843,13 @@ export function buildStillPrompt({ style, specKey, option, weekOf, look }) {
       return `An ultra-wide trompe-l'oeil deep-relief composition in perfectly frontal, dead-centered, ` +
         `symmetrical one-point perspective. Style: ${f.style}. ${styleLock(f, option)}` +
         `${FRAME_GEOMETRY} ${FRAME_STYLE} ` +
-        `The scene is home to an ensemble of characters: ${cast}. ` +
+        ensembleFor(f, cast) +
         freedomFor(f) +
-        `This is how the story opens: ${arc.opening}. ` +
+        (limitedSubjects(f) ? limitedOpening(f, option) : `This is how the story opens: ${arc.opening}. `) +
         `Whatever moves onto the frame's inner edge is rendered IN FRONT of the black strips, partially ` +
         `covering them and casting soft shadows onto them — unmistakably closer to the viewer than the ` +
         `frame plane. ${FRAME_CONTAINMENT} ` +
-        `${CAST_POISE} ${contrastFor(f)} ${SAFE}`;
+        `${poiseFor(f)}${contrastFor(f)} ${SAFE}`;
     }
     const { keeper, hero, companion } = f.cast;
     const [near, far] = option % 2 === 0 ? ['left', 'right'] : ['right', 'left'];
@@ -816,12 +857,14 @@ export function buildStillPrompt({ style, specKey, option, weekOf, look }) {
       `The scene fills the ENTIRE picture edge to edge and corner to corner — one continuous, deep, ` +
       `living world with no border, no frame, no vignette, no dark edges: pure immersive scenery ` +
       `everywhere. ` +
-      `The scene is home to an ensemble of characters: ${cast}. ` +
+      ensembleFor(f, cast) +
       freedomFor(f) +
-      `This is how the story opens: ${keeper} dominates the ${near} third mid-motion while ${hero} ` +
-      `streaks in from the far ${far} edge trailing light and ${companion} sweeps through the deep ` +
-      `middle distance — the whole scene already surging. ` +
-      `${CAST_POISE} ${contrastFor(f)} ${SAFE}`;
+      (limitedSubjects(f)
+        ? limitedOpening(f, option)
+        : `This is how the story opens: ${keeper} dominates the ${near} third mid-motion while ${hero} ` +
+          `streaks in from the far ${far} edge trailing light and ${companion} sweeps through the deep ` +
+          `middle distance — the whole scene already surging. `) +
+      `${poiseFor(f)}${contrastFor(f)} ${SAFE}`;
   }
   // eon_single: tall portrait composition, composed to wrap (the left band is
   // cut away onto the pod's spine — see WRAP_BAND_SINGLE).
@@ -842,12 +885,12 @@ export function buildStillPrompt({ style, specKey, option, weekOf, look }) {
 export function buildClosingStillPrompt({ style, specKey, option, weekOf, look }) {
   if (style !== 'frame_break') return null; // storyboard is a spectacular-only feature
   const f = look ?? styleFor({ specKey, option, weekOf });
-  const cast = joinCast(castList(f));
+  const cast = joinCast(subjectsFor(f));
   const arc = arcFor({ specKey, option, weekOf, look: f });
   return `An ultra-wide trompe-l'oeil deep-relief composition in perfectly frontal, dead-centered, ` +
     `symmetrical one-point perspective. Style: ${f.style}. ${styleLock(f, option)}` +
     `${FRAME_GEOMETRY} ${FRAME_STYLE} ` +
-    `The scene is home to an ensemble of characters: ${cast}. ${ONLY_CAST(cast)} ` +
+    `${ensembleFor(f, cast)}${ONLY_CAST(cast)} ` +
     // "grand finale"/"closing pose of a performance" wording literalized into a
     // STAGE SHOW — human statues and a central performer (live QA, 2026-08-05);
     // "final scene" then drew a framed screen INSIDE the picture, and BANNING
@@ -855,13 +898,20 @@ export function buildClosingStillPrompt({ style, specKey, option, weekOf, look }
     // literalize drawable nouns even inside negations (same lesson as the
     // painted "bands", 2026-07-31). So: no show words, no screen words at all;
     // instead POSITIVELY fill the back of the box so nothing invents a panel.
-    `This is how the story ends: ${arc.finale}. ` +
+    (limitedSubjects(f) ? limitedFinale(f) : `This is how the story ends: ${arc.finale}. `) +
     `Every character is distinct and glowing with energy, the composition settled and majestic. ` +
-    `Glowing scenery, drifting light and rich atmospheric color fill the space continuously all the way ` +
-    `to its deep far end. ` +
+    (limitedSubjects(f)
+      ? ''
+      : `Glowing scenery, drifting light and rich atmospheric color fill the space continuously all the way ` +
+        `to its deep far end. `) +
     `${FRAME_CONTAINMENT} ` +
-    `${CAST_ENERGY} ${CONTRAST} ${SAFE}`;
+    `${limitedSubjects(f) ? poiseFor(f) : `${CAST_ENERGY} `}${contrastFor(f)} ${SAFE}`;
 }
+
+// The closing frame for a limited look (the arcs' finales name all three).
+const limitedFinale = (s) => (s.subjectCount === 1
+  ? `This is how the story ends: ${s.cast.hero} has arrived at the far side of the scene, colossal in frame and coming forward onto the frame plane, the treatment settling around it in one great spent burst. `
+  : `This is how the story ends: ${s.cast.hero} and ${s.cast.keeper} are locked together at the point of impact, huge in frame and coming forward onto the frame plane, the treatment settled around them in one great spent burst. `);
 
 // Negative guard for the EON motion prompts (frame_break keeps its border on
 // purpose, so it does NOT get this): the pillar videos are cut at fixed x
@@ -1063,6 +1113,19 @@ export function buildSpectacularArcPrompt({ specKey, option, weekOf, framed = tr
   const f = look ?? styleFor({ specKey: key, option: opt, weekOf });
   const { keeper, hero, companion } = f.cast;
   const front = framed ? 'up to the frame itself and back' : 'up to the very front and back';
+  if (limitedSubjects(f)) {
+    // One or two subjects: a journey or a collision, never a three-way chase.
+    const story = f.subjectCount === 1
+      ? `One journey with real stakes plays out across this one take: ${hero} charges from one edge of the ` +
+        `scene to the other, diving from the deep distance ${front}, the treatment erupting and churning in ` +
+        `its wake wherever it passes, until it slams to a stop far from where it began in one decisive ` +
+        `burst that floods the whole picture.`
+      : `A collision with real stakes plays out across this one take: ${hero} charges across the full width ` +
+        `of the scene straight at ${keeper}, diving from the deep distance ${front}, the treatment surging ` +
+        `in its wake, until the two meet in one decisive impact far from where it began — the whole ` +
+        `picture erupting from the point of contact.`;
+    return composeSpectacularMotionPrompt(story, { framed });
+  }
   const story = `A chase with real stakes plays out across this one take: ${hero} flees across the full ` +
     `width of the scene with ${companion} in relentless pursuit — weaving through the painted scenery, ` +
     `ducking behind it, breaking cover, diving from the deep distance ${front} — ` +
@@ -1109,7 +1172,7 @@ export function combineSpectacularActs(act1, act2) {
 
 export { CHOREOGRAPHIES, SOLO_MOTIONS, SPECTACULAR_FAMILIES, SPECTACULAR_ARCS, WILD_THEMES };
 export default {
-  colorCountOf, paletteFor, colorName,
+  colorCountOf, paletteFor, colorName, subjectsFor,
   buildStillPrompt, buildClosingStillPrompt, buildMotionPrompt, buildSpectacularArcPrompt,
   composeSpectacularMotionPrompt, buildSpectacularAct, combineSpectacularActs, sanitizeMotionPrompt,
   travelFor, choreographyFor, soloMotionFor, arcFor, SPECTACULAR_FAMILIES,
