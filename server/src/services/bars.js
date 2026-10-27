@@ -21,9 +21,9 @@
 
 import ffmpeg from './ffmpeg.js';
 
-/** Mean luma (0-255) at or below which a band counts as padding. True black pads at ~16. */
+/** Mean luma (0-255) at or below which a band counts as padding. True black pads at ~16. (Kept for the geometric step.) */
 export const BAR_YAVG_MAX = 28;
-/** Brightest pixel a padding band may contain — anything brighter is art, not a bar. */
+/** Brightest pixel a padding band may contain — anything brighter is art, not a bar. (Kept for the geometric step.) */
 export const BAR_YMAX_MAX = 80;
 /** Never strip more than this fraction of a dimension from one edge. */
 export const MAX_STRIP_FRAC = 0.4;
@@ -39,17 +39,26 @@ export const MIN_STRIP_PX = 2;
  * black line along the bottom"). A few pixels out of thousands is invisible
  * on the sign; a dark line is not.
  */
-export const OVERSHOOT_FRAC = 0.004;
-export const OVERSHOOT_MIN_PX = 4;
+export const OVERSHOOT_FRAC = 0.012;  // the fade past a pure-black bar measured ~8px of 468 on a real file (2026-10-27)
+export const OVERSHOOT_MIN_PX = 8;
+/** Trimmed from EVERY edge at the final pass, bar or no bar: a 1px blended line from any upstream rounding can never ship. */
+export const EDGE_SAFETY_PX = 2;
+/** The final pass may never take more than this fraction of an axis from one edge (a dark scene is not a bar). */
+export const FINAL_MAX_STRIP_FRAC = 0.1;
 /** Final-resolution edge-line check: outer 2px vs the 6px just inside. */
 export const EDGE_LINE_OUTER_PX = 2;
 export const EDGE_LINE_INNER_PX = 6;
-export const EDGE_LINE_MAX_LUMA = 70;   // an outer line brighter than this is not dark
-export const EDGE_LINE_RATIO = 0.55;    // ...and must be this much darker than its neighbour
+export const EDGE_LINE_MAX_LUMA = 80;   // an outer band brighter than this is not dark (VAE padding noise sits ~40-60)
+export const EDGE_LINE_RATIO = 0.6;     // ...and must be this much darker than the art beside it
 export const EDGE_LINE_TRIM_PX = 4;     // trimmed per pass (even for yuv420)
 export const EDGE_LINE_MAX_PASSES = 3;
-/** cropdetect black threshold (0-255). Topaz-lifted blacks sit around 20-30. */
-export const DETECT_LIMIT = 40;
+/**
+ * cropdetect black threshold (0-255), per-row MEAN. 24 = pure black as the
+ * renders actually carry it: on the two real files of 2026-10-27 the padding
+ * measured 16-17 in every frame it was present, while the darkest night-scene
+ * edges measured 37+ (and a limit of 32 already swallowed 298px of a dark sky).
+ */
+export const DETECT_LIMIT = 24;
 
 const EDGES = ['top', 'bottom', 'left', 'right'];
 
@@ -196,34 +205,18 @@ export async function measureResidualBars(input, { framed = false, frameFrac, li
 }
 
 /**
- * Measure, then PROVE: each band the plan would remove must be flat black
- * padding (mean luma ≤ BAR_YAVG_MAX and no pixel above BAR_YMAX_MAX across
- * the sampled clip). A band that fails proof is art — a dark sky, a lit
- * painted frame — and is dropped from the plan. Shared by the strip step and
- * the delivered-file audit so both apply the same judgement.
+ * Measure the black edges. Detection at DETECT_LIMIT (per-row mean ≤ 24,
+ * frame by frame, worst case per edge) IS the proof: only padding is that
+ * black. The old clip-wide luma gate is gone — a bar that is only present
+ * part of the clip (the picture drifting in its canvas) averages bright over
+ * the whole clip and the gate kept it (Shawn, 2026-10-27, Masquerade file).
+ * A painted frame is protected by the allowance measured on the still, not
+ * by a luma test. `rejected` stays in the result for callers; it is always [].
  * @returns {Promise<{width, height, box, thickness, plan, rejected}>}
  */
 export async function proveResidualBars(input, { framed = false, frameFrac, sampleFps = 2 } = {}) {
   const m = await measureResidualBars(input, { framed, frameFrac, sampleFps });
-  if (!m.plan) return { ...m, rejected: [] };
-  const rejected = [];
-  for (const edge of EDGES) {
-    const px = m.plan.strip[edge];
-    if (!px) continue;
-    const band = bandRegion({ edge, px, width: m.width, height: m.height });
-    if (!band) continue; // a sliver too thin to measure is stripped on the box's word
-    const stats = await ffmpeg.regionStats(input, { ...band, sampleFps });
-    if (!stats || stats.yavg > BAR_YAVG_MAX) { rejected.push(edge); continue; }
-    // Brightest pixel is judged on the OUTER half only: a fade or halo at the
-    // boundary is not a reason to keep a bar (Shawn, 2026-10-27).
-    const outer = bandRegion({ edge, px, width: m.width, height: m.height, guard: Math.max(2, Math.round(px * 0.5)) });
-    const outerStats = outer ? await ffmpeg.regionStats(input, { ...outer, sampleFps }) : stats;
-    if (outerStats && outerStats.ymax !== null && outerStats.ymax > BAR_YMAX_MAX) rejected.push(edge);
-  }
-  const plan = rejected.length
-    ? planResidualStrip({ width: m.width, height: m.height, box: m.box, framed, allowancePx: m.allowancePx, skipEdges: rejected })
-    : m.plan;
-  return { ...m, plan, rejected };
+  return { ...m, rejected: [] };
 }
 
 /**
@@ -257,58 +250,49 @@ export function isDarkEdgeLine({ outer, inner, maxLuma = EDGE_LINE_MAX_LUMA, rat
 }
 
 /**
- * Measure, at the DELIVERED size, which edges still carry a dark line.
- * A uniform painted frame (outer and inner both dark) is not a line; a dark
- * scene edge (outer ≈ inner) is not a line. Only "black rim, bright art
- * beside it" counts.
- * @returns {Promise<{lines: string[], stats: object}>}
+ * Measure, at the DELIVERED size, the black edges beyond the painted-frame
+ * allowance: per-frame, worst case per edge, pure-black threshold (see
+ * detectContentBox). `lines` names the edges that carry one; `thickness` is
+ * the full dark run; `framesWithBar` says in how many sampled frames.
+ * @returns {Promise<{width, height, lines: string[], thickness: object, framesWithBar: object, frames: number}>}
  */
-export async function measureEdgeLines(input, { sampleFps = 2 } = {}) {
-  const { width, height } = await ffmpeg.probe(input);
-  const lines = [];
-  const stats = {};
-  for (const edge of EDGES) {
-    const bands = edgeLineBands({ edge, width, height });
-    if (!bands) continue;
-    const outer = await ffmpeg.regionStats(input, { ...bands.outer, sampleFps });
-    const inner = await ffmpeg.regionStats(input, { ...bands.inner, sampleFps });
-    stats[edge] = { outer: outer?.yavg ?? null, inner: inner?.yavg ?? null };
-    if (isDarkEdgeLine({ outer, inner })) lines.push(edge);
-  }
-  return { width, height, lines, stats };
+export async function measureEdgeLines(input, { sampleFps = 4, allowancePx, limit = DETECT_LIMIT } = {}) {
+  const det = await ffmpeg.detectContentBox(input, { limit, sampleFps, mode: 'intersection' });
+  const lines = EDGES.filter((e) => (det.thickness[e] || 0) > (allowancePx?.[e] || 0));
+  return { width: det.width, height: det.height, lines, thickness: det.thickness, framesWithBar: det.framesWithBar, frames: det.frames };
 }
 
 /**
- * LAST PASS at the delivered size (Shawn, 2026-10-27: a thin dark line was
- * still visible along the bottom and the right edge of a shipped file).
- * Whatever got past the render-size steps — a 1px rounding sliver, a fade
- * the box stopped short of — reads here as a dark rim beside bright art.
- * Trim EDGE_LINE_TRIM_PX from each such edge and scale straight back to the
- * exact spec (≤1% squash per pass, invisible). Up to maxPasses passes.
- * @returns {Promise<{path, passes, trimmed: object, remaining: string[]}>} path === input when nothing was trimmed.
+ * LAST PASS at the delivered size. Everything that survived the render-size
+ * steps — a bar that comes and goes as the picture drifts, a fade, a 1px
+ * rounding line — is removed here in one stable cut for the whole clip:
+ *   cut[edge] = EDGE_SAFETY_PX (always, every edge)
+ *             + max(0, worst-case black thickness − frame allowance) + overshoot
+ * capped at FINAL_MAX_STRIP_FRAC of the axis; then scaled straight back to
+ * the exact spec — 'exact' when the cut kept the aspect within 5%, 'cover'
+ * (center-crop, no distortion) otherwise. Always produces `output`.
+ * @returns {Promise<{path, cut, measured, fit, capped: string[]}>}
  */
-export async function trimDarkEdgeLines({ input, output, width, height, maxPasses = EDGE_LINE_MAX_PASSES, trimPx = EDGE_LINE_TRIM_PX, sampleFps = 2 }) {
-  let current = input;
-  let passes = 0;
-  const trimmed = { top: 0, bottom: 0, left: 0, right: 0 };
-  let lines = (await measureEdgeLines(current, { sampleFps })).lines;
-  while (lines.length && passes < maxPasses) {
-    passes += 1;
-    const cut = { top: 0, bottom: 0, left: 0, right: 0 };
-    for (const e of lines) { cut[e] = trimPx; trimmed[e] += trimPx; }
-    const cropped = `${output}.pass${passes}.mp4`;
-    await ffmpeg.cropColumn({
-      input: current, output: cropped,
-      width: width - cut.left - cut.right, height: height - cut.top - cut.bottom, x: cut.left, y: cut.top,
-    });
-    const next = passes === maxPasses ? output : `${output}.scaled${passes}.mp4`;
-    await ffmpeg.conform({ input: cropped, output: next, width, height, fit: 'exact' });
-    current = next;
-    lines = (await measureEdgeLines(current, { sampleFps })).lines;
+export async function trimDarkEdgeLines({ input, output, width, height, allowancePx, sampleFps = 4, maxFrac = FINAL_MAX_STRIP_FRAC, safetyPx = EDGE_SAFETY_PX }) {
+  const m = await measureEdgeLines(input, { sampleFps, allowancePx });
+  const evenUp = (n) => Math.ceil(n / 2) * 2;
+  const cut = {};
+  const capped = [];
+  for (const e of EDGES) {
+    const axis = e === 'top' || e === 'bottom' ? height : width;
+    const excess = Math.max(0, (m.thickness[e] || 0) - (allowancePx?.[e] || 0));
+    let px = safetyPx + (excess > 0 ? excess + overshootFor(axis) : 0);
+    const cap = Math.floor(axis * maxFrac);
+    if (px > cap) { px = cap; capped.push(e); }
+    cut[e] = evenUp(px);
   }
-  if (passes === 0) return { path: input, passes, trimmed, remaining: lines };
-  if (current !== output) await ffmpeg.conform({ input: current, output, width, height, fit: 'exact' });
-  return { path: output, passes, trimmed, remaining: lines };
+  const cw = width - cut.left - cut.right;
+  const ch = height - cut.top - cut.bottom;
+  const fit = fitForAspect({ width: cw, height: ch, wantAspect: width / height, tolerance: 0.05 });
+  const cropped = `${output}.cut.mp4`;
+  await ffmpeg.cropColumn({ input, output: cropped, width: cw, height: ch, x: cut.left, y: cut.top });
+  await ffmpeg.conform({ input: cropped, output, width, height, fit });
+  return { path: output, cut, measured: m, fit, capped };
 }
 
 /** One-line description of a strip/thickness map for logs and QA flags. */
@@ -323,4 +307,5 @@ export default {
   edgeThickness, isFramedPrompt, overshootFor, planResidualStrip, bandRegion, fitForAspect,
   measureResidualBars, proveResidualBars, stripResidualBars, describeEdges,
   measureFrameFractions, allowanceFromFractions, edgeLineBands, isDarkEdgeLine, measureEdgeLines, trimDarkEdgeLines,
+  EDGE_SAFETY_PX, FINAL_MAX_STRIP_FRAC,
 };

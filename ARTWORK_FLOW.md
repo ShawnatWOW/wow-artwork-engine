@@ -227,8 +227,17 @@ usable card usable.
     pixels into the art (the model and the upscaler blend art into the bar, so the measured
     boundary is a dark fade, not a line); no sliver is too thin to count; and a framed
     design's allowance is **measured on the approved still** (where the frame is painted)
-    instead of guessed from the video. Then a **last pass at the delivered size** looks for a
-    dark rim beside bright art on any edge, trims it and scales straight back to spec.
+    instead of guessed from the video. Then a **last pass at the delivered size** *(rebuilt
+    2026-10-27 on Shawn's two real files)*: every black edge is measured **frame by frame** at a
+    pure-black threshold (per-row mean ≤ 24 — real padding measures 16-17, the darkest night
+    scenery 37+) and the **worst case per edge over the whole clip** is cut in one stable crop,
+    plus the fade overshoot and a 2px safety margin on every edge, never more than 10% of an
+    axis; then scaled straight back to spec (center-cropped if the cut changed the aspect by
+    more than 5%). Frame-by-frame matters: on the Masquerade file the picture drifted inside
+    its canvas, so pure-black bottom/right edges were there in a third of the frames and gone
+    in the rest — every whole-clip average saw "dark grey" and kept them. The painted frame is
+    excused by the still's measurement. 3-second excerpts of both real files live in
+    `server/test/fixtures/` and must ship clean in every test run.
     Finally the **delivered file itself is audited**: any proven-black edge or dark edge
     line left on it raises a red "do not send" flag on the row.
 12. **QA.** Saturation-drift measurement (warning only — Seedance colors can drain), and
