@@ -15,6 +15,7 @@
 
 import { readFile } from 'node:fs/promises';
 import config from '../../config/index.js';
+import { chatBody } from '../openaiChat.js';
 import logger from '../../config/logger.js';
 
 const SYSTEM = `You are the style analyst for a studio that paints giant animated outdoor artworks in many visual styles. You are shown frames from a reference piece the creative director liked. Your job is to capture what makes it LOOK the way it does — the TREATMENT, not the subject — as a reusable style card, so new scenes with entirely different subjects come out unmistakably in this look.
@@ -157,15 +158,14 @@ export async function analyzeStyle({ frames, hints = {} } = {}) {
       const resp = await fetch(`${baseUrl}/chat/completions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-        body: JSON.stringify({
-          model: styleModel,
+        body: JSON.stringify(chatBody(styleModel, {
           max_tokens: 900,
           response_format: { type: 'json_object' },
           messages: [
             { role: 'system', content: SYSTEM },
             { role: 'user', content: [{ type: 'text', text: lines.join(' ') + (extraUser ? ` ${extraUser}` : '') }, ...images] },
           ],
-        }),
+        })),
       });
       if (!resp.ok) throw new Error(`openai ${resp.status}`);
       const data = await resp.json();

@@ -18,6 +18,7 @@
 // bad output) returns null and the caller falls back to the template story.
 
 import config from '../../config/index.js';
+import { chatBody } from '../openaiChat.js';
 import logger from '../../config/logger.js';
 
 // The framed variant scripts the signature pop-out over the painted black
@@ -62,8 +63,7 @@ export async function directStory({ imageUrl, cast, style, framed = true } = {})
     const resp = await fetch(`${baseUrl}/chat/completions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model: directorModel,
+      body: JSON.stringify(chatBody(directorModel, {
         max_tokens: 500,
         response_format: { type: 'json_object' },
         messages: [
@@ -81,7 +81,7 @@ export async function directStory({ imageUrl, cast, style, framed = true } = {})
             ],
           },
         ],
-      }),
+      })),
     });
     if (!resp.ok) throw new Error(`openai ${resp.status}`);
     const data = await resp.json();
