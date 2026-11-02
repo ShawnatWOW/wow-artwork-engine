@@ -16,6 +16,7 @@
 
 import config from '../../config/index.js';
 import logger from '../../config/logger.js';
+import { chatBody } from '../openaiChat.js';
 
 const TWEAK_SYSTEM = `You are EDITING an existing text-to-image art prompt for a psychedelic billboard artwork. Apply ONLY the reviewer's plain-language change and return the FULL prompt with EVERYTHING ELSE PRESERVED — same subject, composition, style and safety rules. Never add people, faces, text, logos or watermarks. Keep high-contrast readable-from-distance lighting. If the style is the 'frame_break' pop-out, keep the trompe-l'oeil black border + subject-bursting-through language intact. Return STRICT JSON {"prompt":"<full edited prompt>","change_note":"<one short sentence of what changed>"}.`;
 
@@ -40,8 +41,7 @@ export async function refineTweak({ prompt, instruction, style } = {}) {
     const resp = await fetch(`${baseUrl}/chat/completions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model,
+      body: JSON.stringify(chatBody(model, {
         max_tokens: 800,
         response_format: { type: 'json_object' },
         messages: [
@@ -54,7 +54,7 @@ export async function refineTweak({ prompt, instruction, style } = {}) {
               `keeping everything else intact: "${note}". Also give the change_note. JSON only.`,
           },
         ],
-      }),
+      })),
     });
     if (!resp.ok) throw new Error(`openai ${resp.status}`);
     const data = await resp.json();

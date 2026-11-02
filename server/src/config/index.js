@@ -133,16 +133,23 @@ const config = {
   // Empty key is fine: refineTweak falls back to a labeled re-roll, never errors.
   openai: {
     apiKey: process.env.OPENAI_API_KEY || process.env.OPEN_AI_API_KEY || '',
-    model: process.env.ARTWORK_TWEAK_MODEL || 'gpt-4o-mini',
+    // Models (Nov 2026): the cheap tier (gpt-6-luna) for the tweak editor and the story
+    // director, the smart tier (gpt-6.1-terra) for the style analyst. gpt-4o and gpt-4o-mini
+    // are shut off by OpenAI on 2027-01-14; until then ARTWORK_*_MODEL=gpt-4o-mini is a
+    // one-line rollback. Request shaping for the newer families lives in services/openaiChat.js.
+    model: process.env.ARTWORK_TWEAK_MODEL || 'gpt-6-luna',
     // Vision model for the story director (generation/director.js) — looks at
     // each generated still and scripts its motion story from what is actually
     // in the picture.
-    directorModel: process.env.ARTWORK_DIRECTOR_MODEL || 'gpt-4o-mini',
+    directorModel: process.env.ARTWORK_DIRECTOR_MODEL || 'gpt-6-luna',
     // Vision model for the STYLE ANALYST (services/styles/analyze.js) — looks
     // at the frames of an uploaded reference (an Instagram post, a screenshot,
     // a screen recording) and writes the style card. One call per new style,
     // ~12 images, so the bigger model is affordable and worth it.
-    styleModel: process.env.ARTWORK_STYLE_MODEL || 'gpt-4o',
+    styleModel: process.env.ARTWORK_STYLE_MODEL || 'gpt-6.1-terra',
+    // Thinking level for the gpt-5/gpt-6 families: none, minimal, low, medium, high.
+    // Thinking is billed as output tokens and adds seconds; these are short creative edits.
+    reasoning: process.env.ARTWORK_REASONING || 'none',
     baseUrl: process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1',
   },
 
